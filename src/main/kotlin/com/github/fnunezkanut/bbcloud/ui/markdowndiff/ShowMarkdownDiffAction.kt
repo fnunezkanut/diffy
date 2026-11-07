@@ -26,7 +26,7 @@ internal class ShowMarkdownDiffAction : DumbAwareAction() {
             return
         }
         LOG.info("User opened the rendered Markdown diff for a file from ${event.place}")
-        BbCloudMarkdownDiffEditorOpener.getInstance(project).open(
+        DiffyMarkdownDiffEditorOpener.getInstance(project).open(
             source = GitMarkdownDiffContentSource(project = project, file = file)
         )
     }

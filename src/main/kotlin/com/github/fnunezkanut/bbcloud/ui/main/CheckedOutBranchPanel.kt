@@ -5,7 +5,7 @@ import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDetails
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestOverview
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
@@ -24,7 +24,7 @@ import javax.swing.JPanel
  * pushes into it and forwards the user actions back.
  */
 class CheckedOutBranchPanel(
-    private val configurationService: BbCloudConfigurationService,
+    private val configurationService: DiffyConfigurationService,
     private val coroutineScope: CoroutineScope,
     private val onRefreshRequested: () -> Unit,
     onActionRequested: (PullRequestAction) -> Unit,

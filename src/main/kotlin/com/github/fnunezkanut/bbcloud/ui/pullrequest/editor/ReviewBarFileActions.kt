@@ -1,9 +1,9 @@
 package com.github.fnunezkanut.bbcloud.ui.pullrequest.editor
 
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestPathMatcher
-import com.github.fnunezkanut.bbcloud.git.BbCloudPullRequestBranchDiffService
 import com.github.fnunezkanut.bbcloud.git.BranchDiffResult
-import com.github.fnunezkanut.bbcloud.review.BbCloudWorktreePullRequestContext
+import com.github.fnunezkanut.bbcloud.git.DiffyPullRequestBranchDiffService
+import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestChangeDiffOpener
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestCommentFileOpener
 import com.intellij.openapi.application.ApplicationManager
@@ -28,14 +28,14 @@ internal object ReviewBarFileActions {
      */
     fun showDiff(project: Project, relativePath: String) {
         LOG.info("User clicked 'Show Diff' for '$relativePath'")
-        val binding = BbCloudWorktreePullRequestContext.getInstance(project).binding
+        val binding = DiffyWorktreePullRequestContext.getInstance(project).binding
         if (binding == null) {
             LOG.info("Cannot show the diff of '$relativePath': the work tree is not bound to a pull request")
             return
         }
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val result = BbCloudPullRequestBranchDiffService().loadPullRequestChanges(
+                val result = DiffyPullRequestBranchDiffService().loadPullRequestChanges(
                     project = project,
                     destinationBranch = binding.destinationBranch,
                     sourceBranch = binding.sourceBranch

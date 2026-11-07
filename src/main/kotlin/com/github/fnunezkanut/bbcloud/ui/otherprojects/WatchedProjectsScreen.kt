@@ -38,10 +38,10 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectWorktreeRow
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudCompactOutlinedIconButton
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyCompactOutlinedIconButton
 import com.github.fnunezkanut.bbcloud.ui.components.REPOSITORY_ICON_SIZE
 import com.github.fnunezkanut.bbcloud.ui.main.ActionButtonOutlines
 import com.github.fnunezkanut.bbcloud.ui.main.MainPanelStatusSupport
@@ -78,7 +78,7 @@ fun WatchedProjectsScreen(viewModel: WatchedProjectsViewModel) {
                     tint = JewelTheme.globalColors.text.warning
                 )
                 Text(
-                    text = BbCloudBundle.message("workspace.watchedProjects.rescan.failed"),
+                    text = DiffyBundle.message("workspace.watchedProjects.rescan.failed"),
                     color = JewelTheme.globalColors.text.warning
                 )
             }
@@ -98,7 +98,7 @@ fun WatchedProjectsScreen(viewModel: WatchedProjectsViewModel) {
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = BbCloudBundle.message("workspace.watchedProjects.loading"))
+                    Text(text = DiffyBundle.message("workspace.watchedProjects.loading"))
                 }
 
                 WatchedProjectsCard.Empty -> Unit
@@ -231,7 +231,7 @@ private fun ShowOnlyWatchedCheckbox(checked: Boolean, onCheckedChange: (Boolean)
     ) {
         Checkbox(checked = checked, onCheckedChange = onCheckedChange)
         Text(
-            text = BbCloudBundle.message("workspace.watchedProjects.showOnlyWatched.label"),
+            text = DiffyBundle.message("workspace.watchedProjects.showOnlyWatched.label"),
             modifier = Modifier.clickable { onCheckedChange(!checked) }.pointerHoverIcon(PointerIcon.Hand),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -251,23 +251,23 @@ private fun WatchedProjectsSearchField(fieldValue: TextFieldValue, onFieldValueC
             value = fieldValue,
             onValueChange = onFieldValueChange,
             modifier = Modifier.weight(1f),
-            placeholder = { Text(text = BbCloudBundle.message("workspace.watchedProjects.search.placeholder")) },
+            placeholder = { Text(text = DiffyBundle.message("workspace.watchedProjects.search.placeholder")) },
             leadingIcon = {
                 Icon(
                     key = AllIconsKeys.Actions.Search,
-                    contentDescription = BbCloudBundle.message("workspace.watchedProjects.search.icon.description")
+                    contentDescription = DiffyBundle.message("workspace.watchedProjects.search.icon.description")
                 )
             }
         )
         if (fieldValue.text.isNotEmpty()) {
             Tooltip(
                 tooltip = {
-                    Text(text = BbCloudBundle.message("workspace.watchedProjects.search.clear.tooltip"))
+                    Text(text = DiffyBundle.message("workspace.watchedProjects.search.clear.tooltip"))
                 }
             ) {
                 Icon(
                     key = AllIconsKeys.Actions.Close,
-                    contentDescription = BbCloudBundle.message("workspace.watchedProjects.search.clear.tooltip"),
+                    contentDescription = DiffyBundle.message("workspace.watchedProjects.search.clear.tooltip"),
                     modifier = Modifier.clickable(onClick = onClear).pointerHoverIcon(PointerIcon.Hand)
                 )
             }
@@ -284,9 +284,9 @@ private fun WatchedProjectsNoMatches(query: String) {
     ) {
         Text(
             text = if (query.isBlank()) {
-                BbCloudBundle.message("workspace.watchedProjects.showOnlyWatched.noResults")
+                DiffyBundle.message("workspace.watchedProjects.showOnlyWatched.noResults")
             } else {
-                BbCloudBundle.message("workspace.watchedProjects.search.noResults", query)
+                DiffyBundle.message("workspace.watchedProjects.search.noResults", query)
             },
             textAlign = TextAlign.Center,
             maxLines = 2,
@@ -368,21 +368,21 @@ private fun watchedProjectsHeaderCells(flexibleWidths: FlexibleColumnWidths): Li
 
             WatchedProjectsColumn.Remote -> {
                 headerCell(
-                    text = BbCloudBundle.message("workspace.watchedProjects.column.remote"),
+                    text = DiffyBundle.message("workspace.watchedProjects.column.remote"),
                     width = flexibleWidths.remote
                 )
             }
 
             WatchedProjectsColumn.Local -> {
                 headerCell(
-                    text = BbCloudBundle.message("workspace.watchedProjects.column.local"),
+                    text = DiffyBundle.message("workspace.watchedProjects.column.local"),
                     width = flexibleWidths.local
                 )
             }
 
             WatchedProjectsColumn.Worktrees -> {
                 headerCell(
-                    text = BbCloudBundle.message("workspace.watchedProjects.column.worktrees"),
+                    text = DiffyBundle.message("workspace.watchedProjects.column.worktrees"),
                     width = flexibleWidths.worktrees
                 )
             }
@@ -592,11 +592,11 @@ private fun WorktreeEntry(mapping: WatchedProjectMapping, worktree: WatchedProje
                 modifier = Modifier.weight(1f),
                 overflow = TextOverflow.Ellipsis
             )
-            val removeTooltip = BbCloudBundle.message("workspace.watchedProjects.worktree.remove.tooltip")
+            val removeTooltip = DiffyBundle.message("workspace.watchedProjects.worktree.remove.tooltip")
             Tooltip(tooltip = { Text(text = removeTooltip) }) {
-                BbCloudCompactOutlinedIconButton(
+                DiffyCompactOutlinedIconButton(
                     icon = AllIconsKeys.Actions.GC,
-                    contentDescription = BbCloudBundle.message(
+                    contentDescription = DiffyBundle.message(
                         "workspace.watchedProjects.worktree.remove.contentDescription",
                         worktree.prNumber
                     ),
@@ -626,31 +626,31 @@ private fun WatchedProjectsFooter(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = BbCloudBundle.message("workspace.watchedProjects.footerNote.prefix"),
+            text = DiffyBundle.message("workspace.watchedProjects.footerNote.prefix"),
             color = JewelTheme.globalColors.text.info,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
         Link(
-            text = BbCloudBundle.message("workspace.watchedProjects.footerNote.workspaceLink"),
+            text = DiffyBundle.message("workspace.watchedProjects.footerNote.workspaceLink"),
             onClick = onGoToWorkspace
         )
         Text(
-            text = BbCloudBundle.message("workspace.watchedProjects.footerNote.suffix"),
+            text = DiffyBundle.message("workspace.watchedProjects.footerNote.suffix"),
             color = JewelTheme.globalColors.text.info,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
         Spacer(modifier = Modifier.weight(1f))
         Link(
-            text = BbCloudBundle.message("workspace.watchedProjects.worktreesHelp.link"),
+            text = DiffyBundle.message("workspace.watchedProjects.worktreesHelp.link"),
             onClick = onWorktreesHelp
         )
         if (state.syncVisible) {
             Spacer(modifier = Modifier.width(12.dp))
             Tooltip(
                 tooltip = {
-                    Text(text = BbCloudBundle.message("workspace.watchedProjects.prune.tooltip"))
+                    Text(text = DiffyBundle.message("workspace.watchedProjects.prune.tooltip"))
                 }
             ) {
                 OutlinedButton(onClick = onPrune, enabled = state.pruneEnabled && state.syncEnabled) {
@@ -660,9 +660,9 @@ private fun WatchedProjectsFooter(
                     ) {
                         Icon(
                             key = AllIconsKeys.Actions.GC,
-                            contentDescription = BbCloudBundle.message("workspace.watchedProjects.prune.button")
+                            contentDescription = DiffyBundle.message("workspace.watchedProjects.prune.button")
                         )
-                        Text(text = BbCloudBundle.message("workspace.watchedProjects.prune.button"))
+                        Text(text = DiffyBundle.message("workspace.watchedProjects.prune.button"))
                     }
                 }
             }
@@ -676,7 +676,7 @@ private fun WatchedProjectsFooter(
                         key = AllIconsKeys.Actions.Refresh,
                         contentDescription = "Sync"
                     )
-                    Text(text = BbCloudBundle.message("workspace.watchedProjects.sync"))
+                    Text(text = DiffyBundle.message("workspace.watchedProjects.sync"))
                 }
             }
         }

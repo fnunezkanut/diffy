@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.recentprojects
 
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.project.normalizedFolderKey
 import com.github.fnunezkanut.bbcloud.ui.main.AuthorAvatarCache
 import kotlinx.coroutines.CoroutineScope
@@ -43,7 +43,7 @@ internal object NoRepoAvatars : RepoAvatarProvider {
 }
 
 /** Uses the same persisted avatar URLs and decoded-image cache (same size) as the Watched Projects tab. */
-internal class PlatformRepoAvatarProvider(private val configurationService: BbCloudConfigurationService, private val coroutineScope: CoroutineScope) :
+internal class PlatformRepoAvatarProvider(private val configurationService: DiffyConfigurationService, private val coroutineScope: CoroutineScope) :
     RepoAvatarProvider {
     private val avatarCache = AuthorAvatarCache(avatarSize = AVATAR_SIZE)
 

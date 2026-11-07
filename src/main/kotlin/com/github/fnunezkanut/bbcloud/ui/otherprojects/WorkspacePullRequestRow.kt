@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.otherprojects
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequest
@@ -69,7 +69,7 @@ internal fun buildWorkspacePullRequestRow(
         repoSlug = pullRequest.repositoryName(),
         sourceBranch = summary.sourceBranch,
         destinationBranch = summary.destinationBranch,
-        branches = BbCloudBundle.message(
+        branches = DiffyBundle.message(
             "main.pullRequests.branches",
             summary.sourceBranch,
             summary.destinationBranch

@@ -47,7 +47,7 @@ internal object PlatformRecentProjectsGateway : RecentProjectsGateway {
 }
 
 /**
- * Keeps pull request worktrees together in one Recent Projects group and removes them from the list when bbcloud
+ * Keeps pull request worktrees together in one Recent Projects group and removes them from the list when Diffy
  * deletes the worktree.
  *
  * Only folders named `<repoSlug>--pr-<number>` (see [PullRequestWorktreeLayout]) are grouped, so plain source clones

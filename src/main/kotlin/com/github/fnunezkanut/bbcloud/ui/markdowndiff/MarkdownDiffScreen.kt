@@ -42,8 +42,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudCompactOutlinedIconButton
+import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyCompactOutlinedIconButton
 import com.github.fnunezkanut.bbcloud.ui.main.ActionButtonOutlines
 import com.intellij.diff.util.TextDiffType
 import com.intellij.ide.BrowserUtil
@@ -129,8 +129,8 @@ fun MarkdownDiffScreen(viewModel: MarkdownDiffViewModel) {
 private fun statusMessageOf(state: MarkdownDiffUiState): String? {
     return when {
         state.errorMessage != null -> state.errorMessage
-        state.isLoading && state.rows.isEmpty() -> BbCloudBundle.message("markdownDiff.loading")
-        state.rows.isEmpty() -> BbCloudBundle.message("markdownDiff.empty")
+        state.isLoading && state.rows.isEmpty() -> DiffyBundle.message("markdownDiff.loading")
+        state.rows.isEmpty() -> DiffyBundle.message("markdownDiff.empty")
         else -> null
     }
 }
@@ -152,23 +152,23 @@ private fun MarkdownDiffToolbar(state: MarkdownDiffUiState, viewModel: MarkdownD
         } else {
             state.comparisons.firstOrNull()?.let { comparison -> Text(text = comparison.label) }
         }
-        BbCloudCompactOutlinedIconButton(
+        DiffyCompactOutlinedIconButton(
             icon = AllIconsKeys.Actions.PreviousOccurence,
-            contentDescription = BbCloudBundle.message("markdownDiff.previousChange"),
+            contentDescription = DiffyBundle.message("markdownDiff.previousChange"),
             outlineColor = ActionButtonOutlines.neutral(),
             enabled = state.isPreviousChangeEnabled,
             onClick = viewModel::onPreviousChange
         )
-        BbCloudCompactOutlinedIconButton(
+        DiffyCompactOutlinedIconButton(
             icon = AllIconsKeys.Actions.NextOccurence,
-            contentDescription = BbCloudBundle.message("markdownDiff.nextChange"),
+            contentDescription = DiffyBundle.message("markdownDiff.nextChange"),
             outlineColor = ActionButtonOutlines.neutral(),
             enabled = state.isNextChangeEnabled,
             onClick = viewModel::onNextChange
         )
         MarkdownDiffSummary(state = state, colors = colors)
         CheckboxRow(
-            text = BbCloudBundle.message("markdownDiff.wordChanges"),
+            text = DiffyBundle.message("markdownDiff.wordChanges"),
             checked = state.showWordChanges,
             onCheckedChange = viewModel::onWordChangesToggled
         )
@@ -176,7 +176,7 @@ private fun MarkdownDiffToolbar(state: MarkdownDiffUiState, viewModel: MarkdownD
         OutlinedButton(onClick = viewModel::onRefreshRequested, enabled = !state.isLoading) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(key = AllIconsKeys.Actions.Refresh, contentDescription = null)
-                Text(text = BbCloudBundle.message("markdownDiff.refresh"))
+                Text(text = DiffyBundle.message("markdownDiff.refresh"))
             }
         }
     }
@@ -188,12 +188,12 @@ private fun MarkdownDiffSummary(state: MarkdownDiffUiState, colors: MarkdownDiff
         return
     }
     if (!state.hasChanges) {
-        Text(text = BbCloudBundle.message("markdownDiff.noChanges"))
+        Text(text = DiffyBundle.message("markdownDiff.noChanges"))
         return
     }
     val position = if (state.currentChangeIndex >= 0) "${state.currentChangeIndex + 1}/" else ""
     val summary = buildAnnotatedString {
-        append(BbCloudBundle.message("markdownDiff.changeCount", position, state.changeRowIndices.size))
+        append(DiffyBundle.message("markdownDiff.changeCount", position, state.changeRowIndices.size))
         append("  ")
         withStyle(SpanStyle(color = colors.addedMarker, fontWeight = FontWeight.Bold)) { append("+${state.addedCount}") }
         append(" ")

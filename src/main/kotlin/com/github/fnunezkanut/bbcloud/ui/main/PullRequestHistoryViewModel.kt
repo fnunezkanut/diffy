@@ -2,7 +2,7 @@ package com.github.fnunezkanut.bbcloud.ui.main
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestActivityFeed
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestConversation
 import com.intellij.openapi.diagnostic.logger
@@ -90,7 +90,7 @@ class PullRequestHistoryViewModel(
     }
 
     private fun initialState(): PullRequestHistoryUiState {
-        return PullRequestHistoryUiState(title = BbCloudBundle.message("main.branch.history.title"))
+        return PullRequestHistoryUiState(title = DiffyBundle.message("main.branch.history.title"))
     }
 
     companion object {

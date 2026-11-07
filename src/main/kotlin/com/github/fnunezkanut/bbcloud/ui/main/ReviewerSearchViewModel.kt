@@ -2,7 +2,7 @@ package com.github.fnunezkanut.bbcloud.ui.main
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerCandidate
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerCandidates
 import com.intellij.openapi.diagnostic.logger
@@ -49,7 +49,7 @@ class ReviewerSearchViewModel(
                 isLoading = false,
                 hasError = true,
                 candidates = emptyList(),
-                statusMessage = BbCloudBundle.message("main.branch.reviewers.search.error")
+                statusMessage = DiffyBundle.message("main.branch.reviewers.search.error")
             )
             return
         }
@@ -102,8 +102,8 @@ class ReviewerSearchViewModel(
 
     private fun statusMessage(matches: List<ReviewerCandidate>, loaded: ReviewerCandidates): String? {
         val messages = listOfNotNull(
-            BbCloudBundle.message("main.branch.reviewers.search.empty").takeIf { matches.isEmpty() },
-            BbCloudBundle.message("main.branch.reviewers.search.truncated", loaded.members.size).takeIf { loaded.isTruncated }
+            DiffyBundle.message("main.branch.reviewers.search.empty").takeIf { matches.isEmpty() },
+            DiffyBundle.message("main.branch.reviewers.search.truncated", loaded.members.size).takeIf { loaded.isTruncated }
         )
         return messages.joinToString(separator = " ").takeIf { messages.isNotEmpty() }
     }

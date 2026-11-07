@@ -111,7 +111,7 @@ sealed interface ActivityFeedEntry : TimelineEntry
  * Threads are sorted newest first.
  * [mentions] maps a normalized account key to the display name shown for `@{account-key}` mentions. It holds the names
  * known when the conversation was built. When [mentionsPending] is true, some mentioned accounts are still unnamed, and
- * the caller resolves them later with `BbCloudOpenPullRequestService.pullRequestMentionNames`.
+ * the caller resolves them later with `DiffyOpenPullRequestService.pullRequestMentionNames`.
  */
 data class PullRequestConversation(
     val threads: List<TimelineEntry.CommentThread>,

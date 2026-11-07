@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.bitbucket
 
-import com.github.fnunezkanut.bbcloud.auth.BbCloudBearerRetryAuthenticator
+import com.github.fnunezkanut.bbcloud.auth.DiffyBearerRetryAuthenticator
 import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -918,7 +918,7 @@ class OkHttpBitbucketPullRequestClient(private val httpClient: OkHttpClient = sh
         private val sharedHttpClient: OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
-            .authenticator(BbCloudBearerRetryAuthenticator())
+            .authenticator(DiffyBearerRetryAuthenticator())
             .build()
 
         private fun elapsedMillis(startNanos: Long): Long {

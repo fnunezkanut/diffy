@@ -24,7 +24,7 @@ object PullRequestWorktreeLayout {
      * positive `Long`).
      *
      * @param workTreeDirectory the configured work tree root (see
-     *   [com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService.workTreeDirectoryOrNull]).
+     *   [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.workTreeDirectoryOrNull]).
      * @param repoSlug the Bitbucket repository slug (the workspace is already stripped).
      * @param prNumber the pull request number, which is
      *   [com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary.id].

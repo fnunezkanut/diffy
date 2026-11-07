@@ -4,14 +4,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentChange
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestComment
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestCommentThreads
 import com.github.fnunezkanut.bbcloud.bitbucket.TimelineEntry
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
-import com.github.fnunezkanut.bbcloud.review.BbCloudPullRequestViewedThreads
-import com.github.fnunezkanut.bbcloud.review.BbCloudWorktreePullRequestContext
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedThreads
+import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
 import com.github.fnunezkanut.bbcloud.review.PullRequestThreadFingerprint
 import com.github.fnunezkanut.bbcloud.review.PullRequestViewedThreadKey
 import com.github.fnunezkanut.bbcloud.ui.main.AuthorAvatarCache
@@ -38,10 +38,10 @@ internal class EditorCommentThreadController(
     private val pullRequestIdValue: Long,
     private val relativePath: String,
     private val coroutineScope: CoroutineScope,
-    private val context: BbCloudWorktreePullRequestContext = BbCloudWorktreePullRequestContext.getInstance(projectValue),
+    private val context: DiffyWorktreePullRequestContext = DiffyWorktreePullRequestContext.getInstance(projectValue),
     private val avatarCache: AuthorAvatarCache = AuthorAvatarCache(avatarSize = 16)
 ) : CommentThreadCardHost {
-    private val viewedThreads = BbCloudPullRequestViewedThreads.getInstance()
+    private val viewedThreads = DiffyPullRequestViewedThreads.getInstance()
 
     /**
      * Keeps the composer drafts (one per `(target, scope)` where scope is the host editor) and the focus-restore
@@ -204,10 +204,10 @@ internal class EditorCommentThreadController(
     override fun replyInput(commentId: Long): CommentInput {
         return CommentInput(
             label = "reply",
-            placeholder = BbCloudBundle.message("main.branch.comments.reply.placeholder"),
-            submitLabel = BbCloudBundle.message("main.branch.comments.reply.submit"),
-            submitHint = BbCloudBundle.message("main.branch.comments.reply.submitHint", CommentInputActionsComponentFactory.submitShortcutText),
-            failureMessage = BbCloudBundle.message("main.branch.comments.failed.inline"),
+            placeholder = DiffyBundle.message("main.branch.comments.reply.placeholder"),
+            submitLabel = DiffyBundle.message("main.branch.comments.reply.submit"),
+            submitHint = DiffyBundle.message("main.branch.comments.reply.submitHint", CommentInputActionsComponentFactory.submitShortcutText),
+            failureMessage = DiffyBundle.message("main.branch.comments.failed.inline"),
             submit = { content, onResult -> applyCommentChange(CommentChange.Reply(commentId, content), onResult) }
         )
     }
@@ -215,10 +215,10 @@ internal class EditorCommentThreadController(
     override fun editInput(comment: PullRequestComment): CommentInput {
         return CommentInput(
             label = "comment edit",
-            placeholder = BbCloudBundle.message("main.branch.comments.edit.placeholder"),
-            submitLabel = BbCloudBundle.message("main.branch.comments.edit.submit"),
-            submitHint = BbCloudBundle.message("main.branch.comments.edit.submitHint", CommentInputActionsComponentFactory.submitShortcutText),
-            failureMessage = BbCloudBundle.message("main.branch.comments.failed.inline"),
+            placeholder = DiffyBundle.message("main.branch.comments.edit.placeholder"),
+            submitLabel = DiffyBundle.message("main.branch.comments.edit.submit"),
+            submitHint = DiffyBundle.message("main.branch.comments.edit.submitHint", CommentInputActionsComponentFactory.submitShortcutText),
+            failureMessage = DiffyBundle.message("main.branch.comments.failed.inline"),
             initialText = comment.raw.orEmpty(),
             submit = { content, onResult -> applyCommentChange(CommentChange.Edit(comment.id, content), onResult) }
         )
@@ -241,7 +241,7 @@ internal class EditorCommentThreadController(
     }
 
     private fun workspaceSlug(): String {
-        return BbCloudConfigurationService.getInstance().workspaceSlugOrNull().orEmpty()
+        return DiffyConfigurationService.getInstance().workspaceSlugOrNull().orEmpty()
     }
 
     private fun threadPath(thread: TimelineEntry.CommentThread): String {

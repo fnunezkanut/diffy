@@ -1,11 +1,11 @@
 package com.github.fnunezkanut.bbcloud.ui.pullrequest.decline
 
-import com.github.fnunezkanut.bbcloud.bitbucket.BbCloudOpenPullRequestService
+import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDeclineResult
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
-import com.github.fnunezkanut.bbcloud.git.BbCloudWorktreeService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService
 import com.github.fnunezkanut.bbcloud.git.WorktreeRemovalResult
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
 import com.intellij.openapi.project.Project
@@ -47,7 +47,7 @@ class PullRequestDeclineOrchestratorTest {
                 events += "close"
                 true
             }
-            val worktreeService = mockk<BbCloudWorktreeService>()
+            val worktreeService = mockk<DiffyWorktreeService>()
             coEvery {
                 worktreeService.removeWorktree(
                     sourceCheckoutRoot = sourceCheckout,
@@ -58,7 +58,7 @@ class PullRequestDeclineOrchestratorTest {
                 events += "remove"
                 WorktreeRemovalResult.Success
             }
-            val openPullRequestService = mockk<BbCloudOpenPullRequestService>()
+            val openPullRequestService = mockk<DiffyOpenPullRequestService>()
             coEvery {
                 openPullRequestService.declinePullRequest(
                     projectBasePath = worktreePath.toString(),
@@ -67,7 +67,7 @@ class PullRequestDeclineOrchestratorTest {
                     reason = "reason"
                 )
             } returns PullRequestDeclineResult.Success()
-            val configurationService = mockk<BbCloudConfigurationService>()
+            val configurationService = mockk<DiffyConfigurationService>()
             every { configurationService.workTreeDirectoryOrNull() } returns worktreeRoot.toString()
             every { configurationService.projectsDirectoryOrNull() } returns temporaryDirectory.toString()
             every { configurationService.watchedProjectsForCurrentWorkspaceWithLocalPaths() } returns listOf(

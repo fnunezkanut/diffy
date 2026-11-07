@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.ActivityUser
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentMentionResolver
 import com.github.fnunezkanut.bbcloud.bitbucket.InlineCommentSide
@@ -94,13 +94,13 @@ object ConversationThreadRules {
     /** The notice of a resolved thread; Bitbucket omits the resolver on some threads, so the name falls back to "Unknown user". */
     fun resolvedByText(resolvedBy: ActivityUser?): String {
         val name = resolvedBy?.displayName?.takeIf { displayName -> displayName.isNotBlank() }
-            ?: BbCloudBundle.message("main.branch.history.unknownUser")
-        return BbCloudBundle.message("main.branch.history.resolvedBy", name)
+            ?: DiffyBundle.message("main.branch.history.unknownUser")
+        return DiffyBundle.message("main.branch.history.resolvedBy", name)
     }
 
     /** The name of a comment author; Bitbucket does not always report the author of a deleted comment. */
     fun authorName(author: ActivityUser?): String {
         return author?.displayName?.takeIf { displayName -> displayName.isNotBlank() }
-            ?: BbCloudBundle.message("main.branch.history.unknownUser")
+            ?: DiffyBundle.message("main.branch.history.unknownUser")
     }
 }

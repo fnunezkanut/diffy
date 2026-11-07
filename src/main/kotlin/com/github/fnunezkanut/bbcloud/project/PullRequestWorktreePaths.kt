@@ -6,7 +6,7 @@ import java.nio.file.Path
 /**
  * Whether [path] is a PR work tree: a folder directly under [workTreeDirectory] named `<repoSlug>--pr-<n>`.
  *
- * This mirrors the safety check in `BbCloudWorktreeService.removeWorktree` (same normalization, same layout check), so
+ * This mirrors the safety check in `DiffyWorktreeService.removeWorktree` (same normalization, same layout check), so
  * the Remove work tree button is shown exactly when the removal will be accepted.
  */
 fun isPullRequestWorktreePath(path: String, workTreeDirectory: String?): Boolean {

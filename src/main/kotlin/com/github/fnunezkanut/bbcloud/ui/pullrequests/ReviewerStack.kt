@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.pullrequests
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestReviewer
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerStatus
 import kotlin.time.Instant
@@ -48,7 +48,7 @@ internal fun cappedOverflowCount(hiddenCount: Int): Int {
 
 /** The "+N" label text for the overflow circle, using the capped hidden count. */
 internal fun reviewerOverflowLabel(hiddenCount: Int): String {
-    return BbCloudBundle.message("main.pullRequests.reviewers.more", cappedOverflowCount(hiddenCount = hiddenCount))
+    return DiffyBundle.message("main.pullRequests.reviewers.more", cappedOverflowCount(hiddenCount = hiddenCount))
 }
 
 private fun statusRank(status: ReviewerStatus): Int {

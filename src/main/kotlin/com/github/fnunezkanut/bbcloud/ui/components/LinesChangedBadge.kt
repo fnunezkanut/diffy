@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.ui.main.DiffstatLinesEmoji
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
@@ -29,7 +29,7 @@ internal fun LinesChangedBadge(linesAdded: Int, linesRemoved: Int, modifier: Mod
     Tooltip(
         tooltip = {
             Text(
-                text = BbCloudBundle.message(
+                text = DiffyBundle.message(
                     "main.branch.header.linesChanged.tooltip",
                     linesAdded,
                     linesRemoved
@@ -46,11 +46,11 @@ internal fun LinesChangedBadge(linesAdded: Int, linesRemoved: Int, modifier: Mod
                 Text(text = DiffstatLinesEmoji.forLinesAdded(linesAdded))
             }
             Text(
-                text = BbCloudBundle.message("main.branch.header.linesAdded", linesAdded),
+                text = DiffyBundle.message("main.branch.header.linesAdded", linesAdded),
                 color = addedLinesColor()
             )
             Text(
-                text = BbCloudBundle.message("main.branch.header.linesRemoved", linesRemoved),
+                text = DiffyBundle.message("main.branch.header.linesRemoved", linesRemoved),
                 color = removedLinesColor()
             )
         }

@@ -8,7 +8,7 @@ data class CommentLineIndicatorRange(val startLine: Int, val endLine: Int)
  * Resolves inline comment anchors to merged zero-based editor line ranges for the content indicator.
  *
  * File-scoped and unmapped anchors intentionally use line zero. The fallback keeps a comment visible as a marker while
- * leaving [BbCloudPullRequestDiffCommentService] free to skip an inlay whose source line is not present.
+ * leaving [DiffyPullRequestDiffCommentService] free to skip an inlay whose source line is not present.
  */
 internal fun indicatorRangesForAnchors(
     anchors: List<InlineCommentAnchor>,

@@ -1,7 +1,7 @@
 package com.github.fnunezkanut.bbcloud.ui.pullrequest.decline
 
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
-import com.github.fnunezkanut.bbcloud.git.BbCloudWorktreeService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService
 import com.github.fnunezkanut.bbcloud.git.WorktreeRemovalResult
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
 import com.intellij.openapi.project.Project
@@ -46,7 +46,7 @@ class ClosedPullRequestWorktreeCleanupOrchestratorTest {
                 events += "close"
                 true
             }
-            val worktreeService = mockk<BbCloudWorktreeService>()
+            val worktreeService = mockk<DiffyWorktreeService>()
             coEvery {
                 worktreeService.removeWorktree(
                     sourceCheckoutRoot = sourceCheckout,
@@ -97,7 +97,7 @@ class ClosedPullRequestWorktreeCleanupOrchestratorTest {
                 closeCalls += 1
                 true
             }
-            val worktreeService = mockk<BbCloudWorktreeService>()
+            val worktreeService = mockk<DiffyWorktreeService>()
             val configurationService = configurationService(
                 worktreeRoot = worktreeRoot,
                 sourceCheckout = sourceCheckout
@@ -133,9 +133,9 @@ class ClosedPullRequestWorktreeCleanupOrchestratorTest {
                 closeCalls += 1
                 true
             }
-            val worktreeService = mockk<BbCloudWorktreeService>()
+            val worktreeService = mockk<DiffyWorktreeService>()
             // No watched mapping and no conventional clone on disk, so the resolver cannot find a source checkout.
-            val configurationService = mockk<BbCloudConfigurationService>()
+            val configurationService = mockk<DiffyConfigurationService>()
             every { configurationService.workTreeDirectoryOrNull() } returns worktreeRoot.toString()
             every { configurationService.projectsDirectoryOrNull() } returns temporaryDirectory.toString()
             every { configurationService.watchedProjectsForCurrentWorkspaceWithLocalPaths() } returns emptyList()
@@ -173,7 +173,7 @@ class ClosedPullRequestWorktreeCleanupOrchestratorTest {
                 releaseFirstClose.await()
                 true
             }
-            val worktreeService = mockk<BbCloudWorktreeService>()
+            val worktreeService = mockk<DiffyWorktreeService>()
             coEvery {
                 worktreeService.removeWorktree(
                     sourceCheckoutRoot = sourceCheckout,
@@ -290,7 +290,7 @@ class ClosedPullRequestWorktreeCleanupOrchestratorTest {
     private class HungCleanupFixture(
         val scope: CoroutineScope,
         val projectCloser: ProjectCloser,
-        val worktreeService: BbCloudWorktreeService,
+        val worktreeService: DiffyWorktreeService,
         val releaseClose: CompletableDeferred<Unit>,
         val request: ClosedPullRequestWorktreeCleanupRequest
     )
@@ -301,7 +301,7 @@ class ClosedPullRequestWorktreeCleanupOrchestratorTest {
         val worktreePath = worktreeRoot.resolve("repo--pr-42")
         Files.createDirectories(worktreePath)
         val releaseClose = CompletableDeferred<Unit>()
-        val worktreeService = mockk<BbCloudWorktreeService>()
+        val worktreeService = mockk<DiffyWorktreeService>()
         coEvery {
             worktreeService.removeWorktree(
                 sourceCheckoutRoot = sourceCheckout,
@@ -326,7 +326,7 @@ class ClosedPullRequestWorktreeCleanupOrchestratorTest {
 
     private fun orchestrator(
         projectCloser: ProjectCloser,
-        worktreeService: BbCloudWorktreeService,
+        worktreeService: DiffyWorktreeService,
         scope: CoroutineScope,
         cleanupModal: CleanupModal = CleanupModal { _, block -> block() },
         modalAutoCloseTimeout: Duration = 5.seconds
@@ -342,8 +342,8 @@ class ClosedPullRequestWorktreeCleanupOrchestratorTest {
         )
     }
 
-    private fun configurationService(worktreeRoot: Path, sourceCheckout: Path): BbCloudConfigurationService {
-        val configurationService = mockk<BbCloudConfigurationService>()
+    private fun configurationService(worktreeRoot: Path, sourceCheckout: Path): DiffyConfigurationService {
+        val configurationService = mockk<DiffyConfigurationService>()
         every { configurationService.workTreeDirectoryOrNull() } returns worktreeRoot.toString()
         every { configurationService.projectsDirectoryOrNull() } returns temporaryDirectory.toString()
         every { configurationService.watchedProjectsForCurrentWorkspaceWithLocalPaths() } returns listOf(
@@ -357,7 +357,7 @@ class ClosedPullRequestWorktreeCleanupOrchestratorTest {
         return configurationService
     }
 
-    private fun request(worktreePath: Path, configurationService: BbCloudConfigurationService): ClosedPullRequestWorktreeCleanupRequest {
+    private fun request(worktreePath: Path, configurationService: DiffyConfigurationService): ClosedPullRequestWorktreeCleanupRequest {
         return ClosedPullRequestWorktreeCleanupRequest(
             project = mockk<Project>(),
             projectBasePath = worktreePath.toString(),

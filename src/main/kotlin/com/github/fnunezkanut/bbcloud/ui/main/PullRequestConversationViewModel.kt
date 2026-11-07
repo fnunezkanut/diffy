@@ -3,13 +3,13 @@ package com.github.fnunezkanut.bbcloud.ui.main
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentChange
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestComment
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestConversation
 import com.github.fnunezkanut.bbcloud.bitbucket.TimelineEntry
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
-import com.github.fnunezkanut.bbcloud.review.BbCloudPullRequestViewedThreads
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedThreads
 import com.github.fnunezkanut.bbcloud.review.PullRequestThreadFingerprint
 import com.github.fnunezkanut.bbcloud.review.PullRequestViewedThreadKey
 import com.intellij.collaboration.ui.codereview.comment.CommentInputActionsComponentFactory
@@ -60,7 +60,7 @@ class PullRequestConversationViewModel(
     override val mentionsPending: Boolean
         get() = state.value.mentionsPending
 
-    private val viewedThreads by lazy { BbCloudPullRequestViewedThreads.getInstance() }
+    private val viewedThreads by lazy { DiffyPullRequestViewedThreads.getInstance() }
 
     /**
      * Keeps the composer drafts of the Activity card alive across recompositions when the card list is re-created. The
@@ -233,7 +233,7 @@ class PullRequestConversationViewModel(
     }
 
     private fun workspaceSlug(): String {
-        return BbCloudConfigurationService.getInstance().workspaceSlugOrNull().orEmpty()
+        return DiffyConfigurationService.getInstance().workspaceSlugOrNull().orEmpty()
     }
 
     private fun threadPath(thread: TimelineEntry.CommentThread): String {
@@ -341,10 +341,10 @@ class PullRequestConversationViewModel(
     fun topLevelCommentInput(): CommentInput {
         return CommentInput(
             label = "comment",
-            placeholder = BbCloudBundle.message("main.branch.comments.placeholder"),
-            submitLabel = BbCloudBundle.message("main.branch.comments.submit"),
-            submitHint = BbCloudBundle.message("main.branch.comments.submitHint", SUBMIT_SHORTCUT_HINT),
-            failureMessage = BbCloudBundle.message("main.branch.comments.failed.inline"),
+            placeholder = DiffyBundle.message("main.branch.comments.placeholder"),
+            submitLabel = DiffyBundle.message("main.branch.comments.submit"),
+            submitHint = DiffyBundle.message("main.branch.comments.submitHint", SUBMIT_SHORTCUT_HINT),
+            failureMessage = DiffyBundle.message("main.branch.comments.failed.inline"),
             submit = { content, onResult -> commentEditor.addComment(content = content, onResult = onResult) }
         )
     }
@@ -353,10 +353,10 @@ class PullRequestConversationViewModel(
     override fun replyInput(commentId: Long): CommentInput {
         return CommentInput(
             label = "reply",
-            placeholder = BbCloudBundle.message("main.branch.comments.reply.placeholder"),
-            submitLabel = BbCloudBundle.message("main.branch.comments.reply.submit"),
-            submitHint = BbCloudBundle.message("main.branch.comments.reply.submitHint", SUBMIT_SHORTCUT_HINT),
-            failureMessage = BbCloudBundle.message("main.branch.comments.failed.inline"),
+            placeholder = DiffyBundle.message("main.branch.comments.reply.placeholder"),
+            submitLabel = DiffyBundle.message("main.branch.comments.reply.submit"),
+            submitHint = DiffyBundle.message("main.branch.comments.reply.submitHint", SUBMIT_SHORTCUT_HINT),
+            failureMessage = DiffyBundle.message("main.branch.comments.failed.inline"),
             submit = { content, onResult ->
                 applyCommentChange(change = CommentChange.Reply(commentId = commentId, content = content), onResult = onResult)
             }
@@ -367,10 +367,10 @@ class PullRequestConversationViewModel(
     override fun editInput(comment: PullRequestComment): CommentInput {
         return CommentInput(
             label = "comment edit",
-            placeholder = BbCloudBundle.message("main.branch.comments.edit.placeholder"),
-            submitLabel = BbCloudBundle.message("main.branch.comments.edit.submit"),
-            submitHint = BbCloudBundle.message("main.branch.comments.edit.submitHint", SUBMIT_SHORTCUT_HINT),
-            failureMessage = BbCloudBundle.message("main.branch.comments.failed.inline"),
+            placeholder = DiffyBundle.message("main.branch.comments.edit.placeholder"),
+            submitLabel = DiffyBundle.message("main.branch.comments.edit.submit"),
+            submitHint = DiffyBundle.message("main.branch.comments.edit.submitHint", SUBMIT_SHORTCUT_HINT),
+            failureMessage = DiffyBundle.message("main.branch.comments.failed.inline"),
             initialText = comment.raw.orEmpty(),
             submit = { content, onResult ->
                 applyCommentChange(change = CommentChange.Edit(commentId = comment.id, content = content), onResult = onResult)

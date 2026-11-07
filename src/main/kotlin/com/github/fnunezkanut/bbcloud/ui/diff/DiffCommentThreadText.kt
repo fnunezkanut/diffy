@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.diff
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.ActivityUser
 
 /**
@@ -12,9 +12,9 @@ internal object DiffCommentThreadText {
     fun resolutionText(resolvedBy: ActivityUser?): String {
         val name = resolvedBy?.displayName?.takeIf { it.isNotBlank() }
         return if (name == null) {
-            BbCloudBundle.message("main.branch.diffComments.threadResolvedUnknown")
+            DiffyBundle.message("main.branch.diffComments.threadResolvedUnknown")
         } else {
-            BbCloudBundle.message("main.branch.diffComments.threadResolved", name)
+            DiffyBundle.message("main.branch.diffComments.threadResolved", name)
         }
     }
 }

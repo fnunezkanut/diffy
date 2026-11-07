@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.worktree
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
@@ -33,15 +33,15 @@ object WorktreeBranchCollisionDialog {
      */
     fun show(project: Project, prNumber: Long, branchName: String, sourceCheckoutPath: Path): Choice {
         return runOnEdtAndWait {
-            val title = BbCloudBundle.message("otherProjects.worktree.branchCheckedOut.title", prNumber)
-            val message = BbCloudBundle.message(
+            val title = DiffyBundle.message("otherProjects.worktree.branchCheckedOut.title", prNumber)
+            val message = DiffyBundle.message(
                 "otherProjects.worktree.branchCheckedOut.message",
                 branchName,
                 sourceCheckoutPath.toString()
             )
             val options = arrayOf(
-                BbCloudBundle.message("otherProjects.worktree.branchCheckedOut.openInBitbucket"),
-                BbCloudBundle.message("otherProjects.worktree.branchCheckedOut.dismiss")
+                DiffyBundle.message("otherProjects.worktree.branchCheckedOut.openInBitbucket"),
+                DiffyBundle.message("otherProjects.worktree.branchCheckedOut.dismiss")
             )
             val chosenIndex = Messages.showDialog(
                 project,
@@ -67,15 +67,15 @@ object WorktreeBranchCollisionDialog {
      */
     fun showUncommittedChanges(project: Project, prNumber: Long, branchName: String, mainBranchName: String): Choice {
         return runOnEdtAndWait {
-            val title = BbCloudBundle.message("otherProjects.worktree.switchMain.dirty.title", prNumber)
-            val message = BbCloudBundle.message(
+            val title = DiffyBundle.message("otherProjects.worktree.switchMain.dirty.title", prNumber)
+            val message = DiffyBundle.message(
                 "otherProjects.worktree.switchMain.dirty.message",
                 branchName,
                 mainBranchName
             )
             val options = arrayOf(
-                BbCloudBundle.message("otherProjects.worktree.branchCheckedOut.openInBitbucket"),
-                BbCloudBundle.message("otherProjects.worktree.branchCheckedOut.dismiss")
+                DiffyBundle.message("otherProjects.worktree.branchCheckedOut.openInBitbucket"),
+                DiffyBundle.message("otherProjects.worktree.branchCheckedOut.dismiss")
             )
             val chosenIndex = Messages.showDialog(
                 project,

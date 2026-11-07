@@ -50,7 +50,7 @@ class PullRequestWorktreeResolverTest {
     @Test
     fun `resolve - work tree directory that does not exist yet still resolves because it is created on demand`() {
         // GIVEN only the source checkout exists on disk; the work tree root does NOT yet exist (it is created on demand
-        // by BbCloudWorktreeService), so the resolver must not gate on its existence.
+        // by DiffyWorktreeService), so the resolver must not gate on its existence.
         val mappings = listOf(mapping(localFolderPath = watchedClonePath.toString()))
 
         // WHEN the work tree root is NOT a directory, but the source checkout is

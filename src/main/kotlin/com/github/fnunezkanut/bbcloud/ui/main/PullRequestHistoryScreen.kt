@@ -33,7 +33,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.ActivityFeedEntry
 import com.github.fnunezkanut.bbcloud.bitbucket.ActivityUser
 import com.github.fnunezkanut.bbcloud.bitbucket.BuildState
@@ -116,8 +116,8 @@ private fun ActivityBody(
     conversationViewModel: PullRequestConversationViewModel
 ) {
     when (state.loadState) {
-        PullRequestHistoryLoadState.Loading -> ActivityMessage(BbCloudBundle.message("main.branch.history.loading"))
-        PullRequestHistoryLoadState.Error -> ActivityMessage(BbCloudBundle.message("main.branch.history.error"))
+        PullRequestHistoryLoadState.Loading -> ActivityMessage(DiffyBundle.message("main.branch.history.loading"))
+        PullRequestHistoryLoadState.Error -> ActivityMessage(DiffyBundle.message("main.branch.history.error"))
         PullRequestHistoryLoadState.Loaded -> ActivityTimeline(
             state = state,
             historyViewModel = historyViewModel,
@@ -139,7 +139,7 @@ private fun ActivityTimeline(
         ) {
             Icon(key = AllIconsKeys.General.BalloonWarning, contentDescription = null)
             Text(
-                text = BbCloudBundle.message("main.branch.history.partialFailure"),
+                text = DiffyBundle.message("main.branch.history.partialFailure"),
                 color = JewelTheme.globalColors.text.info
             )
         }
@@ -173,7 +173,7 @@ private fun ActivityTimeline(
     }
     if (state.showTruncation) {
         Text(
-            text = BbCloudBundle.message("main.branch.history.truncated"),
+            text = DiffyBundle.message("main.branch.history.truncated"),
             color = JewelTheme.globalColors.text.info
         )
     }
@@ -306,31 +306,31 @@ private fun HistoryHeadline(entry: ActivityFeedEntry, viewModel: PullRequestHist
             is TimelineEntry.Opened -> {
                 HistoryActorName(entry.actor)
                 HistoryStatePill(
-                    text = BbCloudBundle.message("main.branch.history.pill.opened"),
+                    text = DiffyBundle.message("main.branch.history.pill.opened"),
                     state = PullRequestState.Open
                 )
-                Text(text = BbCloudBundle.message("main.branch.history.action.pullRequest"))
+                Text(text = DiffyBundle.message("main.branch.history.action.pullRequest"))
             }
             is TimelineEntry.StateChanged -> {
                 HistoryActorName(entry.actor)
                 HistoryStatePill(text = historyStatePillText(entry.state), state = entry.state)
-                Text(text = BbCloudBundle.message("main.branch.history.action.pullRequest"))
+                Text(text = DiffyBundle.message("main.branch.history.action.pullRequest"))
             }
             is TimelineEntry.Approved -> {
                 HistoryActorName(entry.actor)
-                Text(text = BbCloudBundle.message("main.branch.history.action.approved"))
+                Text(text = DiffyBundle.message("main.branch.history.action.approved"))
             }
             is TimelineEntry.TaskCreated -> {
                 HistoryActorName(entry.actor)
-                Text(text = BbCloudBundle.message("main.branch.history.action.taskCreated"))
+                Text(text = DiffyBundle.message("main.branch.history.action.taskCreated"))
             }
             is TimelineEntry.TaskResolved -> {
                 HistoryActorName(entry.actor)
-                Text(text = BbCloudBundle.message("main.branch.history.action.taskResolved"))
+                Text(text = DiffyBundle.message("main.branch.history.action.taskResolved"))
             }
             is TimelineEntry.CommitsPushed -> {
                 HistoryActorName(entry.actor)
-                Text(text = BbCloudBundle.message("main.branch.history.action.commitsPushed", entry.commits.size))
+                Text(text = DiffyBundle.message("main.branch.history.action.commitsPushed", entry.commits.size))
             }
             is TimelineEntry.BuildUpdated -> {
                 // The weight lets a long build name wrap instead of pushing the state text and the time into a narrow column.
@@ -385,7 +385,7 @@ private fun HistoryBody(entry: ActivityFeedEntry, viewModel: PullRequestHistoryV
 @Composable
 private fun RowScope.HistoryActorName(actor: ActivityUser?) {
     Text(
-        text = actor?.displayName ?: BbCloudBundle.message("main.branch.history.unknownUser"),
+        text = actor?.displayName ?: DiffyBundle.message("main.branch.history.unknownUser"),
         fontWeight = FontWeight.Bold,
         // The weight lets a long name shrink instead of pushing the pill, the action and the time out of the row.
         modifier = Modifier.weight(1f, fill = false),
@@ -440,8 +440,8 @@ private fun HistoryCommitRow(commit: PullRequestCommit, viewModel: PullRequestHi
 
 internal fun historyDayHeaderText(day: HistoryDay): String {
     return when (day) {
-        HistoryDay.Today -> BbCloudBundle.message("main.branch.history.day.today")
-        HistoryDay.Yesterday -> BbCloudBundle.message("main.branch.history.day.yesterday")
+        HistoryDay.Today -> DiffyBundle.message("main.branch.history.day.today")
+        HistoryDay.Yesterday -> DiffyBundle.message("main.branch.history.day.yesterday")
         is HistoryDay.Earlier -> activityFormatDate(day.date)
     }
 }
@@ -452,18 +452,18 @@ private fun activityFormatDate(date: LocalDate): String {
 
 private fun historyStatePillText(state: PullRequestState): String {
     return when (state) {
-        PullRequestState.Open -> BbCloudBundle.message("main.branch.history.pill.opened")
-        PullRequestState.Merged -> BbCloudBundle.message("main.branch.history.pill.merged")
-        PullRequestState.Declined -> BbCloudBundle.message("main.branch.history.pill.declined")
+        PullRequestState.Open -> DiffyBundle.message("main.branch.history.pill.opened")
+        PullRequestState.Merged -> DiffyBundle.message("main.branch.history.pill.merged")
+        PullRequestState.Declined -> DiffyBundle.message("main.branch.history.pill.declined")
     }
 }
 
 private fun activityBuildStateText(state: BuildState): String {
     return when (state) {
-        BuildState.Successful -> BbCloudBundle.message("main.branch.history.build.successful")
-        BuildState.Failed -> BbCloudBundle.message("main.branch.history.build.failed")
-        BuildState.InProgress -> BbCloudBundle.message("main.branch.history.build.inProgress")
-        BuildState.Stopped -> BbCloudBundle.message("main.branch.history.build.stopped")
+        BuildState.Successful -> DiffyBundle.message("main.branch.history.build.successful")
+        BuildState.Failed -> DiffyBundle.message("main.branch.history.build.failed")
+        BuildState.InProgress -> DiffyBundle.message("main.branch.history.build.inProgress")
+        BuildState.Stopped -> DiffyBundle.message("main.branch.history.build.stopped")
     }
 }
 

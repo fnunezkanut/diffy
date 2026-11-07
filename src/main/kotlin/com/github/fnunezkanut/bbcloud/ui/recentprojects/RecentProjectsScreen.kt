@@ -39,8 +39,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudCompactOutlinedIconButton
+import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyCompactOutlinedIconButton
 import com.github.fnunezkanut.bbcloud.ui.components.REPOSITORY_ICON_SIZE
 import com.github.fnunezkanut.bbcloud.ui.components.actionButtonHoverBackground
 import com.github.fnunezkanut.bbcloud.ui.main.ActionButtonOutlines
@@ -80,11 +80,11 @@ fun RecentProjectsScreen(viewModel: RecentProjectsViewModel) {
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
-                state.isLoading && state.isEmpty -> CenteredMessage(text = BbCloudBundle.message("recentProjects.loading"))
+                state.isLoading && state.isEmpty -> CenteredMessage(text = DiffyBundle.message("recentProjects.loading"))
                 state.loadFailed -> LoadFailed(onRetry = viewModel::reload)
-                state.isEmpty -> CenteredMessage(text = BbCloudBundle.message("recentProjects.empty"))
+                state.isEmpty -> CenteredMessage(text = DiffyBundle.message("recentProjects.empty"))
                 visible.first.isEmpty() && visible.second.isEmpty() -> CenteredMessage(
-                    text = BbCloudBundle.message("recentProjects.search.noResults", state.searchQuery.trim())
+                    text = DiffyBundle.message("recentProjects.search.noResults", state.searchQuery.trim())
                 )
                 else -> RecentProjectsList(
                     groups = visible.first,
@@ -118,9 +118,9 @@ private fun LoadFailed(onRetry: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = BbCloudBundle.message("recentProjects.loadFailed"))
+            Text(text = DiffyBundle.message("recentProjects.loadFailed"))
             Link(
-                text = BbCloudBundle.message("recentProjects.retry"),
+                text = DiffyBundle.message("recentProjects.retry"),
                 onClick = onRetry
             )
         }
@@ -149,19 +149,19 @@ private fun RecentProjectsSearchField(query: String, onQueryChange: (String) -> 
                 onQueryChange(updated.text)
             },
             modifier = Modifier.weight(1f),
-            placeholder = { Text(text = BbCloudBundle.message("recentProjects.search.placeholder")) },
+            placeholder = { Text(text = DiffyBundle.message("recentProjects.search.placeholder")) },
             leadingIcon = {
                 Icon(
                     key = AllIconsKeys.Actions.Search,
-                    contentDescription = BbCloudBundle.message("recentProjects.search.icon.description")
+                    contentDescription = DiffyBundle.message("recentProjects.search.icon.description")
                 )
             }
         )
         if (fieldValue.text.isNotEmpty()) {
-            Tooltip(tooltip = { Text(text = BbCloudBundle.message("recentProjects.search.clear.tooltip")) }) {
+            Tooltip(tooltip = { Text(text = DiffyBundle.message("recentProjects.search.clear.tooltip")) }) {
                 Icon(
                     key = AllIconsKeys.Actions.Close,
-                    contentDescription = BbCloudBundle.message("recentProjects.search.clear.tooltip"),
+                    contentDescription = DiffyBundle.message("recentProjects.search.clear.tooltip"),
                     modifier = Modifier.clickable(onClick = onClear).pointerHoverIcon(PointerIcon.Hand)
                 )
             }
@@ -201,7 +201,7 @@ private fun RecentProjectsList(groups: List<RecentProjectGroupRow>, ungrouped: L
 
 @Composable
 private fun RecentProjectGroupHeader(group: RecentProjectGroupRow, onToggle: () -> Unit) {
-    val description = BbCloudBundle.message(
+    val description = DiffyBundle.message(
         if (group.isExpanded) "recentProjects.group.collapse" else "recentProjects.group.expand"
     )
     Row(
@@ -235,12 +235,12 @@ private fun RecentProjectRowItem(row: RecentProjectRow, viewModel: RecentProject
     ContextMenuArea(
         items = {
             val items = mutableListOf(
-                ContextMenuItem(label = BbCloudBundle.message("recentProjects.row.remove")) {
+                ContextMenuItem(label = DiffyBundle.message("recentProjects.row.remove")) {
                     viewModel.onRemoveRequested(row = row)
                 }
             )
             if (canRemoveWorktree) {
-                items += ContextMenuItem(label = BbCloudBundle.message("recentProjects.row.removeWorktree")) {
+                items += ContextMenuItem(label = DiffyBundle.message("recentProjects.row.removeWorktree")) {
                     viewModel.onRemoveWorktreeRequested(row = row)
                 }
             }
@@ -248,7 +248,7 @@ private fun RecentProjectRowItem(row: RecentProjectRow, viewModel: RecentProject
         }
     ) {
         Tooltip(
-            tooltip = { Text(text = BbCloudBundle.message("recentProjects.row.missing.tooltip")) },
+            tooltip = { Text(text = DiffyBundle.message("recentProjects.row.missing.tooltip")) },
             enabled = !row.exists
         ) {
             Row(
@@ -288,7 +288,7 @@ private fun RecentProjectRowItem(row: RecentProjectRow, viewModel: RecentProject
                         ) {
                             Icon(
                                 key = AllIconsKeys.Vcs.Branch,
-                                contentDescription = BbCloudBundle.message("recentProjects.row.branch.description"),
+                                contentDescription = DiffyBundle.message("recentProjects.row.branch.description"),
                                 modifier = Modifier.size(BRANCH_ICON_SIZE),
                                 tint = secondaryColor
                             )
@@ -321,20 +321,20 @@ private fun RecentProjectRowActions(row: RecentProjectRow, canRemoveWorktree: Bo
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Tooltip(tooltip = { Text(text = BbCloudBundle.message("recentProjects.row.remove.tooltip")) }) {
-            BbCloudCompactOutlinedIconButton(
+        Tooltip(tooltip = { Text(text = DiffyBundle.message("recentProjects.row.remove.tooltip")) }) {
+            DiffyCompactOutlinedIconButton(
                 icon = AllIconsKeys.Actions.Close,
-                contentDescription = BbCloudBundle.message("recentProjects.row.remove.contentDescription", row.name),
+                contentDescription = DiffyBundle.message("recentProjects.row.remove.contentDescription", row.name),
                 outlineColor = ActionButtonOutlines.neutral(),
                 enabled = true,
                 onClick = { viewModel.onRemoveRequested(row = row) }
             )
         }
         if (canRemoveWorktree) {
-            Tooltip(tooltip = { Text(text = BbCloudBundle.message("recentProjects.row.removeWorktree.tooltip")) }) {
-                BbCloudCompactOutlinedIconButton(
+            Tooltip(tooltip = { Text(text = DiffyBundle.message("recentProjects.row.removeWorktree.tooltip")) }) {
+                DiffyCompactOutlinedIconButton(
                     icon = AllIconsKeys.Actions.GC,
-                    contentDescription = BbCloudBundle.message("recentProjects.row.removeWorktree.contentDescription", row.name),
+                    contentDescription = DiffyBundle.message("recentProjects.row.removeWorktree.contentDescription", row.name),
                     outlineColor = ActionButtonOutlines.red(),
                     enabled = true,
                     onClick = { viewModel.onRemoveWorktreeRequested(row = row) }

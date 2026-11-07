@@ -292,7 +292,7 @@ class PrBranchSyncEngine(
                         command = GitCommand.UPDATE_REF,
                         parameters = listOf(
                             "-m",
-                            "bbcloud: fast-forward $branch to ${snapshot.remoteName}/$branch",
+                            "diffy: fast-forward $branch to ${snapshot.remoteName}/$branch",
                             "$HEADS_PREFIX$branch",
                             action.newRevision,
                             action.oldRevision

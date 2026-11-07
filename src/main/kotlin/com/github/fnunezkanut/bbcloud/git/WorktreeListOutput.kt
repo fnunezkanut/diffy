@@ -9,7 +9,7 @@ import java.nio.file.Paths
  * The porcelain format lists each worktree as a block of attribute lines; the first line of every block is
  * `worktree <absolute-path>`. Comparing those paths (normalized to absolute, normalized form) against a candidate
  * path tells us whether `git worktree add` would collide with an existing registration, which drives the idempotent
- * reconciliation in [BbCloudWorktreeService]. Kept pure so the parsing is unit-testable with sample porcelain strings.
+ * reconciliation in [DiffyWorktreeService]. Kept pure so the parsing is unit-testable with sample porcelain strings.
  */
 object WorktreeListOutput {
     fun containsWorktree(porcelainOutput: String, worktreePath: Path): Boolean {

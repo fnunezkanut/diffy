@@ -1,22 +1,22 @@
 package com.github.fnunezkanut.bbcloud.ui.worktree
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
-import com.github.fnunezkanut.bbcloud.auth.BbCloudAccessTokenProvider
-import com.github.fnunezkanut.bbcloud.bitbucket.BbCloudOpenPullRequestService
+import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.auth.DiffyAccessTokenProvider
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
+import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketPullRequestClient
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
-import com.github.fnunezkanut.bbcloud.git.BbCloudWorktreeService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.BitbucketGitRemoteReader
+import com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService
 import com.github.fnunezkanut.bbcloud.git.WorktreeSetupResult
 import com.github.fnunezkanut.bbcloud.project.LocalRepositoryProjectOpener
 import com.github.fnunezkanut.bbcloud.project.PullRequestOpenCheck
 import com.github.fnunezkanut.bbcloud.project.PullRequestOpenCheckResult
 import com.github.fnunezkanut.bbcloud.project.PullRequestWorktreeResolution
 import com.github.fnunezkanut.bbcloud.project.PullRequestWorktreeResolver
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPendingEditorOpen
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestEditorOpenQueue
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPendingEditorOpen
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorOpenQueue
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.impl.ProjectUtil
 import com.intellij.notification.NotificationAction
@@ -50,16 +50,16 @@ import kotlin.coroutines.cancellation.CancellationException
 class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
     private val openingWorktrees: MutableSet<Path> = ConcurrentHashMap.newKeySet<Path>()
 
-    private val openPullRequestService: BbCloudOpenPullRequestService by lazy {
-        BbCloudOpenPullRequestService(
-            accessTokenProvider = ApplicationManager.getApplication().service<BbCloudAccessTokenProvider>(),
+    private val openPullRequestService: DiffyOpenPullRequestService by lazy {
+        DiffyOpenPullRequestService(
+            accessTokenProvider = ApplicationManager.getApplication().service<DiffyAccessTokenProvider>(),
             pullRequestClient = OkHttpBitbucketPullRequestClient()
         )
     }
 
     /** Finds the source clone and the work tree path for a pull request, using only the local disk. */
     fun resolve(workspace: String, repoSlug: String, prNumber: Long): PullRequestWorktreeResolution {
-        val configuration = BbCloudConfigurationService.getInstance()
+        val configuration = DiffyConfigurationService.getInstance()
         return PullRequestWorktreeResolver.resolve(
             mappings = configuration.watchedProjectsForCurrentWorkspaceWithLocalPaths(),
             workTreeDirectory = configuration.workTreeDirectoryOrNull(),
@@ -87,7 +87,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
 
     /**
      * Re-checks with Bitbucket that the pull request is still open, then creates or reconciles the work tree on the
-     * pull request branch. The git work runs on IO inside [BbCloudWorktreeService.ensureWorktree]. Call this from a
+     * pull request branch. The git work runs on IO inside [DiffyWorktreeService.ensureWorktree]. Call this from a
      * coroutine. It shows no UI.
      */
     suspend fun prepareWorktree(
@@ -134,10 +134,10 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
         }
         if (remoteUrl == null) {
             LOG.info("Cannot open pull request #$prNumber: source checkout is not a git repository or has no origin remote")
-            return WorktreeOpenOutcome.Failed(content = BbCloudBundle.message("otherProjects.worktree.failed.notAGitRepo"))
+            return WorktreeOpenOutcome.Failed(content = DiffyBundle.message("otherProjects.worktree.failed.notAGitRepo"))
         }
 
-        val setup = BbCloudWorktreeService.getInstance().ensureWorktree(
+        val setup = DiffyWorktreeService.getInstance().ensureWorktree(
             sourceCheckoutRoot = resolved.sourceCheckoutPath,
             worktreePath = resolved.worktreePath,
             remoteUrl = remoteUrl,
@@ -190,7 +190,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
                 LOG.warn("Opening pull request #$prNumber from the browser failed", exception)
                 notifyFailure(
                     prNumber = prNumber,
-                    content = BbCloudBundle.message("otherProjects.worktree.failed.generic"),
+                    content = DiffyBundle.message("otherProjects.worktree.failed.generic"),
                     webUrl = pullRequestWebUrl(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)
                 )
             }
@@ -199,10 +199,10 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
 
     private suspend fun openFromBrowserRequest(workspace: String, repoSlug: String, prNumber: Long) {
         val webUrl = pullRequestWebUrl(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)
-        val organizationUrl = BbCloudConfigurationService.getInstance().organizationUrlOrNull()
+        val organizationUrl = DiffyConfigurationService.getInstance().organizationUrlOrNull()
         if (organizationUrl == null) {
             LOG.info("Cannot open pull request #$prNumber from the browser: no organization URL configured")
-            notifyFailure(prNumber = prNumber, content = BbCloudBundle.message("otherProjects.worktree.failed.noOrgUrl"), webUrl = webUrl)
+            notifyFailure(prNumber = prNumber, content = DiffyBundle.message("otherProjects.worktree.failed.noOrgUrl"), webUrl = webUrl)
             return
         }
         val resolved = when (val resolution = resolve(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)) {
@@ -213,7 +213,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
                 LOG.info("Cannot open pull request #$prNumber from the browser: work tree directory is unavailable")
                 notifyFailure(
                     prNumber = prNumber,
-                    content = BbCloudBundle.message("otherProjects.worktree.failed.workTreeDirMissing"),
+                    content = DiffyBundle.message("otherProjects.worktree.failed.workTreeDirMissing"),
                     webUrl = webUrl
                 )
                 return
@@ -222,7 +222,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
                 LOG.info("Cannot open pull request #$prNumber from the browser: no local clone of $repoSlug")
                 notifyFailure(
                     prNumber = prNumber,
-                    content = BbCloudBundle.message("otherProjects.worktree.failed.sourceCheckoutMissing", repoSlug),
+                    content = DiffyBundle.message("otherProjects.worktree.failed.sourceCheckoutMissing", repoSlug),
                     webUrl = webUrl
                 )
                 return
@@ -253,7 +253,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
                     if (opened == null) {
                         notifyFailure(
                             prNumber = prNumber,
-                            content = BbCloudBundle.message("otherProjects.worktree.failed.openProjectFailed"),
+                            content = DiffyBundle.message("otherProjects.worktree.failed.openProjectFailed"),
                             webUrl = outcome.summary.webUrl
                         )
                     } else {
@@ -297,9 +297,9 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
             LOG.info("Cannot open pull request #${summary.id}: no repository web URL")
             return
         }
-        val queue = project.service<BbCloudPullRequestEditorOpenQueue>()
+        val queue = project.service<DiffyPullRequestEditorOpenQueue>()
         queue.enqueue(
-            BbCloudPendingEditorOpen(
+            DiffyPendingEditorOpen(
                 summary = summary,
                 branchName = summary.sourceBranch,
                 repositoryWebUrl = webUrl,
@@ -338,7 +338,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
 
     private fun notifyFailure(prNumber: Long, content: String, webUrl: String?) {
         notify(
-            title = BbCloudBundle.message("otherProjects.worktree.failed.title", prNumber),
+            title = DiffyBundle.message("otherProjects.worktree.failed.title", prNumber),
             content = content,
             webUrl = webUrl,
             prNumber = prNumber
@@ -347,8 +347,8 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
 
     private fun notifyBranchCollision(prNumber: Long, outcome: WorktreeOpenOutcome.BranchCollision, webUrl: String?) {
         notify(
-            title = BbCloudBundle.message("otherProjects.worktree.branchCheckedOut.title", prNumber),
-            content = BbCloudBundle.message(
+            title = DiffyBundle.message("otherProjects.worktree.branchCheckedOut.title", prNumber),
+            content = DiffyBundle.message(
                 "rest.open.branchCollision",
                 outcome.branchName,
                 outcome.sourceCheckoutPath.toString()
@@ -359,7 +359,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
     }
 
     private fun notify(title: String, content: String, webUrl: String?, prNumber: Long) {
-        val trimmed = content.trim().ifBlank { BbCloudBundle.message("otherProjects.worktree.failed.generic") }
+        val trimmed = content.trim().ifBlank { DiffyBundle.message("otherProjects.worktree.failed.generic") }
         val body = if (trimmed.length > MAX_NOTIFICATION_CONTENT_LENGTH) {
             trimmed.substring(0, MAX_NOTIFICATION_CONTENT_LENGTH) + "\u2026"
         } else {
@@ -370,7 +370,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
             .createNotification(title, body, NotificationType.ERROR)
         if (webUrl != null) {
             notification.addAction(
-                NotificationAction.createSimpleExpiring(BbCloudBundle.message("otherProjects.worktree.openInBitbucket")) {
+                NotificationAction.createSimpleExpiring(DiffyBundle.message("otherProjects.worktree.openInBitbucket")) {
                     LOG.info("User opened Bitbucket PR #$prNumber from a work tree notification")
                     BrowserUtil.browse(webUrl)
                 }
@@ -391,7 +391,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
 
     companion object {
         private val LOG = logger<PullRequestWorktreeOpener>()
-        private const val NOTIFICATION_GROUP_ID = "BbCloud"
+        private const val NOTIFICATION_GROUP_ID = "Diffy"
         private const val MAX_NOTIFICATION_CONTENT_LENGTH = 2_000
 
         fun getInstance(): PullRequestWorktreeOpener {

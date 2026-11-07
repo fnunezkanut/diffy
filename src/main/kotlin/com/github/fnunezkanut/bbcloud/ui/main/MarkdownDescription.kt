@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentEmojiResolver
 import com.github.fnunezkanut.bbcloud.bitbucket.MarkdownCodeRegions
 import com.intellij.ide.BrowserUtil
@@ -101,7 +101,7 @@ private fun linkLabel(alt: String, url: String): String {
     if (fileName != null && fileName.isNotBlank()) {
         return fileName
     }
-    return BbCloudBundle.message("main.branch.overview.description.imageLink")
+    return DiffyBundle.message("main.branch.overview.description.imageLink")
 }
 
 /**

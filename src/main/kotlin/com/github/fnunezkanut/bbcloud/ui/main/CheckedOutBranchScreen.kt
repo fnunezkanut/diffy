@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -34,7 +34,7 @@ internal fun CheckedOutBranchScreen(
     historyViewModel: PullRequestHistoryViewModel,
     infoViewModel: PullRequestInfoViewModel,
     headerViewModel: PullRequestHeaderViewModel,
-    configurationService: BbCloudConfigurationService,
+    configurationService: DiffyConfigurationService,
     coroutineScope: CoroutineScope,
     onUpdateLocalBranch: () -> Unit
 ) {

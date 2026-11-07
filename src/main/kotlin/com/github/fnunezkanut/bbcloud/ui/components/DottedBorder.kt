@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Draws a dotted, rounded outline along the edges of the composable it is applied to. The dash pattern matches the dotted
- * outline of `BbCloudOutlinedActionButton`, so the two read as the same control style.
+ * outline of `DiffyOutlinedActionButton`, so the two read as the same control style.
  *
  * The stroke is drawn inside the bounds, inset by half its width, so the outer edge of the stroke is not clipped by the
  * bounds of the composable or of its parent.

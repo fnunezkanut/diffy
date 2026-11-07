@@ -45,7 +45,7 @@ object PullRequestWorktreeResolver {
         prNumber: Long,
         isDirectory: (Path) -> Boolean = { path -> Files.isDirectory(path) }
     ): PullRequestWorktreeResolution {
-        // The work tree root is derived ($projectsDirectory/.worktrees) and created on demand by BbCloudWorktreeService,
+        // The work tree root is derived ($projectsDirectory/.worktrees) and created on demand by DiffyWorktreeService,
         // so it is NOT required to already exist here; it only has to be a non-blank, valid path. A null/blank value
         // (no projects directory) or an invalid path is treated as WorkTreeDirMissing.
         val resolvedWorkTreeDirectory = normalizedPath(path = workTreeDirectory)

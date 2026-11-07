@@ -37,7 +37,7 @@ internal object OAuthTokenResponseParser {
         val refreshToken = payload.refresh_token?.takeIf { it.isNotBlank() }
             ?: previousRefreshToken?.takeIf { it.isNotBlank() }
             ?: return null
-        val lifetime = payload.expires_in?.seconds ?: BbCloudOAuthConfig.DEFAULT_ACCESS_TOKEN_LIFETIME
+        val lifetime = payload.expires_in?.seconds ?: DiffyOAuthConfig.DEFAULT_ACCESS_TOKEN_LIFETIME
         return OAuthTokens(
             accessToken = accessToken,
             refreshToken = refreshToken,

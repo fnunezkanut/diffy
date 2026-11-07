@@ -15,7 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.settings.PullRequestListFilter
 import com.github.fnunezkanut.bbcloud.settings.PullRequestUserScope
 import org.jetbrains.jewel.ui.component.CheckboxRow
@@ -38,18 +38,18 @@ internal fun RowScope.PullRequestExcludeCheckboxes(filter: PullRequestListFilter
     ) {
         if (viewModel.scope.offersResolved) {
             CheckboxRow(
-                text = BbCloudBundle.message("pullRequests.exclude.resolved"),
+                text = DiffyBundle.message("pullRequests.exclude.resolved"),
                 checked = filter.excludeResolved,
                 onCheckedChange = viewModel::onExcludeResolvedChanged
             )
         }
         CheckboxRow(
-            text = BbCloudBundle.message("pullRequests.exclude.approvedByMe"),
+            text = DiffyBundle.message("pullRequests.exclude.approvedByMe"),
             checked = filter.excludeApprovedByMe,
             onCheckedChange = viewModel::onExcludeApprovedByMeChanged
         )
         CheckboxRow(
-            text = BbCloudBundle.message("pullRequests.exclude.drafts"),
+            text = DiffyBundle.message("pullRequests.exclude.drafts"),
             checked = filter.excludeDrafts,
             onCheckedChange = viewModel::onExcludeDraftsChanged
         )
@@ -71,7 +71,7 @@ internal fun RowScope.PullRequestExcludeCheckboxes(filter: PullRequestListFilter
 @Composable
 private fun UserScopeComboBox(userScope: PullRequestUserScope, isCurrentUserKnown: Boolean, onUserScopeChanged: (PullRequestUserScope) -> Unit) {
     val choices = if (isCurrentUserKnown) PullRequestUserScope.entries.toList() else listOf(PullRequestUserScope.AnyUser)
-    val options = choices.map { choice -> BbCloudBundle.message(labelKeyOf(userScope = choice)) }
+    val options = choices.map { choice -> DiffyBundle.message(labelKeyOf(userScope = choice)) }
     val selectedIndex = choices.indexOf(userScope).coerceAtLeast(0)
     ListComboBox(
         items = options,

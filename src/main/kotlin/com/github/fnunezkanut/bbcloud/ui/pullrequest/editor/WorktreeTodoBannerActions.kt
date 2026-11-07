@@ -1,12 +1,12 @@
 package com.github.fnunezkanut.bbcloud.ui.pullrequest.editor
 
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.project.LocalRepositoryProjectOpener
 import com.github.fnunezkanut.bbcloud.review.PageReloadRequest
 import com.github.fnunezkanut.bbcloud.review.WorktreePullRequestPageReloader
 import com.github.fnunezkanut.bbcloud.review.WorktreeTodoBannerUiState
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.BbCloudPullRequestVirtualFiles
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.DiffyPullRequestVirtualFiles
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
@@ -38,7 +38,7 @@ internal object WorktreeTodoBannerActions {
             return
         }
         LOG.info("User clicked the repository slug $repoSlug on the worktree banner for pull request #$pullRequestId")
-        val localPath = BbCloudConfigurationService.getInstance().localCheckoutPathForRepo(repoSlug)
+        val localPath = DiffyConfigurationService.getInstance().localCheckoutPathForRepo(repoSlug)
         if (localPath.isBlank()) {
             LOG.info("No local checkout for $repoSlug; opening the repository for pull request #$pullRequestId on the web")
             browseRepository(project = project, repoSlug = repoSlug, pullRequestId = pullRequestId)
@@ -111,7 +111,7 @@ internal object WorktreeTodoBannerActions {
             LOG.info("Cannot open the pull request page for pull request #${state.pullRequestId}: project is not a worktree")
             return
         }
-        val file = BbCloudPullRequestVirtualFiles.forWorktreeProject(project)
+        val file = DiffyPullRequestVirtualFiles.forWorktreeProject(project)
         if (file == null) {
             LOG.info(
                 "Cannot open the pull request page for pull request #${state.pullRequestId}: " +
@@ -136,7 +136,7 @@ internal object WorktreeTodoBannerActions {
     }
 
     private fun browseRepository(project: Project, repoSlug: String, pullRequestId: Long) {
-        val organizationUrl = BbCloudConfigurationService.getInstance().organizationUrlOrNull()
+        val organizationUrl = DiffyConfigurationService.getInstance().organizationUrlOrNull()
         val url = organizationUrl?.let { BitbucketRepositoryUrls.repositoryWebUrl(organizationUrl = it, repoSlug = repoSlug) }
         if (url.isNullOrBlank()) {
             LOG.info("Repository link unavailable for pull request #$pullRequestId on the worktree banner")

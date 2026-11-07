@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.ui.main.CenteredError
 import com.github.fnunezkanut.bbcloud.ui.main.CenteredMessage
 import com.github.fnunezkanut.bbcloud.ui.main.MainPanelStatusSupport
@@ -38,19 +38,19 @@ internal fun PullRequestsListingBody(
             when (state.card) {
                 PullRequestsCard.Hidden -> Unit
                 PullRequestsCard.Loading -> CenteredMessage(
-                    message = BbCloudBundle.message("main.pullRequests.loading")
+                    message = DiffyBundle.message("main.pullRequests.loading")
                 )
 
                 PullRequestsCard.Empty -> CenteredMessage(
-                    message = BbCloudBundle.message(emptyMessageKey)
+                    message = DiffyBundle.message(emptyMessageKey)
                 )
 
                 PullRequestsCard.FilteredEmpty -> CenteredMessage(
-                    message = BbCloudBundle.message("pullRequests.noneMatchFilters")
+                    message = DiffyBundle.message("pullRequests.noneMatchFilters")
                 )
 
                 PullRequestsCard.Error -> CenteredError(
-                    message = BbCloudBundle.message(errorMessageKey)
+                    message = DiffyBundle.message(errorMessageKey)
                 )
 
                 PullRequestsCard.Listing -> PullRequestCardListing(
@@ -70,7 +70,7 @@ internal fun PullRequestsListingBody(
         footer(state)
         if (state.isUserFilterUnavailable) {
             Text(
-                text = BbCloudBundle.message("pullRequests.userFilterUnavailable"),
+                text = DiffyBundle.message("pullRequests.userFilterUnavailable"),
                 color = MainPanelStatusSupport.warningForeground()
             )
         }

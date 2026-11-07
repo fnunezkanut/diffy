@@ -40,7 +40,7 @@ internal class PullRequestAddReviewCommentAction :
         if (editorLine in 0 until target.editor.document.lineCount) {
             target.editor.caretModel.moveToOffset(target.editor.document.getLineEndOffset(editorLine))
         }
-        BbCloudPullRequestDiffCommentService.getInstance(target.project).openInlineLineComposer(
+        DiffyPullRequestDiffCommentService.getInstance(target.project).openInlineLineComposer(
             editor = target.editor,
             relativePath = target.relativePath,
             pullRequestId = target.pullRequestId,
@@ -95,7 +95,7 @@ internal class PullRequestAddReviewCommentAction :
      * any) owns [editor].
      */
     private fun resolveSide(project: Project, editor: EditorEx): InlineCommentSide {
-        return BbCloudPullRequestDiffCommentService.getInstance(project).diffSideForEditor(editor = editor)
+        return DiffyPullRequestDiffCommentService.getInstance(project).diffSideForEditor(editor = editor)
             ?: InlineCommentSide.AFTER
     }
 

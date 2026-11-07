@@ -23,13 +23,13 @@ class BitbucketAuthorizeUrlTest {
         assertSoftly {
             url.host shouldBe "bitbucket.org"
             url.encodedPath shouldBe "/site/oauth2/authorize"
-            url.queryParameter(BbCloudConsumerMaterial.primaryField()) shouldBe BbCloudConsumerMaterial.primary()
+            url.queryParameter(DiffyConsumerMaterial.primaryField()) shouldBe DiffyConsumerMaterial.primary()
             url.queryParameter("response_type") shouldBe "code"
             url.queryParameter("redirect_uri") shouldBe "http://127.0.0.1:42424/bbcloud"
             url.queryParameter("state") shouldBe "state-value"
             url.queryParameter("code_challenge") shouldBe "challenge-value"
             url.queryParameter("code_challenge_method") shouldBe "S256"
-            url.toString().contains(BbCloudConsumerMaterial.secondary()) shouldBe false
+            url.toString().contains(DiffyConsumerMaterial.secondary()) shouldBe false
         }
     }
 }

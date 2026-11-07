@@ -26,7 +26,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestReviewer
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerStatus
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.toComposeImageBitmap
@@ -158,7 +158,7 @@ private fun reviewerStatusBadgeKey(status: ReviewerStatus): IconKey? {
 }
 
 private fun reviewerTooltip(reviewer: PullRequestReviewer): String {
-    return BbCloudBundle.message(
+    return DiffyBundle.message(
         "main.pullRequests.reviewers.tooltip",
         reviewer.displayName,
         reviewerStatusTooltip(status = reviewer.status)

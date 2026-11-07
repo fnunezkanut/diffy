@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.pullrequest.decline
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.project.WatchedWorktreeRemovalOutcome
 import com.github.fnunezkanut.bbcloud.project.WatchedWorktreeRemover
 import com.intellij.openapi.diagnostic.logger
@@ -108,7 +108,7 @@ internal object WatchedWorktreeProgressModal : CleanupModal {
     override suspend fun show(project: Project, block: suspend () -> Unit) {
         withModalProgress(
             owner = ModalTaskOwner.project(project),
-            title = BbCloudBundle.message("workspace.watchedProjects.worktree.remove.progress"),
+            title = DiffyBundle.message("workspace.watchedProjects.worktree.remove.progress"),
             cancellation = TaskCancellation.nonCancellable()
         ) {
             block()

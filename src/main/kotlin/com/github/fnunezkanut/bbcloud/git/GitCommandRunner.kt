@@ -15,7 +15,7 @@ import kotlin.time.TimeSource
 data class GitCommandResult(val success: Boolean, val combinedOutput: String)
 
 /**
- * Resolves the open IntelliJ [Project] whose base path matches a checkout root, so [BbCloudWorktreeService] can run
+ * Resolves the open IntelliJ [Project] whose base path matches a checkout root, so [DiffyWorktreeService] can run
  * git through that project's [GitLineHandler] when a window is already open for it. Injectable so the service can be
  * unit-tested without the platform's [com.intellij.openapi.project.ProjectManager]; the production implementation is
  * [OpenProjectLocatorImpl].
@@ -41,7 +41,7 @@ class OpenProjectLocatorImpl : OpenProjectLocator {
 }
 
 /**
- * The seam [BbCloudWorktreeService] uses to run git, so the service's reconciliation logic can be unit-tested against
+ * The seam [DiffyWorktreeService] uses to run git, so the service's reconciliation logic can be unit-tested against
  * stubbed command results without a platform fixture. The real implementation is [PlatformGitCommandRunner]; when a
  * project is already open for the working directory its [GitLineHandler] path is used for consistency with the rest of
  * the plugin, otherwise the command runs through a direct process invocation so worktree creation still works when no

@@ -1,22 +1,22 @@
 # Architecture
 
-This file describes how the bbcloud IntelliJ plugin source is organized. For build commands, coding standards, and
+This file describes how the diffy IntelliJ plugin source is organized. For build commands, coding standards, and
 logging rules, see [AGENTS.md](AGENTS.md). For user-facing features, see [README.md](README.md).
 
 All Kotlin sources live under `src/main/kotlin/com/github/fnunezkanut/bbcloud/`. Extension points, services, tool
 windows, and editors are registered in [`plugin.xml`](src/main/resources/META-INF/plugin.xml). User-visible strings
-live in `BbCloudBundle` (`messages/BbCloudBundle.properties`).
+live in `DiffyBundle` (`messages/DiffyBundle.properties`).
 
 ## Layers
 
 ```
 UI (Compose Screen  <-  UiState  <-  ViewModel, hosted by a Swing *Panel)
         |
-Application services (BbCloud*Service, git and project helpers)
+Application services (Diffy*Service, git and project helpers)
         |
 Bitbucket clients (OkHttp*Client, Bitbucket*Client)  ->  response parsers (Bitbucket*ResponseParser)
         |
-Credentials (PasswordSafe) and persisted settings (BbCloudSettings)
+Credentials (PasswordSafe) and persisted settings (DiffySettings)
 ```
 
 - Higher layers depend on lower layers only. Clients return sealed result types (for example
@@ -29,15 +29,15 @@ Credentials (PasswordSafe) and persisted settings (BbCloudSettings)
 | Package | Responsibility |
 | --- | --- |
 | `auth` | Bitbucket Cloud OAuth 2.0 (PKCE) login and the access-token layer: the login service and flow, the local callback server, the token-endpoint client, the access-token provider (OAuth first, API token fallback), the online credential validator, and the 401-retry OkHttp `Authenticator`. See "Authentication" below. |
-| `bitbucket` | Bitbucket Cloud REST clients, URL builders, JSON parsers, and domain models (pull requests, comments, tasks, build statuses, reviewers). Also holds the application services that combine clients with the access-token provider (`BbCloudAuthoredPullRequestService`, `BbCloudReviewQueueService`, `BbCloudOpenPullRequestService`, `BbCloudProjectRepositoryLinkService`). |
-| `config` | `BbCloudConfigurationService`: the single facade the UI uses for setup state, workspace, projects directory, watched projects, and list filters. |
-| `credentials` | `BbCloudCredentialStore` and its `PasswordSafe` implementation. Holds the API token and, as a separate entry, the OAuth token bundle (access token, refresh token, expiry); both may exist at once. |
-| `git` | Git command execution, worktree creation and removal, branch checkout, parsers for git output, `GitHeadBranchReader` (reads a project's current branch from its `HEAD` file), `PrBranchSyncEngine` (fetches, inspects and fast-forwards the local PR source and destination branches through the `GitCommandRunner` seam, driven by the pure `PrBranchFastForwardPolicy`), and `BbCloudPrBranchSyncService` (project service in a PR work tree window that serializes syncs and publishes the `PR_BRANCHES_SYNCED` topic, which the `.pr` editor session uses to refresh the red "branches are behind" warning). |
+| `bitbucket` | Bitbucket Cloud REST clients, URL builders, JSON parsers, and domain models (pull requests, comments, tasks, build statuses, reviewers). Also holds the application services that combine clients with the access-token provider (`DiffyAuthoredPullRequestService`, `DiffyReviewQueueService`, `DiffyOpenPullRequestService`, `DiffyProjectRepositoryLinkService`). |
+| `config` | `DiffyConfigurationService`: the single facade the UI uses for setup state, workspace, projects directory, watched projects, and list filters. |
+| `credentials` | `DiffyCredentialStore` and its `PasswordSafe` implementation. Holds the API token and, as a separate entry, the OAuth token bundle (access token, refresh token, expiry); both may exist at once. |
+| `git` | Git command execution, worktree creation and removal, branch checkout, parsers for git output, `GitHeadBranchReader` (reads a project's current branch from its `HEAD` file), `PrBranchSyncEngine` (fetches, inspects and fast-forwards the local PR source and destination branches through the `GitCommandRunner` seam, driven by the pure `PrBranchFastForwardPolicy`), and `DiffyPrBranchSyncService` (project service in a PR work tree window that serializes syncs and publishes the `PR_BRANCHES_SYNCED` topic, which the `.pr` editor session uses to refresh the red "branches are behind" warning). |
 | `project` | Mapping local checkouts and PR worktrees to Bitbucket repositories: watched-project discovery, worktree layout and resolution, `ResolvedWorktreeCleanupSelection` and `ResolvedWorktreeCleaner` (background cleanup of the work trees and git links of merged or declined PRs when the Current Project tab loads), opening local projects, `PullRequestWorktreeRecentProjects` (groups PR worktrees in Recent Projects and forgets removed ones), `RecentProjectsSource` (read side of the IDE Recent Projects list), `PullRequestWorktreePaths` (detects PR work tree folders under the work tree root and maps recent projects to repository slugs), and `WorktreeSourceCheckoutResolver` (finds the source clone of a work tree from its `.git` pointer, the watched mapping, or the projects directory). |
-| `review` | Per-project review state kept while a PR worktree is open: viewed files and threads, the worktree PR context, banners, page reloads, and the persisted recently-seen mention users cache (`BbCloudKnownUsersCache` / `BbCloudKnownUsersState`). |
-| `settings` | Persisted plugin settings (`BbCloudSettings`) and the Settings > Tools configurable. |
-| `toolwindow` | `BbCloudToolWindowFactory` and the tool window tab ids. |
-| `ui` | `BbCloudToolWindowPanel` (the project service that owns the tool window tabs) and the sub-packages below. |
+| `review` | Per-project review state kept while a PR worktree is open: viewed files and threads, the worktree PR context, banners, page reloads, and the persisted recently-seen mention users cache (`DiffyKnownUsersCache` / `DiffyKnownUsersState`). |
+| `settings` | Persisted plugin settings (`DiffySettings`) and the Settings > Tools configurable. |
+| `toolwindow` | `DiffyToolWindowFactory` and the tool window tab ids. |
+| `ui` | `DiffyToolWindowPanel` (the project service that owns the tool window tabs) and the sub-packages below. |
 | `ui/main` | Current Project tab: the pull request detail views (overview, conversation, changes, history), comment and description editors, reviewer search, and @mention suggestions (`CommentMentionSuggestions`, `CommentMentionSource`). |
 | `ui/pullrequests` | The shared pull request listing (`PullRequestsViewModel`, filtering, merging of listing sources) used by both PR tabs. |
 | `ui/otherprojects` | Workspace and Workspace - Watched Projects tabs. |
@@ -48,7 +48,7 @@ Credentials (PasswordSafe) and persisted settings (BbCloudSettings)
 | `ui/setup` | First-run setup and the Settings screen. |
 | `ui/components` | Reusable Compose components. |
 | `ui/worktree` | Worktree dialogs and `PullRequestWorktreeOpener`, the one implementation of "open a pull request in its own work tree" used by the Workspace and Current Project panels and by the REST open path. It also holds `PullRequestWorktreeRemovalLauncher`, the one "remove a PR work tree" flow (guards, confirmation with an uncommitted-changes warning, removal, notifications) shared by the Watched Projects and Recent Projects tabs. It lives under `ui` because it opens editor tabs and shows notifications. |
-| `external` | Browser entry point: `BbCloudOpenPullRequestRestService` at `/api/bbcloud/open` (ping and open), its request validator, and the allowed extension origin. Requests run on a Netty thread, so work is handed to `ui/worktree`. |
+| `external` | Browser entry point: `DiffyOpenPullRequestRestService` at `/api/diffy/open` (ping and open), its request validator, and the allowed extension origin. Requests run on a Netty thread, so work is handed to `ui/worktree`. |
 | `validation` | Input validators for workspace and repository slugs. |
 
 ## UI pattern: UiState / ViewModel / Screen
@@ -63,7 +63,7 @@ Each screen has three parts:
 
 Example: `PullRequestOverviewUiState` / `PullRequestOverviewViewModel` / `PullRequestOverviewScreen` in `ui/main`.
 
-`*Panel` classes (`BbCloudMainPanel`, `BbCloudOtherProjectsPanel`, `CheckedOutBranchPanel`) are Swing hosts. They wire
+`*Panel` classes (`DiffyMainPanel`, `DiffyOtherProjectsPanel`, `CheckedOutBranchPanel`) are Swing hosts. They wire
 services into ViewModels, switch between not-configured and content cards, and show platform UI that needs a Swing
 parent (dialogs, notifications). For example, on the Workspace tabs:
 
@@ -71,9 +71,9 @@ parent (dialogs, notifications). For example, on the Workspace tabs:
 - `WorkspacePullRequestsLoader` loads the authored and reviewing sources into the shared `PullRequestsViewModel`
   against a `WorkspacePullRequestsDataSource`.
 
-`BbCloudOtherProjectsPanel` still runs the worktree open, prune, and remove flows itself. They are candidates for the
+`DiffyOtherProjectsPanel` still runs the worktree open, prune, and remove flows itself. They are candidates for the
 same extraction. The Watched Projects remove button is the exception that delegates the work: the panel asks for
-confirmation, then `BbCloudPullRequestDeclineCoordinator` runs `WatchedWorktreeRemover` on its application scope. The
+confirmation, then `DiffyPullRequestDeclineCoordinator` runs `WatchedWorktreeRemover` on its application scope. The
 remover closes an open IDE window on the work tree and then removes it, so the removal survives the project closing.
 `WatchedWorktreeRemovalOrchestrator` bounds the progress modal to 5 seconds. The removal continues on the application
 scope after the modal closes.
@@ -99,21 +99,21 @@ scope after the modal closes.
 ## Authentication (`auth`)
 
 Two credentials may be stored at once, and every API request resolves its bearer token through
-`BbCloudAccessTokenProvider` (implemented by the application service `BbCloudAuthService`):
+`DiffyAccessTokenProvider` (implemented by the application service `DiffyAuthService`):
 
 - **OAuth first, API token fallback.** `bearerTokenOrNull()` returns a working OAuth access token when one is
-  available, otherwise the stored API token. `BbCloudAccessTokenResolver` holds the logic.
+  available, otherwise the stored API token. `DiffyAccessTokenResolver` holds the logic.
 - **Proactive refresh.** An OAuth access token within five minutes of expiry is refreshed under a single-flight
   `Mutex`, so concurrent callers cause one refresh. A permanent refresh failure (`invalid_grant` / `invalid_client`)
   clears the OAuth tokens, shows one balloon, and falls back to the API token. A transient failure keeps the tokens
   and applies a one-minute backoff before retrying.
-- **401 retry.** `BbCloudBearerRetryAuthenticator` is attached to the authenticated OkHttp clients. After a 401 on a
+- **401 retry.** `DiffyBearerRetryAuthenticator` is attached to the authenticated OkHttp clients. After a 401 on a
   trusted Bitbucket API URL it asks the provider for a refreshed token and retries the request once.
 
 The OAuth login itself:
 
-- `BbCloudOAuthLoginService` is an application service that owns the one login allowed per IDE; every project's
-  Settings tab observes its `StateFlow` and can cancel it. `BbCloudOAuthLoginFlow` is the testable core (PKCE request,
+- `DiffyOAuthLoginService` is an application service that owns the one login allowed per IDE; every project's
+  Settings tab observes its `StateFlow` and can cancel it. `DiffyOAuthLoginFlow` is the testable core (PKCE request,
   browser launch, callback wait, token exchange, result page).
 - `JdkOAuthCallbackServer` is a short-lived `com.sun.net.httpserver` server bound to `127.0.0.1:42424`. It serves
   `/bbcloud` (the OAuth redirect, answered with a 302 to a code-free result page) and `/bbcloud/done` (the result
@@ -121,8 +121,8 @@ The OAuth login itself:
 
 The configured gate:
 
-- `BbCloudConfigurationService.isConfigured()` requires a workspace slug, an existing projects directory, and a
-  credential that `BbCloudCredentialValidator` verifies working online with `GET /2.0/user`. The check result is
+- `DiffyConfigurationService.isConfigured()` requires a workspace slug, an existing projects directory, and a
+  credential that `DiffyCredentialValidator` verifies working online with `GET /2.0/user`. The check result is
   cached for five minutes (30 seconds when the check could not reach Bitbucket). When offline, the validator falls
   back to the last known working method so the UI is not locked.
 

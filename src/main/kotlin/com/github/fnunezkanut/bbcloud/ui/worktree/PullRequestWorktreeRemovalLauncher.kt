@@ -1,10 +1,10 @@
 package com.github.fnunezkanut.bbcloud.ui.worktree
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
-import com.github.fnunezkanut.bbcloud.git.BbCloudWorktreeService
+import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService
 import com.github.fnunezkanut.bbcloud.project.WatchedWorktreeRemovalOutcome
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.decline.BbCloudPullRequestDeclineCoordinator
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.decline.DiffyPullRequestDeclineCoordinator
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
@@ -26,12 +26,12 @@ import kotlin.coroutines.cancellation.CancellationException
  *
  * It refuses while pruning runs or the work tree is being opened, ignores a second request for a work tree that is
  * already being removed (in any tab or window, the guard is application wide), optionally asks for confirmation, and
- * then hands over to [BbCloudPullRequestDeclineCoordinator], which closes the IDE window on the work tree and removes it.
+ * then hands over to [DiffyPullRequestDeclineCoordinator], which closes the IDE window on the work tree and removes it.
  * Notifications for every outcome are shown here.
  */
 class PullRequestWorktreeRemovalLauncher(
     private val project: Project,
-    private val configurationService: BbCloudConfigurationService,
+    private val configurationService: DiffyConfigurationService,
     private val coroutineScope: CoroutineScope,
     private val worktreeOpener: PullRequestWorktreeOpener,
     private val isPruneInProgress: () -> Boolean
@@ -101,9 +101,9 @@ class PullRequestWorktreeRemovalLauncher(
     /** Asks whether to remove the work tree and warns when it has uncommitted or untracked changes. True when the user chooses Remove. */
     private suspend fun askToRemove(worktreePath: Path): Boolean {
         val hasChanges = hasUncommittedChanges(worktreePath = worktreePath)
-        val baseMessage = BbCloudBundle.message("workspace.watchedProjects.worktree.remove.confirm.message", worktreePath.toString())
+        val baseMessage = DiffyBundle.message("workspace.watchedProjects.worktree.remove.confirm.message", worktreePath.toString())
         val message = if (hasChanges) {
-            baseMessage + "\n\n" + BbCloudBundle.message("workspace.watchedProjects.worktree.remove.confirm.uncommitted")
+            baseMessage + "\n\n" + DiffyBundle.message("workspace.watchedProjects.worktree.remove.confirm.uncommitted")
         } else {
             baseMessage
         }
@@ -111,9 +111,9 @@ class PullRequestWorktreeRemovalLauncher(
             Messages.showYesNoDialog(
                 project,
                 message,
-                BbCloudBundle.message("workspace.watchedProjects.worktree.remove.confirm.title"),
-                BbCloudBundle.message("workspace.watchedProjects.worktree.remove.confirm.yes"),
-                BbCloudBundle.message("workspace.watchedProjects.worktree.remove.confirm.no"),
+                DiffyBundle.message("workspace.watchedProjects.worktree.remove.confirm.title"),
+                DiffyBundle.message("workspace.watchedProjects.worktree.remove.confirm.yes"),
+                DiffyBundle.message("workspace.watchedProjects.worktree.remove.confirm.no"),
                 Messages.getWarningIcon()
             ) == Messages.YES
         }
@@ -122,7 +122,7 @@ class PullRequestWorktreeRemovalLauncher(
     private suspend fun hasUncommittedChanges(worktreePath: Path): Boolean {
         return try {
             val exists = withContext(Dispatchers.IO) { Files.isDirectory(worktreePath) }
-            exists && BbCloudWorktreeService.getInstance().hasUncommittedChanges(worktreePath = worktreePath)
+            exists && DiffyWorktreeService.getInstance().hasUncommittedChanges(worktreePath = worktreePath)
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
@@ -137,7 +137,7 @@ class PullRequestWorktreeRemovalLauncher(
      */
     private fun start(sourceCheckoutRoot: Path, worktreePath: Path, prNumber: Long, workTreeDirectory: Path, onFinished: () -> Unit) {
         try {
-            BbCloudPullRequestDeclineCoordinator.getInstance().launchWatchedWorktreeRemoval(
+            DiffyPullRequestDeclineCoordinator.getInstance().launchWatchedWorktreeRemoval(
                 project = project,
                 sourceCheckoutRoot = sourceCheckoutRoot,
                 worktreePath = worktreePath,
@@ -195,14 +195,14 @@ class PullRequestWorktreeRemovalLauncher(
             .getNotificationGroup(NOTIFICATION_GROUP_ID)
             .createNotification(
                 title = "",
-                content = BbCloudBundle.message(contentKey, *contentArgs),
+                content = DiffyBundle.message(contentKey, *contentArgs),
                 type = type
             ).notify(project)
     }
 
     companion object {
         private val LOG = logger<PullRequestWorktreeRemovalLauncher>()
-        private const val NOTIFICATION_GROUP_ID = "BbCloud"
+        private const val NOTIFICATION_GROUP_ID = "Diffy"
 
         /** Work tree paths with a removal in progress. Application wide, so two tabs or windows cannot remove the same work tree twice. */
         private val worktreesBeingRemoved: MutableSet<Path> = ConcurrentHashMap.newKeySet()

@@ -31,7 +31,7 @@ data class ProjectStatusHeaderState(
 
 /**
  * Owns the project status row for the Current Project tab: the status icon and message, the repository slug link,
- * the open pull request count pill, and the refresh button. One instance exists in [BbCloudMainPanel] for the single
+ * the open pull request count pill, and the refresh button. One instance exists in [DiffyMainPanel] for the single
  * merged project tab, so that tab has its own header and its own refresh button. The open pull request count is shown
  * only while the listing is visible; it is hidden on every other card. The header also offers a "Create new PR" button
  * next to refresh, which shares the refresh button's lifecycle.

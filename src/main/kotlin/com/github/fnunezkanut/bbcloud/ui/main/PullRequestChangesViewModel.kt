@@ -2,7 +2,7 @@ package com.github.fnunezkanut.bbcloud.ui.main
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestFileCommentCounts
 import com.github.fnunezkanut.bbcloud.git.BranchDiffResult
 import com.github.fnunezkanut.bbcloud.git.FileLineCount
@@ -67,17 +67,17 @@ class PullRequestChangesViewModel(
                 }
             }
             BranchDiffResult.NoRepository -> {
-                showError(BbCloudBundle.message("main.branch.filesChanged.noRepository"))
+                showError(DiffyBundle.message("main.branch.filesChanged.noRepository"))
             }
             is BranchDiffResult.BranchNotFound -> {
-                showError(BbCloudBundle.message("main.branch.filesChanged.branchNotFound", result.branchName))
+                showError(DiffyBundle.message("main.branch.filesChanged.branchNotFound", result.branchName))
             }
             is BranchDiffResult.Failed -> {
                 val detail = result.message.takeIf { it.isNotBlank() }
                 val message = if (detail != null) {
-                    BbCloudBundle.message("main.branch.filesChanged.failedWithDetail", detail)
+                    DiffyBundle.message("main.branch.filesChanged.failedWithDetail", detail)
                 } else {
-                    BbCloudBundle.message("main.branch.filesChanged.failed")
+                    DiffyBundle.message("main.branch.filesChanged.failed")
                 }
                 showError(message)
             }

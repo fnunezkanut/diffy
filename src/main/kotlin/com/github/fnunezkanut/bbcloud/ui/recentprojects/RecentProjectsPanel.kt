@@ -1,7 +1,7 @@
 package com.github.fnunezkanut.bbcloud.ui.recentprojects
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
+import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.GitHeadBranchReader
 import com.github.fnunezkanut.bbcloud.project.LocalRepositoryProjectOpener
 import com.github.fnunezkanut.bbcloud.project.PlatformRecentProjectsSource
@@ -29,7 +29,7 @@ import kotlin.io.path.invariantSeparatorsPathString
  * panel calls when it is disposed.
  */
 internal class RecentProjectsPanel(private val project: Project, private val coroutineScope: CoroutineScope, isPruneInProgress: () -> Boolean) : Disposable {
-    private val configurationService = BbCloudConfigurationService.getInstance()
+    private val configurationService = DiffyConfigurationService.getInstance()
     private val avatars = PlatformRepoAvatarProvider(
         configurationService = configurationService,
         coroutineScope = coroutineScope
@@ -142,13 +142,13 @@ internal class RecentProjectsPanel(private val project: Project, private val cor
     private fun notify(messageKey: String, type: NotificationType, folderName: String) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup(NOTIFICATION_GROUP_ID)
-            .createNotification(BbCloudBundle.message(messageKey, folderName), type)
+            .createNotification(DiffyBundle.message(messageKey, folderName), type)
             .notify(project)
     }
 
     companion object {
         private val LOG = logger<RecentProjectsPanel>()
-        private const val NOTIFICATION_GROUP_ID = "BbCloud"
+        private const val NOTIFICATION_GROUP_ID = "Diffy"
 
         private fun userHomeWithInvariantSeparators(): String {
             return Path.of(System.getProperty("user.home")).invariantSeparatorsPathString

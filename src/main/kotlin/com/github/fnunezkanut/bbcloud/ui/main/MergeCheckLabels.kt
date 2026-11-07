@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestMergeCheck
 import com.intellij.openapi.util.text.StringUtil
@@ -75,7 +75,7 @@ object MergeCheckLabels {
     fun toHtml(label: MergeCheckLabel): String {
         return when (label) {
             is MergeCheckLabel.Message -> {
-                if (label.count == null) BbCloudBundle.message(label.key) else BbCloudBundle.message(label.key, label.count)
+                if (label.count == null) DiffyBundle.message(label.key) else DiffyBundle.message(label.key, label.count)
             }
             is MergeCheckLabel.Text -> {
                 StringUtil.escapeXmlEntities(label.text)

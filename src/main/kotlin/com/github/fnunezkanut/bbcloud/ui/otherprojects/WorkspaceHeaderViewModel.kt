@@ -24,7 +24,7 @@ data class WorkspaceHeaderState(
 /**
  * Owns the workspace header for one Workspace tab root: the green tick indicator, the open-PR count pill, and the
  * refresh button. Two
- * instances exist in [BbCloudOtherProjectsPanel], one for the My PRs root and one for the Assigned PRs root, so each tab
+ * instances exist in [DiffyOtherProjectsPanel], one for the My PRs root and one for the Assigned PRs root, so each tab
  * has its own header and its own refresh button. All call the same coordinator function when the user clicks refresh.
  */
 class WorkspaceHeaderViewModel(private val onRefreshRequested: () -> Unit) {

@@ -55,7 +55,7 @@ class DiffCommentThreadHostTest {
 
         @Test
         fun `editorInlayContentWidth - should use the full derived width on a wide viewport without a max cap`() {
-            // GIVEN a very wide viewport (clarification 1b: no bbcloud 42 em cap)
+            // GIVEN a very wide viewport (clarification 1b: no Diffy 42 em cap)
             val width = editorInlayContentWidth(
                 viewportWidth = 4000,
                 verticalScrollbarWidth = 24,

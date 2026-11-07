@@ -27,12 +27,12 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.review.WorktreeTodoBannerUiState
 import com.github.fnunezkanut.bbcloud.ui.components.BRANCH_ARROW
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudCompactOutlinedIconButton
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudPluginIcons
 import com.github.fnunezkanut.bbcloud.ui.components.BranchChip
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyCompactOutlinedIconButton
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyPluginIcons
 import com.github.fnunezkanut.bbcloud.ui.components.HeaderLinesChangedIndicator
 import com.github.fnunezkanut.bbcloud.ui.components.labelForeground
 import com.github.fnunezkanut.bbcloud.ui.components.reviewBarPurple
@@ -131,26 +131,26 @@ private fun WorktreePrViewBlueBarHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(SEGMENT_GAP)
     ) {
-        Tooltip(tooltip = { Text(text = BbCloudBundle.message("worktree.todoRow.openChangedFiles.tooltip")) }) {
-            BbCloudCompactOutlinedIconButton(
+        Tooltip(tooltip = { Text(text = DiffyBundle.message("worktree.todoRow.openChangedFiles.tooltip")) }) {
+            DiffyCompactOutlinedIconButton(
                 icon = AllIconsKeys.Actions.ListChanges,
-                contentDescription = BbCloudBundle.message("worktree.todoRow.openChangedFiles"),
+                contentDescription = DiffyBundle.message("worktree.todoRow.openChangedFiles"),
                 outlineColor = ActionButtonOutlines.green(),
                 enabled = state.sourceBranch != null && state.destinationBranch != null,
                 onClick = onOpenChangedFiles,
                 trailingContent = {
                     Text(
-                        text = BbCloudBundle.message("worktree.todoRow.openChangedFiles.label"),
+                        text = DiffyBundle.message("worktree.todoRow.openChangedFiles.label"),
                         color = labelForeground(),
                         maxLines = 1
                     )
                 }
             )
         }
-        Tooltip(tooltip = { Text(text = BbCloudBundle.message("worktree.todoRow.openPrPage.tooltip")) }) {
-            BbCloudCompactOutlinedIconButton(
-                icon = BbCloudPluginIcons.pr,
-                contentDescription = BbCloudBundle.message("worktree.todoRow.openPrPage"),
+        Tooltip(tooltip = { Text(text = DiffyBundle.message("worktree.todoRow.openPrPage.tooltip")) }) {
+            DiffyCompactOutlinedIconButton(
+                icon = DiffyPluginIcons.pr,
+                contentDescription = DiffyBundle.message("worktree.todoRow.openPrPage"),
                 outlineColor = reviewBarPurple(),
                 enabled = true,
                 onClick = onOpenPrPage,
@@ -162,7 +162,7 @@ private fun WorktreePrViewBlueBarHeader(
         }
         Image(
             bitmap = icon,
-            contentDescription = BbCloudBundle.message("worktree.todoRow.repositoryIcon"),
+            contentDescription = DiffyBundle.message("worktree.todoRow.repositoryIcon"),
             modifier = Modifier.size(REPO_ICON_SIZE),
             filterQuality = FilterQuality.High
         )
@@ -172,7 +172,7 @@ private fun WorktreePrViewBlueBarHeader(
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = BbCloudBundle.message("worktree.todoRow.pullRequestPrefix"),
+            text = DiffyBundle.message("worktree.todoRow.pullRequestPrefix"),
             color = labelForeground(),
             maxLines = 1
         )
@@ -190,10 +190,10 @@ private fun WorktreePrViewBlueBarHeader(
             modifier = Modifier.weight(1f)
         )
         HeaderLinesChangedIndicator(lines = state.linesChanged)
-        Tooltip(tooltip = { Text(text = BbCloudBundle.message("main.branch.header.refresh.tooltip")) }) {
-            BbCloudCompactOutlinedIconButton(
+        Tooltip(tooltip = { Text(text = DiffyBundle.message("main.branch.header.refresh.tooltip")) }) {
+            DiffyCompactOutlinedIconButton(
                 icon = AllIconsKeys.Actions.Refresh,
-                contentDescription = BbCloudBundle.message("main.branch.header.refresh"),
+                contentDescription = DiffyBundle.message("main.branch.header.refresh"),
                 outlineColor = ActionButtonOutlines.blue(),
                 enabled = state.refreshEnabled,
                 onClick = onRefresh

@@ -2,8 +2,8 @@ package com.github.fnunezkanut.bbcloud.ui.pullrequest.editor
 
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestPathMatcher
 import com.github.fnunezkanut.bbcloud.git.FileLineCount
-import com.github.fnunezkanut.bbcloud.review.BbCloudWorktreePullRequestContext
-import com.github.fnunezkanut.bbcloud.ui.diff.BbCloudPullRequestDiffCommentService
+import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
+import com.github.fnunezkanut.bbcloud.ui.diff.DiffyPullRequestDiffCommentService
 import com.github.fnunezkanut.bbcloud.ui.diff.PullRequestReviewCommentTarget
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestCommentFileOpener
 import com.github.fnunezkanut.bbcloud.ui.markdowndiff.MarkdownDiffFromDiffRequest
@@ -69,7 +69,7 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
      */
     private fun reviewBarProviderFor(project: Project, request: DiffRequest, diffContext: DiffContext): DiffNotificationProvider? {
         val projectBasePath = project.basePath ?: return null
-        if (!BbCloudPullRequestReviewBarRefresh.isPullRequestWorkTree(projectBasePath = projectBasePath)) {
+        if (!DiffyPullRequestReviewBarRefresh.isPullRequestWorkTree(projectBasePath = projectBasePath)) {
             return null
         }
         val change = request.getUserData(ChangeDiffRequestProducer.CHANGE_KEY)
@@ -77,7 +77,7 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
             LOG.debug("Review bar of diff skipped: the diff request has no change")
             return null
         }
-        val context = BbCloudWorktreePullRequestContext.getInstance(project)
+        val context = DiffyWorktreePullRequestContext.getInstance(project)
         val binding = context.binding
         if (binding == null) {
             LOG.debug("Review bar of diff skipped: no work tree pull request binding")
@@ -180,7 +180,7 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
                         "Cannot open comment composer for '$relativePath' in pull request #$pullRequestId: no text editor is available in the diff"
                     )
                 } else {
-                    val diffCommentService = BbCloudPullRequestDiffCommentService.getInstance(project)
+                    val diffCommentService = DiffyPullRequestDiffCommentService.getInstance(project)
                     when (commentScope) {
                         ReviewBarCommentScope.FileScoped -> diffCommentService.openFileScopedComposer(
                             editor = editor,
@@ -215,7 +215,7 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
 
     companion object {
         private val LOG = logger<PullRequestDiffBarsDiffExtension>()
-        private val BLUE_BAR_ATTACHED_KEY = Key.create<Boolean>("BbCloud.PullRequestDiffBarsDiffExtension.BlueBarAttached")
-        private val REVIEW_BAR_ATTACHED_KEY = Key.create<Boolean>("BbCloud.PullRequestDiffBarsDiffExtension.ReviewBarAttached")
+        private val BLUE_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.BlueBarAttached")
+        private val REVIEW_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.ReviewBarAttached")
     }
 }

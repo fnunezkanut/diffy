@@ -1,12 +1,12 @@
 package com.github.fnunezkanut.bbcloud.ui.pullrequest.changes
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestFileCommentCounts
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestPathMatcher
-import com.github.fnunezkanut.bbcloud.git.BbCloudPullRequestBranchDiffService
 import com.github.fnunezkanut.bbcloud.git.BranchDiffResult
-import com.github.fnunezkanut.bbcloud.review.BbCloudPullRequestViewedFiles
-import com.github.fnunezkanut.bbcloud.review.BbCloudWorktreePullRequestContext
+import com.github.fnunezkanut.bbcloud.git.DiffyPullRequestBranchDiffService
+import com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedFiles
+import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestChangeDiffOpener
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestChangesViewModel
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestFileChangesCard
@@ -34,13 +34,13 @@ import kotlin.time.TimeSource
 /**
  * Owns the view model of the work-tree PR Changes tool window.
  *
- * The data comes from the local Git three-dot diff ([BbCloudPullRequestBranchDiffService]) and the work-tree comment
- * snapshot ([BbCloudWorktreePullRequestContext]). The tool window is the only view of the changed files: the pull
+ * The data comes from the local Git three-dot diff ([DiffyPullRequestBranchDiffService]) and the work-tree comment
+ * snapshot ([DiffyWorktreePullRequestContext]). The tool window is the only view of the changed files: the pull
  * request editor does not load them, and it only publishes the comment snapshot this service counts comments from.
  */
 @Service(Service.Level.PROJECT)
 class WorktreePullRequestChangesToolWindowService(private val project: Project, private val coroutineScope: CoroutineScope) : Disposable {
-    private val diffService = BbCloudPullRequestBranchDiffService()
+    private val diffService = DiffyPullRequestBranchDiffService()
 
     val viewModel = PullRequestChangesViewModel(
         pullRequestId = { currentPullRequestId },
@@ -49,7 +49,7 @@ class WorktreePullRequestChangesToolWindowService(private val project: Project, 
         onOpenChange = { change -> PullRequestChangeDiffOpener.open(project = project, change = change) },
         onOpenChangeInList = { changes, index -> openDiffChain(changes = changes, index = index) },
         isFileViewed = { pullRequestId, relativePath, revision ->
-            BbCloudPullRequestViewedFiles.getInstance(project).isViewed(
+            DiffyPullRequestViewedFiles.getInstance(project).isViewed(
                 pullRequestId = pullRequestId,
                 relativePath = relativePath,
                 revision = revision
@@ -92,7 +92,7 @@ class WorktreePullRequestChangesToolWindowService(private val project: Project, 
     /** Reloads the changed files; [reason] is logged for diagnostics. */
     fun reload(reason: String) {
         LOG.debug("Reloading the PR Changes tool window: $reason")
-        val context = BbCloudWorktreePullRequestContext.getInstance(project)
+        val context = DiffyWorktreePullRequestContext.getInstance(project)
         if (context.pullRequestKnownClosed) {
             synchronized(loadLock) { loadJob?.cancel() }
             runOnEdt { viewModel.showResolved(pullRequestId = currentPullRequestId) }
@@ -129,7 +129,7 @@ class WorktreePullRequestChangesToolWindowService(private val project: Project, 
                     val lineCounts = lineCountsDeferred.await()
                     if (diffResult is BranchDiffResult.Success) {
                         // The revisions are read after the diff, because they need the resolved source ref. They use the
-                        // same lookup and key normalization as BbCloudWorktreePullRequestContext, so the viewed mark in
+                        // same lookup and key normalization as DiffyWorktreePullRequestContext, so the viewed mark in
                         // this tree and in the diff review bar agree.
                         val revisions = diffService.loadPullRequestFileRevisions(
                             project = project,
@@ -177,7 +177,7 @@ class WorktreePullRequestChangesToolWindowService(private val project: Project, 
      */
     @RequiresEdt
     fun applyCommentCounts() {
-        val context = BbCloudWorktreePullRequestContext.getInstance(project)
+        val context = DiffyWorktreePullRequestContext.getInstance(project)
         val binding = context.binding
         if (binding == null || binding.pullRequestId != currentPullRequestId) {
             viewModel.setCommentCounts(null)
@@ -188,11 +188,11 @@ class WorktreePullRequestChangesToolWindowService(private val project: Project, 
 
     /**
      * Switches to or from the resolved card when the pull request's open/closed status changed. Called from the
-     * composable when [BbCloudWorktreePullRequestContext.pullRequestStatusRevision] changes.
+     * composable when [DiffyWorktreePullRequestContext.pullRequestStatusRevision] changes.
      */
     @RequiresEdt
     fun onPullRequestStatusChanged() {
-        val context = BbCloudWorktreePullRequestContext.getInstance(project)
+        val context = DiffyWorktreePullRequestContext.getInstance(project)
         val card = viewModel.state.value.card
         if (context.pullRequestKnownClosed) {
             if (card != PullRequestFileChangesCard.Resolved) {
@@ -225,7 +225,7 @@ class WorktreePullRequestChangesToolWindowService(private val project: Project, 
             ?.contents
             ?.firstOrNull()
             ?: return
-        content.displayName = BbCloudBundle.message("worktree.changesToolWindow.tabTitle", source, destination)
+        content.displayName = DiffyBundle.message("worktree.changesToolWindow.tabTitle", source, destination)
     }
 
     private fun onRepositoryChanged(repository: GitRepository) {

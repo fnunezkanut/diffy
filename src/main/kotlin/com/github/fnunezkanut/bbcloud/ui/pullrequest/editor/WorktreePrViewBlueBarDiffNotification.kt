@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.pullrequest.editor
 
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.project.PullRequestWorktreeProject
 import com.intellij.diff.FrameDiffTool
 import com.intellij.openapi.diagnostic.logger
@@ -22,7 +22,7 @@ internal object WorktreePrViewBlueBarDiffNotification {
      */
     fun create(project: Project, viewer: FrameDiffTool.DiffViewer?): JComponent? {
         val projectBasePath = project.basePath
-        val workTreeDirectory = BbCloudConfigurationService.getInstance().workTreeDirectoryOrNull()
+        val workTreeDirectory = DiffyConfigurationService.getInstance().workTreeDirectoryOrNull()
         if (!PullRequestWorktreeProject.isPluginManagedWorktree(
                 projectBasePath = projectBasePath,
                 workTreeDirectory = workTreeDirectory

@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.review
 
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestReviewBarRefresh
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestReviewBarRefresh
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
@@ -16,7 +16,7 @@ data class PageReloadRequest(val revealNewestActivity: Boolean = false, val sync
  * refreshes the in-place page), so when that editor is open the reloader simply delegates to the session's handler. The
  * worktree banner shows on every editor, though, including ones opened before the `.pr` editor was ever visited, so a
  * reload also has to work when no session handler is registered. In that case the reloader falls back to reloading the
- * [BbCloudWorktreePullRequestContext], which re-fetches the pull request and refreshes the editor notifications so the
+ * [DiffyWorktreePullRequestContext], which re-fetches the pull request and refreshes the editor notifications so the
  * banner's branch chips and refresh state stay in sync.
  *
  * The reloader drives [WorktreeTodoBannerViewModel.setRefreshEnabled] so the banner's compact refresh button disables
@@ -64,14 +64,14 @@ class WorktreePullRequestPageReloader(private val project: Project) {
     }
 
     private fun reloadContextOnly(request: PageReloadRequest) {
-        if (!BbCloudPullRequestReviewBarRefresh.isPullRequestWorkTree(project.basePath)) {
+        if (!DiffyPullRequestReviewBarRefresh.isPullRequestWorkTree(project.basePath)) {
             LOG.info("Skipping pull request page reload: the project is not a pull-request work tree")
             return
         }
         val bannerViewModel = WorktreeTodoBannerViewModel.getInstance(project)
         bannerViewModel.setRefreshEnabled(false)
         LOG.info("Reloading the pull request work tree context from the banner refresh")
-        BbCloudWorktreePullRequestContext.getInstance(project).reload(reason = "banner refresh", syncBranches = request.syncBranches)
+        DiffyWorktreePullRequestContext.getInstance(project).reload(reason = "banner refresh", syncBranches = request.syncBranches)
         // The context reload runs off the EDT and republishes the binding when it finishes, which refreshes the
         // banner. The refresh button is re-enabled once the banner picks the new binding up; until then a short
         // re-enable keeps the button usable even when the reload resolves to no change (same binding, no republish).

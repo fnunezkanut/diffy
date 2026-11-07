@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestComment
 import com.intellij.icons.AllIcons
 import org.jetbrains.jewel.ui.icon.IconKey
@@ -53,10 +53,10 @@ object CommentThreadActionVisibility {
     /** The visible label used by the footer and as the accessible description of a meta action. */
     fun label(action: CommentThreadAction): String {
         return when (action) {
-            CommentThreadAction.Reply -> BbCloudBundle.message("main.branch.comments.actions.reply")
-            CommentThreadAction.Edit -> BbCloudBundle.message("main.branch.comments.actions.edit")
-            CommentThreadAction.Resolve -> BbCloudBundle.message("main.branch.comments.actions.resolve")
-            CommentThreadAction.Delete -> BbCloudBundle.message("main.branch.comments.actions.delete")
+            CommentThreadAction.Reply -> DiffyBundle.message("main.branch.comments.actions.reply")
+            CommentThreadAction.Edit -> DiffyBundle.message("main.branch.comments.actions.edit")
+            CommentThreadAction.Resolve -> DiffyBundle.message("main.branch.comments.actions.resolve")
+            CommentThreadAction.Delete -> DiffyBundle.message("main.branch.comments.actions.delete")
         }
     }
 

@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.pullrequest.help
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.intellij.openapi.diagnostic.logger
 import java.io.IOException
 
@@ -18,7 +18,7 @@ internal object WorktreesHelpMarkdown {
         val bytes = readResourceBytes(resourcePath = MARKDOWN_RESOURCE)
         if (bytes == null) {
             LOG.warn("The Work Trees help page is missing from the plugin resources: $MARKDOWN_RESOURCE")
-            return BbCloudBundle.message("worktreesHelp.unavailable")
+            return DiffyBundle.message("worktreesHelp.unavailable")
         }
         LOG.debug("Loaded the Work Trees help page (${bytes.size} bytes)")
         return bytes.toString(Charsets.UTF_8)

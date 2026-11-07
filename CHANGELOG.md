@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## *1.9.0* - 2026-11-07
+* Changed: renamed plugin to "Diffy - Bitbucket PR Review"; the plugin id is unchanged, so existing installs and settings carry over
+* Changed: the Chrome extension is renamed to "Diffy - Bitbucket PR Review" and its folder is now `diffy-chrome-ext`
+* Changed: README and Marketplace description refreshed with the new name, logo, and an up-to-date feature list
+
 ## *1.8.0* - 2026-11-05
 * Changed: requires IntelliJ IDEA 2026.3 or newer; updated to Jewel 0.42 and Compose Multiplatform 1.12.1
 * Added: a "Send this comment to Air" button on every comment box, shown when the JetBrains Air plugin is installed; it puts the comment's file location and text into the Air chat input 

@@ -2,7 +2,7 @@ package com.github.fnunezkanut.bbcloud.ui.main
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestBuildStatus
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDetails
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestMergeCheck
@@ -115,10 +115,10 @@ class PullRequestOverviewViewModel(
     fun descriptionInput(): CommentInput {
         return CommentInput(
             label = "description edit",
-            placeholder = BbCloudBundle.message("main.branch.overview.description.editor.placeholder"),
-            submitLabel = BbCloudBundle.message("main.branch.overview.description.editor.submit"),
-            submitHint = BbCloudBundle.message("main.branch.overview.description.editor.submitHint", SUBMIT_SHORTCUT_HINT),
-            failureMessage = BbCloudBundle.message("main.branch.overview.description.editor.failed.inline"),
+            placeholder = DiffyBundle.message("main.branch.overview.description.editor.placeholder"),
+            submitLabel = DiffyBundle.message("main.branch.overview.description.editor.submit"),
+            submitHint = DiffyBundle.message("main.branch.overview.description.editor.submitHint", SUBMIT_SHORTCUT_HINT),
+            failureMessage = DiffyBundle.message("main.branch.overview.description.editor.failed.inline"),
             initialText = state.value.description.rawMarkdown,
             submit = { content, onResult ->
                 descriptionEditor.updateDescription(content) { accepted ->
@@ -142,7 +142,7 @@ class PullRequestOverviewViewModel(
             description = state.value.description.copy(
                 markdown = markdown,
                 emptyMessage = if (markdown == null) {
-                    BbCloudBundle.message("main.branch.overview.description.empty")
+                    DiffyBundle.message("main.branch.overview.description.empty")
                 } else {
                     null
                 },
@@ -157,14 +157,14 @@ class PullRequestOverviewViewModel(
     private fun renderBuilds(builds: List<PullRequestBuildStatus>?) {
         val section = when {
             builds == null -> BuildsSectionState(
-                title = BbCloudBundle.message("main.branch.builds.title"),
+                title = DiffyBundle.message("main.branch.builds.title"),
                 isExpanded = state.value.builds.isExpanded,
-                message = BbCloudBundle.message("main.branch.builds.error")
+                message = DiffyBundle.message("main.branch.builds.error")
             )
             builds.isEmpty() -> BuildsSectionState(
-                title = BbCloudBundle.message("main.branch.builds.title"),
+                title = DiffyBundle.message("main.branch.builds.title"),
                 isExpanded = state.value.builds.isExpanded,
-                message = BbCloudBundle.message("main.branch.builds.empty")
+                message = DiffyBundle.message("main.branch.builds.empty")
             )
             else -> BuildsSectionState(
                 title = buildsSummaryText(BuildStatusSummary.of(builds)),
@@ -177,10 +177,10 @@ class PullRequestOverviewViewModel(
 
     private fun buildsSummaryText(summary: BuildStatusSummary): String {
         return when (summary.kind) {
-            BuildSummaryKind.Empty -> BbCloudBundle.message("main.branch.builds.title")
-            BuildSummaryKind.Failed -> BbCloudBundle.message("main.branch.builds.summary.failed", summary.count, summary.total)
-            BuildSummaryKind.InProgress -> BbCloudBundle.message("main.branch.builds.summary.inProgress", summary.count, summary.total)
-            BuildSummaryKind.Passed -> BbCloudBundle.message("main.branch.builds.summary.passed", summary.total)
+            BuildSummaryKind.Empty -> DiffyBundle.message("main.branch.builds.title")
+            BuildSummaryKind.Failed -> DiffyBundle.message("main.branch.builds.summary.failed", summary.count, summary.total)
+            BuildSummaryKind.InProgress -> DiffyBundle.message("main.branch.builds.summary.inProgress", summary.count, summary.total)
+            BuildSummaryKind.Passed -> DiffyBundle.message("main.branch.builds.summary.passed", summary.total)
         }
     }
 
@@ -216,28 +216,28 @@ class PullRequestOverviewViewModel(
         val section = when {
             checks == null -> {
                 ChecksSectionState(
-                    title = BbCloudBundle.message("main.branch.checks.title"),
+                    title = DiffyBundle.message("main.branch.checks.title"),
                     isExpanded = expanded,
-                    message = BbCloudBundle.message("main.branch.checks.error")
+                    message = DiffyBundle.message("main.branch.checks.error")
                 )
             }
             checks.isEmpty() -> {
                 ChecksSectionState(
-                    title = BbCloudBundle.message("main.branch.checks.title"),
+                    title = DiffyBundle.message("main.branch.checks.title"),
                     isExpanded = expanded,
-                    message = BbCloudBundle.message("main.branch.checks.empty")
+                    message = DiffyBundle.message("main.branch.checks.empty")
                 )
             }
             else -> {
                 val summary = MergeCheckSummary.of(checks)
                 ChecksSectionState(
-                    title = BbCloudBundle.message("main.branch.checks.summary", summary.passed, summary.total),
+                    title = DiffyBundle.message("main.branch.checks.summary", summary.passed, summary.total),
                     isExpanded = expanded,
                     statusIcon = if (summary.isBlocking) SectionStatusIcon.Error else SectionStatusIcon.Success,
                     statusTooltip = if (summary.isBlocking) {
-                        BbCloudBundle.message("main.branch.checks.header.blocking")
+                        DiffyBundle.message("main.branch.checks.header.blocking")
                     } else {
-                        BbCloudBundle.message("main.branch.checks.header.notBlocking")
+                        DiffyBundle.message("main.branch.checks.header.notBlocking")
                     },
                     rows = checks.map { check -> toCheckRow(check) }
                 )
@@ -273,7 +273,7 @@ class PullRequestOverviewViewModel(
                 "main.branch.checks.tooltip.unknown"
             }
         }
-        return BbCloudBundle.message(key)
+        return DiffyBundle.message(key)
     }
 
     fun onToggleChecks() {
@@ -297,17 +297,17 @@ class PullRequestOverviewViewModel(
         val tooltip = if (reviewers.isEmpty()) {
             null
         } else {
-            BbCloudBundle.message("main.branch.reviewers.header.approved", approved, reviewers.size)
+            DiffyBundle.message("main.branch.reviewers.header.approved", approved, reviewers.size)
         }
         state.value = state.value.copy(
             reviewers = ReviewersSectionState(
-                title = BbCloudBundle.message("main.branch.reviewers.summary", reviewers.size),
+                title = DiffyBundle.message("main.branch.reviewers.summary", reviewers.size),
                 isExpanded = state.value.reviewers.isExpanded,
                 statusIcon = statusIcon,
                 statusTooltip = if (isUpdating) null else tooltip,
                 isLoaded = true,
                 reviewers = reviewers,
-                emptyMessage = if (reviewers.isEmpty()) BbCloudBundle.message("main.branch.reviewers.empty") else null,
+                emptyMessage = if (reviewers.isEmpty()) DiffyBundle.message("main.branch.reviewers.empty") else null,
                 isEditable = isEditable,
                 isUpdating = isUpdating
             )
@@ -382,9 +382,9 @@ class PullRequestOverviewViewModel(
         val resolvedCount = current.count { isDisplayedResolved(it) }
         val isAllResolved = current.isNotEmpty() && resolvedCount == current.size
         val title = if (current.isEmpty()) {
-            BbCloudBundle.message("main.branch.tasks.title")
+            DiffyBundle.message("main.branch.tasks.title")
         } else {
-            BbCloudBundle.message("main.branch.tasks.summary", resolvedCount, current.size)
+            DiffyBundle.message("main.branch.tasks.summary", resolvedCount, current.size)
         }
 
         val section = TasksSectionState(
@@ -398,11 +398,11 @@ class PullRequestOverviewViewModel(
             headerCheckboxVisible = current.isNotEmpty(),
             headerCheckboxSelected = isAllResolved,
             headerCheckboxEnabled = isEditable && !isUpdating && tasksMode != TasksMode.Editing,
-            headerCheckboxTooltip = BbCloudBundle.message(
+            headerCheckboxTooltip = DiffyBundle.message(
                 if (isAllResolved) "main.branch.tasks.reopenAll" else "main.branch.tasks.resolveAll"
             ),
             emptyMessage = if (isTasksLoaded && tasks != null && current.isEmpty()) {
-                BbCloudBundle.message("main.branch.tasks.empty")
+                DiffyBundle.message("main.branch.tasks.empty")
             } else {
                 null
             },
@@ -413,7 +413,7 @@ class PullRequestOverviewViewModel(
                 emptyList()
             },
             createFieldText = createFieldText,
-            createPlaceholder = BbCloudBundle.message("main.branch.tasks.create.placeholder"),
+            createPlaceholder = DiffyBundle.message("main.branch.tasks.create.placeholder"),
             saveEnabled = computeSaveEnabled(isUpdating)
         )
         state.value = state.value.copy(tasks = section)
@@ -583,15 +583,15 @@ class PullRequestOverviewViewModel(
     private fun initialState(): PullRequestOverviewUiState {
         return PullRequestOverviewUiState(
             description = DescriptionSectionState(
-                title = BbCloudBundle.message("main.branch.overview.card.description"),
-                emptyMessage = BbCloudBundle.message("main.branch.overview.description.empty")
+                title = DiffyBundle.message("main.branch.overview.card.description"),
+                emptyMessage = DiffyBundle.message("main.branch.overview.description.empty")
             ),
-            builds = BuildsSectionState(title = BbCloudBundle.message("main.branch.builds.title")),
-            checks = ChecksSectionState(title = BbCloudBundle.message("main.branch.checks.title")),
-            reviewers = ReviewersSectionState(title = BbCloudBundle.message("main.branch.reviewers.title")),
+            builds = BuildsSectionState(title = DiffyBundle.message("main.branch.builds.title")),
+            checks = ChecksSectionState(title = DiffyBundle.message("main.branch.checks.title")),
+            reviewers = ReviewersSectionState(title = DiffyBundle.message("main.branch.reviewers.title")),
             tasks = TasksSectionState(
-                title = BbCloudBundle.message("main.branch.tasks.title"),
-                createPlaceholder = BbCloudBundle.message("main.branch.tasks.create.placeholder")
+                title = DiffyBundle.message("main.branch.tasks.title"),
+                createPlaceholder = DiffyBundle.message("main.branch.tasks.create.placeholder")
             )
         )
     }

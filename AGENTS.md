@@ -1,7 +1,7 @@
 ## Project Overview
 
-- **bbcloud** is an IntelliJ IDEA plugin (`com.github.fnunezkanut.bbcloud`).
-- It adds a Bitbucket Cloud PR review tool window, PR editors, and git worktree integration. Extensions and services are registered in [`plugin.xml`](src/main/resources/META-INF/plugin.xml).
+- **diffy** is an IntelliJ IDEA plugin (`com.github.fnunezkanut.bbcloud`).
+- It adds a Diffy - Bitbucket PR Review tool window, PR editors, and git worktree integration. Extensions and services are registered in [`plugin.xml`](src/main/resources/META-INF/plugin.xml).
 - Read [`ARCHITECTURE.md`](ARCHITECTURE.md) for the package layout, layering, and the UiState / ViewModel / Screen pattern.
 - Target IDE: IntelliJ IDEA **2026.3+** (`sinceBuild` `263.7307.200`). The plugin depends on `com.intellij.modules.platform` and the bundled `Git4Idea` plugin (used for branch checkout).
 
@@ -142,7 +142,7 @@ Platform-heavy flows may need fixtures or integration tests tagged `@Tag("integr
 
 - **Lint failures:** run `./gradlew format`, then `./gradlew lint`
 - **Test failures:** check MockK stubs and IntelliJ API types on the test compile classpath
-- **Sandbox / runIde:** logs under `.intellijPlatform/sandbox/bbcloud/IU-2026.3/log_runIde/idea.log`
+- **Sandbox / runIde:** logs under `.intellijPlatform/sandbox/diffy/IU-2026.3/log_runIde/idea.log`
 - **Plugin Verifier:** reports in `build/reports/pluginVerifier`
 
 ## Git Workflow

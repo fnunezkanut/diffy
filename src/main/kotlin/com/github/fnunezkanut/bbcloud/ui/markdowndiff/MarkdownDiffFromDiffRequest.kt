@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.markdowndiff
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.intellij.diff.contents.DiffContent
 import com.intellij.diff.contents.DocumentContent
 import com.intellij.diff.contents.EmptyContent
@@ -63,8 +63,8 @@ internal object MarkdownDiffFromDiffRequest {
     fun sourceFor(request: ContentDiffRequest, contents: MarkdownContents): FixedMarkdownDiffContentSource {
         val titles = request.contentTitles
         val fileName = contents.fileName
-        val leftLabel = titles.getOrNull(0) ?: BbCloudBundle.message("markdownDiff.side.before")
-        val rightLabel = titles.getOrNull(1) ?: BbCloudBundle.message("markdownDiff.side.after")
+        val leftLabel = titles.getOrNull(0) ?: DiffyBundle.message("markdownDiff.side.before")
+        val rightLabel = titles.getOrNull(1) ?: DiffyBundle.message("markdownDiff.side.after")
         val left = contents.left
         val right = contents.right
         return FixedMarkdownDiffContentSource(
@@ -92,7 +92,7 @@ internal object MarkdownDiffFromDiffRequest {
             LOG.info("Show rendered Markdown diff skipped: the diff does not compare two Markdown documents")
             return false
         }
-        BbCloudMarkdownDiffEditorOpener.getInstance(project).open(source = sourceFor(request = request, contents = contents))
+        DiffyMarkdownDiffEditorOpener.getInstance(project).open(source = sourceFor(request = request, contents = contents))
         return true
     }
 
