@@ -14,9 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.git.FileLineCount
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudOutlinedActionButton
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyOutlinedActionButton
 import com.github.fnunezkanut.bbcloud.ui.components.LinesChangedBadge
 import com.github.fnunezkanut.bbcloud.ui.components.RoundedBadge
 import com.github.fnunezkanut.bbcloud.ui.components.labelDisabledForeground
@@ -64,10 +64,10 @@ internal fun PullRequestReviewBarContent(
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             if (action != null) {
-                BbCloudOutlinedActionButton(
+                DiffyOutlinedActionButton(
                     text = when (surface) {
-                        ReviewBarSurface.NormalFile -> BbCloudBundle.message("editor.reviewBar.showDiff")
-                        ReviewBarSurface.Diff -> BbCloudBundle.message("editor.reviewBar.openFile")
+                        ReviewBarSurface.NormalFile -> DiffyBundle.message("editor.reviewBar.showDiff")
+                        ReviewBarSurface.Diff -> DiffyBundle.message("editor.reviewBar.openFile")
                     },
                     icon = when (surface) {
                         ReviewBarSurface.NormalFile -> AllIconsKeys.Actions.Diff
@@ -79,8 +79,8 @@ internal fun PullRequestReviewBarContent(
                 )
             }
             if (renderedDiffAction != null) {
-                BbCloudOutlinedActionButton(
-                    text = BbCloudBundle.message("editor.reviewBar.renderedDiff"),
+                DiffyOutlinedActionButton(
+                    text = DiffyBundle.message("editor.reviewBar.renderedDiff"),
                     icon = AllIconsKeys.Actions.Preview,
                     outlineColor = reviewBarPurple(),
                     enabled = true,
@@ -100,7 +100,7 @@ internal fun PullRequestReviewBarContent(
                 ReviewBarNavigationButtons(navigation = navigation)
             }
             RoundedBadge(
-                text = BbCloudBundle.message("editor.reviewBar.viewed"),
+                text = DiffyBundle.message("editor.reviewBar.viewed"),
                 fillColor = reviewBarPurple(),
                 modifier = Modifier.clickable { onViewedToggled(!viewed) }.pointerHoverIcon(PointerIcon.Hand),
                 leadingContent = { Checkbox(checked = viewed, onCheckedChange = onViewedToggled) }
@@ -116,8 +116,8 @@ internal fun PullRequestReviewBarContent(
 /** The "Add Comment" button. */
 @Composable
 private fun AddCommentButton(enabled: Boolean, onAddComment: () -> Unit) {
-    BbCloudOutlinedActionButton(
-        text = BbCloudBundle.message("editor.reviewBar.addComment"),
+    DiffyOutlinedActionButton(
+        text = DiffyBundle.message("editor.reviewBar.addComment"),
         icon = AllIconsKeys.General.Add,
         outlineColor = ActionButtonOutlines.green(),
         enabled = enabled,
@@ -139,13 +139,13 @@ private fun ReviewBarNavigationButtons(navigation: ReviewBarFileNavigationState)
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (previousIndex == null && nextIndex == null) {
             Text(
-                text = BbCloudBundle.message("editor.reviewBar.noUnviewedFile"),
+                text = DiffyBundle.message("editor.reviewBar.noUnviewedFile"),
                 color = labelDisabledForeground(),
                 modifier = Modifier.padding(end = REVIEW_BAR_HINT_GAP)
             )
         }
         ReviewBarNavigationButton(
-            text = BbCloudBundle.message("editor.reviewBar.previousUnviewed"),
+            text = DiffyBundle.message("editor.reviewBar.previousUnviewed"),
             icon = AllIconsKeys.Actions.Back,
             enabled = previousIndex != null,
             onClick = {
@@ -153,7 +153,7 @@ private fun ReviewBarNavigationButtons(navigation: ReviewBarFileNavigationState)
             }
         )
         ReviewBarNavigationButton(
-            text = BbCloudBundle.message("editor.reviewBar.nextUnviewed"),
+            text = DiffyBundle.message("editor.reviewBar.nextUnviewed"),
             icon = AllIconsKeys.Actions.Forward,
             enabled = nextIndex != null,
             onClick = {
@@ -167,7 +167,7 @@ private fun ReviewBarNavigationButtons(navigation: ReviewBarFileNavigationState)
 /** One navigation button. It has no hover tooltip, because the tooltip popup covered the buttons and did not close. */
 @Composable
 private fun ReviewBarNavigationButton(text: String, icon: IconKey, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    BbCloudOutlinedActionButton(
+    DiffyOutlinedActionButton(
         text = text,
         icon = icon,
         outlineColor = ActionButtonOutlines.blue(),

@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.ui.components.RoundedBadge
 import com.github.fnunezkanut.bbcloud.ui.components.actionButtonHoverBackground
 import com.intellij.ide.BrowserUtil
@@ -73,7 +73,7 @@ internal fun WorkspaceHeader(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(key = AllIconsKeys.Actions.Refresh, contentDescription = null)
-                    Text(text = BbCloudBundle.message("otherProjects.refresh"))
+                    Text(text = DiffyBundle.message("otherProjects.refresh"))
                 }
             }
         }

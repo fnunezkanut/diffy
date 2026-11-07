@@ -26,7 +26,7 @@ class OkHttpBitbucketOAuthTokenClient(private val httpClient: OkHttpClient = sha
             "grant_type" to "authorization_code",
             "code" to code,
             "code_verifier" to codeVerifier,
-            "redirect_uri" to BbCloudOAuthConfig.REDIRECT_URI
+            "redirect_uri" to DiffyOAuthConfig.REDIRECT_URI
         )
         return post(grantType = "authorization_code", form = form, previousRefreshToken = null)
     }
@@ -42,21 +42,21 @@ class OkHttpBitbucketOAuthTokenClient(private val httpClient: OkHttpClient = sha
     private fun clientAuthenticatedForm(vararg fields: Pair<String, String>): FormBody {
         val builder = FormBody.Builder()
         fields.forEach { (name, value) -> builder.add(name, value) }
-        builder.add(BbCloudConsumerMaterial.primaryField(), BbCloudConsumerMaterial.primary())
+        builder.add(DiffyConsumerMaterial.primaryField(), DiffyConsumerMaterial.primary())
         return builder.build()
     }
 
     private fun consumerAuthorization(): String {
         return Credentials.basic(
-            username = BbCloudConsumerMaterial.primary(),
-            password = BbCloudConsumerMaterial.secondary(),
+            username = DiffyConsumerMaterial.primary(),
+            password = DiffyConsumerMaterial.secondary(),
             charset = Charsets.UTF_8
         )
     }
 
     private suspend fun post(grantType: String, form: FormBody, previousRefreshToken: String?): OAuthTokenResult {
         return withContext(Dispatchers.IO) {
-            val tokenUrl = BbCloudOAuthConfig.TOKEN_URL
+            val tokenUrl = DiffyOAuthConfig.TOKEN_URL
             if (!BitbucketApiUrlPolicy.isTrustedOAuthUrl(tokenUrl)) {
                 LOG.warn("Refusing to post to an untrusted OAuth token URL (${BitbucketApiUrlPolicy.describeRejected(tokenUrl)})")
                 return@withContext OAuthTokenResult.Failed()

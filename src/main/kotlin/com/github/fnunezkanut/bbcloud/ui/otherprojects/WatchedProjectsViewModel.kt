@@ -23,7 +23,7 @@ import kotlinx.coroutines.coroutineScope as coroutineScopeBlock
 
 /**
  * The stored data and the rescan operation the Watched Projects tab reads, backed by
- * [com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService] in production and by a fake in tests.
+ * [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService] in production and by a fake in tests.
  */
 interface WatchedProjectsDataSource {
     fun organizationUrlOrNull(): String?
@@ -92,7 +92,7 @@ class WatchedProjectsViewModel(
      * Shows the persisted mappings of the current workspace on the Watched Projects tab, or routes to the generic
      * not-configured card when no projects directory is set. Does not rescan: a rescan runs only after a directory is
      * chosen, or a workspace slug change is saved in Settings (see [rescanWatchedProjects] and
-     * [com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService.saveSetup]).
+     * [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.saveSetup]).
      */
     fun bindWatchedProjects() {
         LOG.debug("Binding the Workspace - Watched Projects tab")

@@ -2,7 +2,7 @@ package com.github.fnunezkanut.bbcloud.ui.main
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.ItemCount
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.git.BranchDiffLineTotals
@@ -50,9 +50,9 @@ data class HeaderLinesChanged(val emoji: String, val addedText: String, val remo
             return if (totals.hasBinaryFiles) {
                 HeaderLinesChanged(
                     emoji = emoji,
-                    addedText = BbCloudBundle.message("main.branch.header.linesAdded.approx", totals.linesAdded),
-                    removedText = BbCloudBundle.message("main.branch.header.linesRemoved.approx", totals.linesRemoved),
-                    tooltip = BbCloudBundle.message(
+                    addedText = DiffyBundle.message("main.branch.header.linesAdded.approx", totals.linesAdded),
+                    removedText = DiffyBundle.message("main.branch.header.linesRemoved.approx", totals.linesRemoved),
+                    tooltip = DiffyBundle.message(
                         "main.branch.header.linesChanged.tooltip.approx",
                         totals.linesAdded,
                         totals.linesRemoved
@@ -61,9 +61,9 @@ data class HeaderLinesChanged(val emoji: String, val addedText: String, val remo
             } else {
                 HeaderLinesChanged(
                     emoji = emoji,
-                    addedText = BbCloudBundle.message("main.branch.header.linesAdded", totals.linesAdded),
-                    removedText = BbCloudBundle.message("main.branch.header.linesRemoved", totals.linesRemoved),
-                    tooltip = BbCloudBundle.message(
+                    addedText = DiffyBundle.message("main.branch.header.linesAdded", totals.linesAdded),
+                    removedText = DiffyBundle.message("main.branch.header.linesRemoved", totals.linesRemoved),
+                    tooltip = DiffyBundle.message(
                         "main.branch.header.linesChanged.tooltip",
                         totals.linesAdded,
                         totals.linesRemoved
@@ -84,11 +84,11 @@ class PullRequestHeaderViewModel {
             return
         }
         val countText = if (commitsBehind.isTruncated) {
-            BbCloudBundle.message("main.branch.count.truncated", commitsBehind.value)
+            DiffyBundle.message("main.branch.count.truncated", commitsBehind.value)
         } else {
             commitsBehind.value.toString()
         }
-        val text = BbCloudBundle.message(
+        val text = DiffyBundle.message(
             "main.branch.overview.behind",
             countText,
             commitsBehind.value,

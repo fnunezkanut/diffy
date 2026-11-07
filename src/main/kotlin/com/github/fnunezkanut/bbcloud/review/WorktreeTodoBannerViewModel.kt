@@ -5,14 +5,14 @@ import androidx.compose.runtime.mutableStateOf
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestNotOpenCheck
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
-import com.github.fnunezkanut.bbcloud.git.BbCloudPullRequestBranchDiffService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.BranchDiffLineTotals
+import com.github.fnunezkanut.bbcloud.git.DiffyPullRequestBranchDiffService
 import com.github.fnunezkanut.bbcloud.project.PullRequestWorktreeLayout
 import com.github.fnunezkanut.bbcloud.ui.main.AuthorAvatarCache
 import com.github.fnunezkanut.bbcloud.ui.main.HeaderLinesChanged
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestVirtualFile
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.BbCloudPullRequestVirtualFiles
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestVirtualFile
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.DiffyPullRequestVirtualFiles
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -89,9 +89,9 @@ data class WorktreeTodoBannerInputs(
  * all show the same header and refresh state.
  *
  * The slug and pull request id are derived from the work tree folder name on first use. The branches, the web URL, and
- * the repository avatar are merged from, in order of preference, the work tree [BbCloudWorktreePullRequestContext]
+ * the repository avatar are merged from, in order of preference, the work tree [DiffyWorktreePullRequestContext]
  * binding and then the pull request editor's virtual file, so the header fills in as those sources resolve.
- * [BbCloudWorktreePullRequestContext] notifies this view model when the binding changes, so the branch chips stay in
+ * [DiffyWorktreePullRequestContext] notifies this view model when the binding changes, so the branch chips stay in
  * sync without polling.
  */
 @Service(Service.Level.PROJECT)
@@ -210,7 +210,7 @@ class WorktreeTodoBannerViewModel(private val project: Project, private val coro
         coroutineScope.launch {
             val totals = try {
                 withContext(Dispatchers.IO) {
-                    BbCloudPullRequestBranchDiffService().loadPullRequestLineTotals(
+                    DiffyPullRequestBranchDiffService().loadPullRequestLineTotals(
                         project = project,
                         destinationBranch = destinationBranch,
                         sourceBranch = sourceBranch
@@ -255,11 +255,11 @@ class WorktreeTodoBannerViewModel(private val project: Project, private val coro
     }
 
     private fun gatherInputs(): WorktreeTodoBannerInputs {
-        val configurationService = BbCloudConfigurationService.getInstance()
+        val configurationService = DiffyConfigurationService.getInstance()
         val basePath = project.basePath
         val summary = runCatching {
-            BbCloudPullRequestVirtualFiles.forWorktreeProject(project)
-                ?.getUserData(BbCloudPullRequestVirtualFile.PULL_REQUEST_SUMMARY_KEY)
+            DiffyPullRequestVirtualFiles.forWorktreeProject(project)
+                ?.getUserData(DiffyPullRequestVirtualFile.PULL_REQUEST_SUMMARY_KEY)
         }.getOrNull()
         val repoSlug = basePath
             ?.let { path -> Paths.get(path).fileName?.toString() }
@@ -267,7 +267,7 @@ class WorktreeTodoBannerViewModel(private val project: Project, private val coro
         val repositoryAvatarUrl = repoSlug?.let { slug ->
             configurationService.repoAvatarUrlsForCurrentWorkspace()[slug]
         }
-        val context = BbCloudWorktreePullRequestContext.getInstance(project)
+        val context = DiffyWorktreePullRequestContext.getInstance(project)
         return WorktreeTodoBannerInputs(
             projectBasePath = basePath,
             organizationUrl = configurationService.organizationUrlOrNull(),

@@ -1,0 +1,26 @@
+package com.github.fnunezkanut.bbcloud.review
+
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestReviewBarRefresh
+import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.startup.ProjectActivity
+
+/**
+ * Resolves the pull request of a pull-request work tree when the project is opened.
+ *
+ * The work tree folder carries the pull request number, so the project itself tells whether the work tree context is
+ * needed at all. An ordinary project never pays for the resolution.
+ */
+class DiffyWorktreePullRequestContextStartupActivity : ProjectActivity {
+    override suspend fun execute(project: Project) {
+        if (!DiffyPullRequestReviewBarRefresh.isPullRequestWorkTree(project.basePath)) {
+            return
+        }
+        LOG.debug("Resolving the work tree pull request context of the opened project")
+        DiffyWorktreePullRequestContext.getInstance(project).reload(reason = "project opened", syncBranches = true)
+    }
+
+    companion object {
+        private val LOG = logger<DiffyWorktreePullRequestContextStartupActivity>()
+    }
+}

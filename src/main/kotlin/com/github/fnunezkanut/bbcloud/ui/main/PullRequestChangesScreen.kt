@@ -32,7 +32,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.git.FileLineCount
 import com.github.fnunezkanut.bbcloud.ui.components.LinesChangedBadge
 import com.github.fnunezkanut.bbcloud.ui.components.RoundedBadge
@@ -70,7 +70,7 @@ private val LOG = logger<PullRequestChangesViewModel>()
 @Composable
 internal fun PullRequestChangesScreen(filesViewModel: PullRequestChangesViewModel) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TitledCardBox(title = BbCloudBundle.message("main.branch.changes.card.fileChanges")) {
+        TitledCardBox(title = DiffyBundle.message("main.branch.changes.card.fileChanges")) {
             FileChangesBody(viewModel = filesViewModel)
         }
     }
@@ -81,13 +81,13 @@ private fun FileChangesBody(viewModel: PullRequestChangesViewModel) {
     val state by viewModel.state
     when (state.card) {
         PullRequestFileChangesCard.Idle -> {
-            CenteredMessage(message = BbCloudBundle.message("main.branch.filesChanged.idle"))
+            CenteredMessage(message = DiffyBundle.message("main.branch.filesChanged.idle"))
         }
         PullRequestFileChangesCard.Loading -> {
-            CenteredMessage(message = BbCloudBundle.message("main.branch.filesChanged.loading"))
+            CenteredMessage(message = DiffyBundle.message("main.branch.filesChanged.loading"))
         }
         PullRequestFileChangesCard.Empty -> {
-            CenteredMessage(message = BbCloudBundle.message("main.branch.filesChanged.empty"))
+            CenteredMessage(message = DiffyBundle.message("main.branch.filesChanged.empty"))
         }
         PullRequestFileChangesCard.Error -> {
             ErrorBody(message = state.errorMessage, onRefresh = viewModel::onRefresh)
@@ -104,9 +104,9 @@ private fun FileChangesBody(viewModel: PullRequestChangesViewModel) {
 /** The centered message shown by the `Resolved` card, naming the pull request when its number is known. */
 private fun resolvedMessage(pullRequestId: Long?): String {
     return if (pullRequestId != null) {
-        BbCloudBundle.message("main.branch.filesChanged.resolved", pullRequestId)
+        DiffyBundle.message("main.branch.filesChanged.resolved", pullRequestId)
     } else {
-        BbCloudBundle.message("main.branch.filesChanged.resolvedNoId")
+        DiffyBundle.message("main.branch.filesChanged.resolvedNoId")
     }
 }
 
@@ -125,7 +125,7 @@ private fun ErrorBody(message: String?, onRefresh: () -> Unit) {
             Icon(key = AllIconsKeys.General.Error, contentDescription = "Error", tint = errorColor)
             Text(text = message.orEmpty(), color = errorColor)
         }
-        Link(text = BbCloudBundle.message("main.branch.filesChanged.refresh"), onClick = onRefresh)
+        Link(text = DiffyBundle.message("main.branch.filesChanged.refresh"), onClick = onRefresh)
     }
 }
 
@@ -199,19 +199,19 @@ private fun ChangesTreeToolbar(onExpandAll: () -> Unit, onCollapseAll: () -> Uni
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Tooltip(tooltip = { Text(text = BbCloudBundle.message("main.branch.filesChanged.expandAll")) }) {
+        Tooltip(tooltip = { Text(text = DiffyBundle.message("main.branch.filesChanged.expandAll")) }) {
             IconButton(onClick = onExpandAll) {
                 Icon(
                     key = AllIconsKeys.Actions.Expandall,
-                    contentDescription = BbCloudBundle.message("main.branch.filesChanged.expandAll")
+                    contentDescription = DiffyBundle.message("main.branch.filesChanged.expandAll")
                 )
             }
         }
-        Tooltip(tooltip = { Text(text = BbCloudBundle.message("main.branch.filesChanged.collapseAll")) }) {
+        Tooltip(tooltip = { Text(text = DiffyBundle.message("main.branch.filesChanged.collapseAll")) }) {
             IconButton(onClick = onCollapseAll) {
                 Icon(
                     key = AllIconsKeys.Actions.Collapseall,
-                    contentDescription = BbCloudBundle.message("main.branch.filesChanged.collapseAll")
+                    contentDescription = DiffyBundle.message("main.branch.filesChanged.collapseAll")
                 )
             }
         }
@@ -257,7 +257,7 @@ private fun DirectoryRowContent(
     ContextMenuArea(
         items = {
             listOf(
-                ContextMenuItem(label = BbCloudBundle.message("main.branch.filesChanged.copyAbsolutePath")) {
+                ContextMenuItem(label = DiffyBundle.message("main.branch.filesChanged.copyAbsolutePath")) {
                     val absolutePath = viewModel.directoryAbsolutePathFor(directory.path)
                     if (absolutePath != null) {
                         copyPathToClipboard(path = absolutePath)
@@ -281,7 +281,7 @@ private fun DirectoryRowContent(
             )
             if (allViewed) {
                 ViewedTick(
-                    tooltip = BbCloudBundle.message("main.branch.filesChanged.viewed.tooltip"),
+                    tooltip = DiffyBundle.message("main.branch.filesChanged.viewed.tooltip"),
                     modifier = Modifier.padding(start = LINE_STATS_LEADING_GAP)
                 )
             }
@@ -312,14 +312,14 @@ private fun FileChangeRowContent(row: PullRequestFileChangeRow, viewModel: PullR
     ContextMenuArea(
         items = {
             listOf(
-                ContextMenuItem(label = BbCloudBundle.message("main.branch.filesChanged.openDiff")) {
+                ContextMenuItem(label = DiffyBundle.message("main.branch.filesChanged.openDiff")) {
                     viewModel.onFileOpened(row.changeId)
                 },
-                ContextMenuItem(label = BbCloudBundle.message("main.branch.filesChanged.copyPath")) {
+                ContextMenuItem(label = DiffyBundle.message("main.branch.filesChanged.copyPath")) {
                     viewModel.onCopyPath(row.relativePath)
                     copyPathToClipboard(path = row.relativePath)
                 },
-                ContextMenuItem(label = BbCloudBundle.message("main.branch.filesChanged.copyAbsolutePath")) {
+                ContextMenuItem(label = DiffyBundle.message("main.branch.filesChanged.copyAbsolutePath")) {
                     val absolutePath = viewModel.absolutePathFor(row.changeId)
                     if (absolutePath != null) {
                         copyPathToClipboard(path = absolutePath)
@@ -355,7 +355,7 @@ private fun FileChangeRowContent(row: PullRequestFileChangeRow, viewModel: PullR
                 maxLines = 1
             )
             if (row.commentCount > 0) {
-                Tooltip(tooltip = { Text(text = BbCloudBundle.message("main.branch.filesChanged.commentCount.tooltip", row.commentCount)) }) {
+                Tooltip(tooltip = { Text(text = DiffyBundle.message("main.branch.filesChanged.commentCount.tooltip", row.commentCount)) }) {
                     RoundedBadge(
                         text = row.commentCount.toString(),
                         fillColor = actionButtonHoverBackground(),
@@ -408,9 +408,9 @@ internal fun shouldShowLinesBadge(lineCount: FileLineCount?, viewed: Boolean): B
  */
 internal fun viewedTooltip(lineCount: FileLineCount?): String {
     if (lineCount == null || lineCount.isBinary || (lineCount.linesAdded == 0 && lineCount.linesRemoved == 0)) {
-        return BbCloudBundle.message("main.branch.filesChanged.viewed.tooltip")
+        return DiffyBundle.message("main.branch.filesChanged.viewed.tooltip")
     }
-    return BbCloudBundle.message(
+    return DiffyBundle.message(
         "main.branch.filesChanged.viewed.tooltipWithCounts",
         lineCount.linesAdded,
         lineCount.linesRemoved

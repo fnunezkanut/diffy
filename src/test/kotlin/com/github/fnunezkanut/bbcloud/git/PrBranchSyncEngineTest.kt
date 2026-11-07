@@ -445,7 +445,7 @@ class PrBranchSyncEngineTest {
                     Call(workingDir = tempDir, command = GitCommand.MERGE, parameters = listOf("--ff-only", "refs/remotes/origin/feature/foo"))
                 git.calls.first { call -> call.command == GitCommand.UPDATE_REF }.parameters shouldBe listOf(
                     "-m",
-                    "bbcloud: fast-forward main to origin/main",
+                    "diffy: fast-forward main to origin/main",
                     "refs/heads/main",
                     "new",
                     "old"

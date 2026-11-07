@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.project
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.intellij.ide.impl.OpenProjectTask
 import com.intellij.ide.impl.ProjectUtil
 import com.intellij.openapi.diagnostic.logger
@@ -58,7 +58,7 @@ object LocalRepositoryProjectOpener {
     private fun addWorktreeToRecentProjectsGroup(checkoutPath: Path) {
         PullRequestWorktreeRecentProjects.getInstance().addToGroup(
             worktreePath = checkoutPath,
-            groupName = BbCloudBundle.message("recentProjects.group.name")
+            groupName = DiffyBundle.message("recentProjects.group.name")
         )
     }
 }

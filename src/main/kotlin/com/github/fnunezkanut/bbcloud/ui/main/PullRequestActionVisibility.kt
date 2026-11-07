@@ -1,7 +1,7 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
 import androidx.compose.ui.graphics.Color
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestAction
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.intellij.ui.JBColor
@@ -50,14 +50,14 @@ object PullRequestActionVisibility {
 
     fun label(action: PullRequestAction): String {
         return when (action) {
-            PullRequestAction.Merge -> BbCloudBundle.message("main.branch.action.merge")
-            PullRequestAction.Approve -> BbCloudBundle.message("main.branch.action.approve")
-            PullRequestAction.Unapprove -> BbCloudBundle.message("main.branch.action.unapprove")
-            PullRequestAction.RequestChanges -> BbCloudBundle.message("main.branch.action.requestChanges")
-            PullRequestAction.RemoveChangesRequest -> BbCloudBundle.message("main.branch.action.changesRequested")
-            PullRequestAction.MarkAsDraft -> BbCloudBundle.message("main.branch.action.markDraft")
-            PullRequestAction.MarkAsReady -> BbCloudBundle.message("main.branch.action.markReady")
-            PullRequestAction.Decline -> BbCloudBundle.message("main.branch.action.decline")
+            PullRequestAction.Merge -> DiffyBundle.message("main.branch.action.merge")
+            PullRequestAction.Approve -> DiffyBundle.message("main.branch.action.approve")
+            PullRequestAction.Unapprove -> DiffyBundle.message("main.branch.action.unapprove")
+            PullRequestAction.RequestChanges -> DiffyBundle.message("main.branch.action.requestChanges")
+            PullRequestAction.RemoveChangesRequest -> DiffyBundle.message("main.branch.action.changesRequested")
+            PullRequestAction.MarkAsDraft -> DiffyBundle.message("main.branch.action.markDraft")
+            PullRequestAction.MarkAsReady -> DiffyBundle.message("main.branch.action.markReady")
+            PullRequestAction.Decline -> DiffyBundle.message("main.branch.action.decline")
         }
     }
 

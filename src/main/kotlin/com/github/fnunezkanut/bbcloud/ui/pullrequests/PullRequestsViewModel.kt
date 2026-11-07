@@ -29,7 +29,7 @@ class PullRequestsViewModel(
     val scope: PullRequestListScope,
     initialFilter: PullRequestListFilter,
     private val organizationUrl: () -> String?,
-    // Persists the filter via BbCloudConfigurationService.
+    // Persists the filter via DiffyConfigurationService.
     private val onFilterChangedCallback: (PullRequestListFilter) -> Unit,
     private val onOpenTitleCallback: (PullRequestListEntry) -> Unit,
     private val onOpenPrOnWebCallback: (PullRequestListEntry) -> Unit,

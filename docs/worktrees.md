@@ -58,7 +58,7 @@ If your working tree has uncommitted or untracked changes, the plugin does not s
 
 ## Keeping branches up to date
 
-In a PR work tree window, bbcloud keeps the local source and destination branches of the pull request in line with
+In a PR work tree window, Diffy keeps the local source and destination branches of the pull request in line with
 Bitbucket. It fetches both branches and fast-forwards the local ones when the window opens, when the work tree is
 opened or focused again from the main window, and when you click refresh (blue bar or PR page).
 

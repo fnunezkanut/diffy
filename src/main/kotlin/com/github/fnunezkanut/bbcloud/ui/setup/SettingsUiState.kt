@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.setup
 
-import com.github.fnunezkanut.bbcloud.auth.BbCloudAuthenticationMethod
+import com.github.fnunezkanut.bbcloud.auth.DiffyAuthenticationMethod
 
 /** Immutable state rendered by the Compose Settings screen. */
 data class SettingsUiState(
@@ -8,7 +8,7 @@ data class SettingsUiState(
     // Whether an OAuth login is stored; independent of [hasStoredToken] since both credentials may coexist.
     val hasOAuthTokens: Boolean = false,
     // The working authentication method as determined by the online credential check; None when nothing verifies.
-    val workingMethod: BbCloudAuthenticationMethod = BbCloudAuthenticationMethod.None,
+    val workingMethod: DiffyAuthenticationMethod = DiffyAuthenticationMethod.None,
     val projectsDirectory: String? = null,
     // Stored Bitbucket workspace slug shown in the authentication status label; null when none is stored.
     val workspaceSlug: String? = null,
@@ -31,7 +31,7 @@ data class SettingsUiState(
      * status label reflects what actually works (OAuth preferred, API token fallback) rather than merely what is
      * stored.
      */
-    val authenticationMethod: BbCloudAuthenticationMethod
+    val authenticationMethod: DiffyAuthenticationMethod
         get() = workingMethod
 
     /**
@@ -39,5 +39,5 @@ data class SettingsUiState(
      * authenticate again (for example after an expired OAuth session with no API token fallback).
      */
     val hasStoredButNotWorkingCredentials: Boolean
-        get() = (hasStoredToken || hasOAuthTokens) && workingMethod == BbCloudAuthenticationMethod.None
+        get() = (hasStoredToken || hasOAuthTokens) && workingMethod == DiffyAuthenticationMethod.None
 }

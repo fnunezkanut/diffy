@@ -49,7 +49,7 @@ sealed interface WorktreeCollisionSwitchPlan {
  * [WorktreeCollisionSwitchPlan] the UI acts on. It holds no IntelliJ APIs (only [java.nio.file.Path]) so it is
  * unit-testable on its own.
  *
- * The work-tree reuse path ([BbCloudWorktreeService] `reuseExistingWorktree`) and the fresh-add path (`addFreshWorktree`)
+ * The work-tree reuse path ([DiffyWorktreeService] `reuseExistingWorktree`) and the fresh-add path (`addFreshWorktree`)
  * both check out the existing local branch as-is when it already exists; neither runs `reset --hard`, `checkout -B`, or
  * `branch -f` against `origin/<branch>`, so switching the current checkout away keeps any unpushed local commits on the
  * pull request branch, and the work tree then checks out that same local branch including those commits (decision 7a).

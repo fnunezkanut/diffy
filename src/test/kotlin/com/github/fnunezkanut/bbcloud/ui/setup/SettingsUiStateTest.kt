@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.setup
 
-import com.github.fnunezkanut.bbcloud.auth.BbCloudAuthenticationMethod
+import com.github.fnunezkanut.bbcloud.auth.DiffyAuthenticationMethod
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Tag
@@ -11,37 +11,37 @@ class SettingsUiStateTest {
     @Test
     fun `authenticationMethod - should mirror the working method None`() {
         // GIVEN
-        val state = SettingsUiState(pluginVersionFooter = "x", workingMethod = BbCloudAuthenticationMethod.None)
+        val state = SettingsUiState(pluginVersionFooter = "x", workingMethod = DiffyAuthenticationMethod.None)
 
         // WHEN
         val method = state.authenticationMethod
 
         // THEN
-        method shouldBe BbCloudAuthenticationMethod.None
+        method shouldBe DiffyAuthenticationMethod.None
     }
 
     @Test
     fun `authenticationMethod - should mirror the working method ApiToken`() {
         // GIVEN
-        val state = SettingsUiState(pluginVersionFooter = "x", workingMethod = BbCloudAuthenticationMethod.ApiToken)
+        val state = SettingsUiState(pluginVersionFooter = "x", workingMethod = DiffyAuthenticationMethod.ApiToken)
 
         // WHEN
         val method = state.authenticationMethod
 
         // THEN
-        method shouldBe BbCloudAuthenticationMethod.ApiToken
+        method shouldBe DiffyAuthenticationMethod.ApiToken
     }
 
     @Test
     fun `authenticationMethod - should mirror the working method OAuth`() {
         // GIVEN
-        val state = SettingsUiState(pluginVersionFooter = "x", workingMethod = BbCloudAuthenticationMethod.OAuth)
+        val state = SettingsUiState(pluginVersionFooter = "x", workingMethod = DiffyAuthenticationMethod.OAuth)
 
         // WHEN
         val method = state.authenticationMethod
 
         // THEN
-        method shouldBe BbCloudAuthenticationMethod.OAuth
+        method shouldBe DiffyAuthenticationMethod.OAuth
     }
 
     @Test
@@ -54,21 +54,21 @@ class SettingsUiStateTest {
             SettingsUiState(
                 pluginVersionFooter = "x",
                 hasStoredToken = true,
-                workingMethod = BbCloudAuthenticationMethod.None
+                workingMethod = DiffyAuthenticationMethod.None
             ).hasStoredButNotWorkingCredentials shouldBe true
 
             // OAuth stored but nothing works online.
             SettingsUiState(
                 pluginVersionFooter = "x",
                 hasOAuthTokens = true,
-                workingMethod = BbCloudAuthenticationMethod.None
+                workingMethod = DiffyAuthenticationMethod.None
             ).hasStoredButNotWorkingCredentials shouldBe true
 
             // A working method means it is not in the warning state.
             SettingsUiState(
                 pluginVersionFooter = "x",
                 hasStoredToken = true,
-                workingMethod = BbCloudAuthenticationMethod.ApiToken
+                workingMethod = DiffyAuthenticationMethod.ApiToken
             ).hasStoredButNotWorkingCredentials shouldBe false
         }
     }

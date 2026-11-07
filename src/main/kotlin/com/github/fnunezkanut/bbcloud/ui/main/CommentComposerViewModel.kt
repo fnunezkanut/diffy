@@ -10,7 +10,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.text.TextRange
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentMentionResolver
 import com.github.fnunezkanut.bbcloud.bitbucket.MentionCandidate
 import com.intellij.openapi.application.EDT
@@ -209,7 +209,7 @@ private fun shiftAt(lines: List<String>, shifts: List<Int>, lineStart: Int, offs
  * says so, instead of showing an empty page.
  */
 internal fun emptyPreviewMessage(draft: String): String? {
-    return if (draft.isBlank()) BbCloudBundle.message("main.branch.comments.preview.empty") else null
+    return if (draft.isBlank()) DiffyBundle.message("main.branch.comments.preview.empty") else null
 }
 
 /**

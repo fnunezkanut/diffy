@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
@@ -59,7 +59,7 @@ internal fun ReviewerIdentityRow(
         )
         Text(text = displayName, modifier = Modifier.weight(1f))
         if (isRemovable) {
-            Tooltip(tooltip = { Text(text = BbCloudBundle.message("main.branch.reviewers.remove", displayName)) }) {
+            Tooltip(tooltip = { Text(text = DiffyBundle.message("main.branch.reviewers.remove", displayName)) }) {
                 val modifier = if (isRemoveEnabled) {
                     Modifier.clickable(onClick = onRemove).pointerHoverIcon(PointerIcon.Hand)
                 } else {

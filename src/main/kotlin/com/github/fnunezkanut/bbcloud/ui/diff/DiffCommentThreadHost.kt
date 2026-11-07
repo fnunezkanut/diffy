@@ -363,7 +363,7 @@ internal fun resolveContentScale(composeDensity: Float, componentScale: () -> Fl
 /**
  * The width the inline comment thread is measured at, ported from the platform `EditorTextWidthWatcher` math:
  * the editor viewport width minus the vertical scrollbar allowance minus the gutter text gap (deducted only when the
- * scrollbar is flipped). Unlike the platform, bbcloud does **not** clamp the result to a 42 em cap; the thread spans
+ * scrollbar is flipped). Unlike the platform, Diffy does **not** clamp the result to a 42 em cap; the thread spans
  * the full editor text width (clarification 1b). Narrow editors clamp to `0` only (clarification 9a); a `0` result
  * means the editor is not laid out yet and the host defers the remeasure to a later viewport event.
  */

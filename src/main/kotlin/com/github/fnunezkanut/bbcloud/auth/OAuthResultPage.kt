@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.auth
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.intellij.openapi.util.text.StringUtil
 
 /** The terminal outcome shown on the `/bbcloud/done` page. [message] is already user-facing text. */
@@ -14,20 +14,20 @@ data class OAuthResultPage(val success: Boolean, val message: String)
 internal object OAuthCallbackPage {
     fun render(page: OAuthResultPage): String {
         val heading = if (page.success) {
-            BbCloudBundle.message("oauth.callback.page.success")
+            DiffyBundle.message("oauth.callback.page.success")
         } else {
-            BbCloudBundle.message("oauth.callback.page.failure", page.message)
+            DiffyBundle.message("oauth.callback.page.failure", page.message)
         }
         return html(body = heading)
     }
 
     /** The page shown when the outcome has not arrived within the wait window; tells the user to return to the IDE. */
     fun pending(): String {
-        return html(body = BbCloudBundle.message("oauth.callback.page.pending"))
+        return html(body = DiffyBundle.message("oauth.callback.page.pending"))
     }
 
     private fun html(body: String): String {
-        val title = StringUtil.escapeXmlEntities(BbCloudBundle.message("oauth.callback.page.title"))
+        val title = StringUtil.escapeXmlEntities(DiffyBundle.message("oauth.callback.page.title"))
         val escapedBody = StringUtil.escapeXmlEntities(body)
         return """
             <!DOCTYPE html>

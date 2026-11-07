@@ -26,7 +26,7 @@ internal class PullRequestCommentLineIndicatorRenderer(private val startLine: In
     }
 
     companion object {
-        private const val COMMENT_LINE_INDICATOR_COLOR_KEY = "BbCloud.Review.CommentLineIndicator"
+        private const val COMMENT_LINE_INDICATOR_COLOR_KEY = "Diffy.Review.CommentLineIndicator"
         internal const val COMMENT_LINE_INDICATOR_WIDTH = 3
         internal const val COMMENT_LINE_INDICATOR_PADDING = 3
     }

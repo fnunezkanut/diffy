@@ -25,7 +25,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.MentionCandidate
 import com.github.fnunezkanut.bbcloud.bitbucket.MentionCandidateTier
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.toComposeImageBitmap
@@ -105,10 +105,10 @@ private fun MentionRow(
 @Composable
 private fun MentionStatusRow(state: CommentMentionSuggestionsUiState) {
     val text = when {
-        state.isLoadingWorkspace -> BbCloudBundle.message("main.branch.comments.mentions.searching")
-        state.items.isEmpty() -> BbCloudBundle.message("main.branch.comments.mentions.noMatches")
-        state.workspaceLoadFailed -> BbCloudBundle.message("main.branch.comments.mentions.loadFailed")
-        state.isWorkspaceTruncated -> BbCloudBundle.message("main.branch.comments.mentions.truncated")
+        state.isLoadingWorkspace -> DiffyBundle.message("main.branch.comments.mentions.searching")
+        state.items.isEmpty() -> DiffyBundle.message("main.branch.comments.mentions.noMatches")
+        state.workspaceLoadFailed -> DiffyBundle.message("main.branch.comments.mentions.loadFailed")
+        state.isWorkspaceTruncated -> DiffyBundle.message("main.branch.comments.mentions.truncated")
         else -> null
     } ?: return
     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp)) {
@@ -127,7 +127,7 @@ private fun tierLabel(tier: MentionCandidateTier): String {
         MentionCandidateTier.RecentlySeen -> "main.branch.comments.mentions.tier.recentlySeen"
         MentionCandidateTier.Workspace -> "main.branch.comments.mentions.tier.workspace"
     }
-    return BbCloudBundle.message(key)
+    return DiffyBundle.message(key)
 }
 
 /** The theme-aware selection background, following the established JBColor-to-Compose idiom. */

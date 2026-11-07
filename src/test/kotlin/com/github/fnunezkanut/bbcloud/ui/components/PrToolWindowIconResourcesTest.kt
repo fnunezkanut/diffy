@@ -1,7 +1,7 @@
 package com.github.fnunezkanut.bbcloud.ui.components
 
 import com.github.fnunezkanut.bbcloud.ui.pullrequest.changes.WorktreePullRequestChangesToolWindowFactory
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestFileType
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestFileType
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -16,10 +16,10 @@ class PrToolWindowIconResourcesTest {
     @Test
     fun `pull request file type - should use the shared 16x16 tool window icon`() {
         // WHEN
-        val fileTypeIcon = BbCloudPullRequestFileType.getIcon()
+        val fileTypeIcon = DiffyPullRequestFileType.getIcon()
 
         // THEN
-        fileTypeIcon shouldBe BbCloudPluginIcons.prIcon
+        fileTypeIcon shouldBe DiffyPluginIcons.prIcon
     }
 
     @Test
@@ -29,7 +29,7 @@ class PrToolWindowIconResourcesTest {
             svgLogicalSize("/icons/prToolWindow.svg") shouldBe 16
             svgLogicalSize("/icons/expui/toolwindow/prToolWindow.svg") shouldBe 16
             svgLogicalSize("/icons/expui/toolwindow/prToolWindow@20x20.svg") shouldBe 20
-            BbCloudPluginIcons::class.java.getResource("/icons/prToolWindow@2x.svg") shouldBe null
+            DiffyPluginIcons::class.java.getResource("/icons/prToolWindow@2x.svg") shouldBe null
         }
     }
 
@@ -48,7 +48,7 @@ class PrToolWindowIconResourcesTest {
         // THEN
         assertSoftly {
             mappers.size shouldBe 1
-            mappers.single().getAttribute("mappingFile") shouldBe "BbCloudIconMappings.json"
+            mappers.single().getAttribute("mappingFile") shouldBe "DiffyIconMappings.json"
         }
     }
 
@@ -120,8 +120,8 @@ class PrToolWindowIconResourcesTest {
     @Test
     fun `icon mappings - should map the new UI pr changes icon to the classic icon`() {
         // GIVEN
-        val mappings = checkNotNull(BbCloudPluginIcons::class.java.getResourceAsStream("/BbCloudIconMappings.json")) {
-            "Missing BbCloudIconMappings.json"
+        val mappings = checkNotNull(DiffyPluginIcons::class.java.getResourceAsStream("/DiffyIconMappings.json")) {
+            "Missing DiffyIconMappings.json"
         }.reader(Charsets.UTF_8).readText()
 
         // THEN
@@ -129,7 +129,7 @@ class PrToolWindowIconResourcesTest {
     }
 
     private fun svgMarkup(resourcePath: String): String {
-        val stream = checkNotNull(BbCloudPluginIcons::class.java.getResourceAsStream(resourcePath)) {
+        val stream = checkNotNull(DiffyPluginIcons::class.java.getResourceAsStream(resourcePath)) {
             "Missing resource $resourcePath"
         }
         return stream.reader(Charsets.UTF_8).readText()

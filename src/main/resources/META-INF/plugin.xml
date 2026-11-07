@@ -1,33 +1,30 @@
 <idea-plugin>
     <id>com.github.fnunezkanut.bbcloud</id>
-    <name>Bitbucket Cloud PR Review</name>
+    <name>Diffy - Bitbucket PR Review</name>
     <vendor>fnunezkanut</vendor>
     <description><![CDATA[
-        <p>Review Bitbucket Cloud pull requests inside IntelliJ IDEA with git
-        <a href="https://github.com/fnunezkanut/bbcloud/blob/main/docs/worktrees.md">work trees</a>,
-        inline comments, and workspace-wide triage.</p>
+        <p>Seamless Bitbucket Cloud PR reviews inside your JetBrains IDE.</p>
         <ul>
             <li>🔐 <b>Secure authentication</b> signs you in to Bitbucket Cloud with OAuth so tokens are obtained and stored safely through the IDE.</li>
-            <li>🪟 A <b>Bitbucket Cloud PR Review</b> tool window on the bottom strip keeps pull request triage inside IntelliJ instead of the browser.</li>
+            <li>🪟 A <b>Diffy - Bitbucket PR Review</b> tool window on the bottom strip keeps pull request triage inside IntelliJ instead of the browser.</li>
             <li>🌳 Opening a PR spins up a separate <b>PR Work Tree</b> project window with its own git work tree so reviews never clash with your main branch or other PRs.</li>
-            <li>📂 The <b>Current Project</b> tab shows open and completed PRs for the repo in your IDE, with repo links, open-PR counts, reviewer avatars, refresh, and persistent <b>Exclude</b> filters.</li>
+            <li>📂 The <b>Current Project</b> tab shows open and completed PRs for the repo in your IDE, with repo links, open-PR counts, reviewer avatars, refresh, and persistent <b>Exclude</b> filters and a <b>Created by</b> dropdown with an <b>Assigned to me</b> option.</li>
             <li>🧭 The <b>Workspace</b> tab merges PRs you opened and review assignments from watched projects into one newest-first list across your Bitbucket workspace.</li>
             <li>👀 <b>Watched Projects</b> controls which repositories contribute to the workspace queue, with search by slug, folder, PR number, or branch and a master checkbox for matching rows.</li>
+            <li>🕘 <b>Recent Projects</b> lists the IDE recent projects and their groups, with search, the project icon, path, and current branch; click a project to open or focus it. Each row has a button to remove it from the list, and PR work trees also have a button that removes the work tree.</li>
             <li>📋 Each PR gets a dedicated <code>&lt;prNum&gt;.pr</code> tab plus a blue header stripe with line-change stats, refresh, file changes, and merge, approve, draft, or decline actions.</li>
             <li>🕐 The PR <b>Activity</b> timeline mixes commits, approvals, tasks, builds, and file or inline comment threads in time order, with a box to add PR-scoped comments and reply in threads.</li>
+            <li>🤖 Every comment box has a <b>Send this comment to Air</b> button (needs the JetBrains Air plugin). It puts the file location and the comment into the Air chat input, ready to send.</li>
             <li>📁 The <b>PR Changes</b> tool window lists every file in the diff; picking a file opens it in the editor or diff view driven from the stripe's <b>Show pull request file changes</b> button.</li>
             <li>✏️ <b>Modified File View</b> and <b>Diff View</b> surface existing comments and let you add line-level feedback from the gutter or context menu, view add/remove counts, and mark files reviewed.</li>
+            <li>📝 <b>Rendered Markdown side by side diff view</b> shows the rendered result of changed Markdown files next to each other, so documentation changes can be reviewed as readers will see them.</li>
             <li>🚀 <b>Create Pull Request</b> walks you through title, description, source and destination branches, reviewers (including defaults), remote cleanup after merge, then opens the new PR in a work tree window.</li>
         </ul>
     ]]></description>
 
     <change-notes><![CDATA[
         <ul>
-            <li>Changed: requires IntelliJ IDEA 2026.3 or newer</li>
-            <li>Added: a "Send this comment to Air" button on every comment box, shown when the JetBrains Air plugin is installed</li>
-            <li>Added: a red delete button beside each PR work tree on Watched Projects removes that work tree after confirmation, and closes its IDE window first if one is open; the progress dialog closes after 5 seconds while the removal keeps running in the background</li>
-            <li>Added: @mention users in comments and replies</li>
-            <li>Added: PRs assigned to me option on Current Project and Workspace tabs in the dropdown</li>
+            <li>Changed: renamed plugin to "Diffy - Bitbucket PR Review"</li>
         </ul>
     ]]></change-notes>
 
@@ -37,109 +34,109 @@
     <!-- VCS classes (ChangesUtil, SimpleAsyncChangesBrowser, ComplexPathVirtualFileSystem, dvcs repo) live in this plugin since 2026.3. -->
     <depends>com.intellij.platform.vcs</depends>
     <!-- Optional: the Send to Air button needs the JetBrains Air plugin. The plugin works without it (see ui/air/AirChatBridge.kt). -->
-    <depends optional="true" config-file="bbcloud-air.xml">com.intellij.air</depends>
+    <depends optional="true" config-file="diffy-air.xml">com.intellij.air</depends>
 
-    <resource-bundle>messages.BbCloudBundle</resource-bundle>
+    <resource-bundle>messages.DiffyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationService
-                serviceImplementation="com.github.fnunezkanut.bbcloud.review.BbCloudPullRequestViewedThreads"/>
+                serviceImplementation="com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedThreads"/>
         <applicationService
-                serviceImplementation="com.github.fnunezkanut.bbcloud.git.BbCloudWorktreeService"/>
+                serviceImplementation="com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService"/>
         <applicationService
-                serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.decline.BbCloudPullRequestDeclineCoordinator"/>
+                serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.decline.DiffyPullRequestDeclineCoordinator"/>
         <applicationService
-                serviceImplementation="com.github.fnunezkanut.bbcloud.settings.BbCloudSettings"/>
+                serviceImplementation="com.github.fnunezkanut.bbcloud.settings.DiffySettings"/>
         <applicationService
-                serviceImplementation="com.github.fnunezkanut.bbcloud.review.BbCloudKnownUsersState"/>
+                serviceImplementation="com.github.fnunezkanut.bbcloud.review.DiffyKnownUsersState"/>
         <applicationService
-                serviceInterface="com.github.fnunezkanut.bbcloud.credentials.BbCloudCredentialStore"
-                serviceImplementation="com.github.fnunezkanut.bbcloud.credentials.PasswordSafeBbCloudCredentialStore"/>
+                serviceInterface="com.github.fnunezkanut.bbcloud.credentials.DiffyCredentialStore"
+                serviceImplementation="com.github.fnunezkanut.bbcloud.credentials.PasswordSafeDiffyCredentialStore"/>
         <applicationService
-                serviceInterface="com.github.fnunezkanut.bbcloud.auth.BbCloudAccessTokenProvider"
-                serviceImplementation="com.github.fnunezkanut.bbcloud.auth.BbCloudAuthService"/>
+                serviceInterface="com.github.fnunezkanut.bbcloud.auth.DiffyAccessTokenProvider"
+                serviceImplementation="com.github.fnunezkanut.bbcloud.auth.DiffyAuthService"/>
         <applicationService
-                serviceImplementation="com.github.fnunezkanut.bbcloud.auth.BbCloudOAuthLoginService"/>
-        <notificationGroup id="BbCloud"
+                serviceImplementation="com.github.fnunezkanut.bbcloud.auth.DiffyOAuthLoginService"/>
+        <notificationGroup id="Diffy"
                            displayType="BALLOON"
-                           key="notification.group.bbcloud"/>
-        <iconMapper mappingFile="BbCloudIconMappings.json"/>
-        <toolWindow id="Bitbucket Cloud PR Review"
+                           key="notification.group.diffy"/>
+        <iconMapper mappingFile="DiffyIconMappings.json"/>
+        <toolWindow id="Diffy - Bitbucket PR Review"
                     secondary="true"
                     icon="/icons/prToolWindow.svg"
                     anchor="bottom"
-                    factoryClass="com.github.fnunezkanut.bbcloud.toolwindow.BbCloudToolWindowFactory"/>
-        <toolWindow id="Bitbucket Cloud PR Changes"
+                    factoryClass="com.github.fnunezkanut.bbcloud.toolwindow.DiffyToolWindowFactory"/>
+        <toolWindow id="Diffy - PR Changes"
                     anchor="left"
                     doNotActivateOnStart="true"
                     icon="/icons/prChangesToolWindow.svg"
                     factoryClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.changes.WorktreePullRequestChangesToolWindowFactory"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.review.BbCloudPullRequestReviewState"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.review.BbCloudPullRequestViewedFiles"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.review.BbCloudWorktreePullRequestContext"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.review.DiffyPullRequestReviewState"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedFiles"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext"/>
         <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.review.WorktreeTodoBannerViewModel"/>
         <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.review.WorktreePullRequestPageReloader"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.git.BbCloudPrBranchSyncService"/>
-        <postStartupActivity implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestEditorStartupActivity"/>
-        <postStartupActivity implementation="com.github.fnunezkanut.bbcloud.review.BbCloudWorktreePullRequestContextStartupActivity"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.diff.BbCloudPullRequestDiffCommentService"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestEditorOpener"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.create.BbCloudNewPullRequestEditorOpener"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.BbCloudWorktreesHelpEditorOpener"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.markdowndiff.BbCloudMarkdownDiffEditorOpener"/>
-        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.BbCloudToolWindowPanel"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.git.DiffyPrBranchSyncService"/>
+        <postStartupActivity implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorStartupActivity"/>
+        <postStartupActivity implementation="com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContextStartupActivity"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.diff.DiffyPullRequestDiffCommentService"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorOpener"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.create.DiffyNewPullRequestEditorOpener"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpEditorOpener"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.markdowndiff.DiffyMarkdownDiffEditorOpener"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.DiffyToolWindowPanel"/>
         <projectConfigurable
                 parentId="tools"
-                instance="com.github.fnunezkanut.bbcloud.settings.BbCloudToolsConfigurable"
-                id="com.github.fnunezkanut.bbcloud.settings.BbCloudToolsConfigurable"
+                instance="com.github.fnunezkanut.bbcloud.settings.DiffyToolsConfigurable"
+                id="com.github.fnunezkanut.bbcloud.settings.DiffyToolsConfigurable"
                 key="configurable.tools.displayName"
-                bundle="messages.BbCloudBundle"/>
+                bundle="messages.DiffyBundle"/>
         <virtualFileSystem
-                key="bbcloudpr"
-                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestVirtualFileSystem"/>
+                key="diffypr"
+                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestVirtualFileSystem"/>
         <fileEditorProvider
-                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestFileEditorProvider"/>
+                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestFileEditorProvider"/>
         <fileEditorProvider
-                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.create.BbCloudNewPullRequestFileEditorProvider"/>
+                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.create.DiffyNewPullRequestFileEditorProvider"/>
         <fileEditorProvider
-                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.BbCloudWorktreesHelpFileEditorProvider"/>
+                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpFileEditorProvider"/>
         <fileEditorProvider
-                implementationClass="com.github.fnunezkanut.bbcloud.ui.markdowndiff.BbCloudMarkdownDiffFileEditorProvider"/>
+                implementationClass="com.github.fnunezkanut.bbcloud.ui.markdowndiff.DiffyMarkdownDiffFileEditorProvider"/>
         <editorTabTitleProvider
-                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestEditorTabTitleProvider"/>
-        <fileType name="Bitbucket Cloud PR Review Overview"
-                  implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestFileType"
+                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorTabTitleProvider"/>
+        <fileType name="Diffy - Bitbucket PR Review Overview"
+                  implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestFileType"
                   fieldName="INSTANCE"/>
         <fileType name="Bitbucket Cloud New PR"
-                  implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.create.BbCloudNewPullRequestFileType"
+                  implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.create.DiffyNewPullRequestFileType"
                   fieldName="INSTANCE"/>
         <fileType name="Bitbucket Cloud Work Trees Help"
-                  implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.BbCloudWorktreesHelpFileType"
+                  implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpFileType"
                   fieldName="INSTANCE"/>
         <fileType name="Bitbucket Cloud Markdown Diff"
-                  implementationClass="com.github.fnunezkanut.bbcloud.ui.markdowndiff.BbCloudMarkdownDiffFileType"
+                  implementationClass="com.github.fnunezkanut.bbcloud.ui.markdowndiff.DiffyMarkdownDiffFileType"
                   fieldName="INSTANCE"/>
         <diff.DiffExtension
                 implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.PullRequestDiffBarsDiffExtension"/>
         <editorNotificationProvider
-                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestReviewBarProvider"/>
+                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestReviewBarProvider"/>
         <editorNotificationProvider
-                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudWorktreePrViewBlueBarEditorNotificationProvider"/>
+                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyWorktreePrViewBlueBarEditorNotificationProvider"/>
         <treeStructureProvider
-                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.BbCloudPullRequestTreeStructureProvider"/>
+                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.DiffyPullRequestTreeStructureProvider"/>
         <postStartupActivity
-                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.BbCloudPullRequestProjectViewRefreshStartupActivity"/>
+                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.DiffyPullRequestProjectViewRefreshStartupActivity"/>
         <httpRequestHandler
-                implementation="com.github.fnunezkanut.bbcloud.external.BbCloudOpenPullRequestRestService"/>
+                implementation="com.github.fnunezkanut.bbcloud.external.DiffyOpenPullRequestRestService"/>
     </extensions>
 
     <actions>
-        <action id="BbCloud.PullRequest.AddReviewComment"
+        <action id="Diffy.PullRequest.AddReviewComment"
                 class="com.github.fnunezkanut.bbcloud.ui.diff.PullRequestAddReviewCommentAction">
             <add-to-group group-id="EditorGutterPopupMenu" anchor="first"/>
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </action>
-        <action id="BbCloud.MarkdownDiff.ShowForFile"
+        <action id="Diffy.MarkdownDiff.ShowForFile"
                 class="com.github.fnunezkanut.bbcloud.ui.markdowndiff.ShowMarkdownDiffAction"
                 icon="AllIcons.Actions.Diff">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
@@ -147,7 +144,7 @@
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
             <add-to-group group-id="ChangesViewPopupMenu" anchor="last"/>
         </action>
-        <action id="BbCloud.MarkdownDiff.ShowFromDiffViewer"
+        <action id="Diffy.MarkdownDiff.ShowFromDiffViewer"
                 class="com.github.fnunezkanut.bbcloud.ui.markdowndiff.ShowMarkdownDiffFromDiffViewerAction"
                 icon="AllIcons.Actions.Preview">
             <add-to-group group-id="Diff.ViewerToolbar" anchor="last"/>

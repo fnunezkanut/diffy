@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.git.BranchSyncStatus
 import com.github.fnunezkanut.bbcloud.git.PrBranchFastForwardPolicy
 import com.github.fnunezkanut.bbcloud.git.PrBranchRole
@@ -29,10 +29,10 @@ object LocalBranchesBehindWarning {
             else -> "main.branch.localBehindRemote.updateDestination"
         }
         return HeaderLocalBehindRemote(
-            title = BbCloudBundle.message("main.branch.localBehindRemote.title"),
+            title = DiffyBundle.message("main.branch.localBehindRemote.title"),
             lines = lines,
-            explanation = BbCloudBundle.message("main.branch.localBehindRemote.explanation"),
-            updateLinkText = BbCloudBundle.message(linkKey)
+            explanation = DiffyBundle.message("main.branch.localBehindRemote.explanation"),
+            updateLinkText = DiffyBundle.message(linkKey)
         )
     }
 
@@ -43,7 +43,7 @@ object LocalBranchesBehindWarning {
             PrBranchRole.Source -> "main.branch.localBehindRemote.source"
             PrBranchRole.Destination -> "main.branch.localBehindRemote.destination"
         }
-        val base = BbCloudBundle.message(key, branch, status.commitsBehind, "${snapshot.remoteName}/$branch")
+        val base = DiffyBundle.message(key, branch, status.commitsBehind, "${snapshot.remoteName}/$branch")
         val reason = reasonFor(snapshot = snapshot, role = role, status = status)
         return LocalBranchBehindLine(role = role, text = base + reason)
     }
@@ -59,13 +59,13 @@ object LocalBranchesBehindWarning {
         val path = status.checkedOutAt?.toString().orEmpty()
         return when (skip.reason) {
             PrBranchSyncSkipReason.UncommittedChanges -> {
-                BbCloudBundle.message("main.branch.localBehindRemote.reason.uncommitted", path)
+                DiffyBundle.message("main.branch.localBehindRemote.reason.uncommitted", path)
             }
             PrBranchSyncSkipReason.LocalCommitsNotOnRemote -> {
-                BbCloudBundle.message("main.branch.localBehindRemote.reason.diverged", status.commitsAhead)
+                DiffyBundle.message("main.branch.localBehindRemote.reason.diverged", status.commitsAhead)
             }
             PrBranchSyncSkipReason.CheckedOutInOtherWorktree -> {
-                BbCloudBundle.message("main.branch.localBehindRemote.reason.otherWorktree", path)
+                DiffyBundle.message("main.branch.localBehindRemote.reason.otherWorktree", path)
             }
             PrBranchSyncSkipReason.CheckedOutWorktreeStateUnknown -> {
                 ""

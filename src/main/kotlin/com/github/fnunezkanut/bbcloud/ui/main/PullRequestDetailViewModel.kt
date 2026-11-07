@@ -2,7 +2,7 @@ package com.github.fnunezkanut.bbcloud.ui.main
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestAction
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDetails
 import com.intellij.openapi.diagnostic.logger
@@ -100,8 +100,8 @@ class PullRequestDetailViewModel(private val onActionRequested: (PullRequestActi
         )
         val mergeTooltip = when {
             PullRequestAction.Merge !in actions -> null
-            mergeChecksState == MergeChecksState.Unknown -> BbCloudBundle.message("main.branch.action.merge.checking")
-            mergeChecksState == MergeChecksState.Blocked -> BbCloudBundle.message("main.branch.action.merge.blocked")
+            mergeChecksState == MergeChecksState.Unknown -> DiffyBundle.message("main.branch.action.merge.checking")
+            mergeChecksState == MergeChecksState.Blocked -> DiffyBundle.message("main.branch.action.merge.blocked")
             else -> null
         }
         val changesRequestActions = actions.filter { action ->
@@ -121,7 +121,7 @@ class PullRequestDetailViewModel(private val onActionRequested: (PullRequestActi
             }
             if (details.isAuthoredByCurrentUser) {
                 changesRequestActions.forEach { action ->
-                    put(action, BbCloudBundle.message("main.branch.action.requestChanges.ownPullRequest"))
+                    put(action, DiffyBundle.message("main.branch.action.requestChanges.ownPullRequest"))
                 }
             }
         }

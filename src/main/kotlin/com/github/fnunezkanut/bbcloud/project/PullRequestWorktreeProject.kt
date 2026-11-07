@@ -4,7 +4,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 /**
- * Decides whether a project window is a pull request worktree that bbcloud opened under the configured work tree root.
+ * Decides whether a project window is a pull request worktree that Diffy opened under the configured work tree root.
  */
 object PullRequestWorktreeProject {
     /**

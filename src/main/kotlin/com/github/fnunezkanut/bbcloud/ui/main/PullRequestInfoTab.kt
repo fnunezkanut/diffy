@@ -9,7 +9,7 @@ package com.github.fnunezkanut.bbcloud.ui.main
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestAction
-import com.github.fnunezkanut.bbcloud.config.BbCloudConfigurationService
+import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.project.LocalRepositoryProjectOpener
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.WorkspacePullRequestRow
 import com.intellij.ide.BrowserUtil
@@ -22,7 +22,7 @@ import java.nio.file.Path
 @Composable
 internal fun PullRequestInfoTab(
     viewModel: PullRequestInfoViewModel,
-    configurationService: BbCloudConfigurationService,
+    configurationService: DiffyConfigurationService,
     coroutineScope: CoroutineScope,
     actions: List<PullRequestAction>,
     actionsEnabled: Boolean,
@@ -76,7 +76,7 @@ internal fun PullRequestInfoTab(
     )
 }
 
-private fun openRepositoryLocally(row: WorkspacePullRequestRow, configurationService: BbCloudConfigurationService, coroutineScope: CoroutineScope) {
+private fun openRepositoryLocally(row: WorkspacePullRequestRow, configurationService: DiffyConfigurationService, coroutineScope: CoroutineScope) {
     val pullRequestId = row.pullRequest.summary.id
     val repositoryUrl = row.repositoryWebUrl
     val repoSlug = row.pullRequest.repoSlug.takeIf { it.isNotBlank() } ?: row.repoSlug

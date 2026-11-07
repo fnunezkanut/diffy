@@ -60,7 +60,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentMentionResolver
 import com.github.fnunezkanut.bbcloud.ui.components.commentThreadContentBackground
 import com.github.fnunezkanut.bbcloud.ui.components.dottedBorder
@@ -286,7 +286,7 @@ private fun ExpandedCommentEditor(
                     onCollapsed()
                 }
             ) {
-                Text(text = BbCloudBundle.message("main.branch.comments.cancel"))
+                Text(text = DiffyBundle.message("main.branch.comments.cancel"))
             }
             Tooltip(tooltip = { Text(text = viewModel.submitHint()) }) {
                 DefaultButton(
@@ -324,9 +324,9 @@ private fun CommentMarkdownToolbar(viewModel: CommentComposerViewModel) {
             modifier = Modifier.height(COMPOSER_TOOLBAR_DIVIDER_HEIGHT)
         )
         val previewLabel = if (state.isPreview) {
-            BbCloudBundle.message("main.branch.comments.preview.toggleBack")
+            DiffyBundle.message("main.branch.comments.preview.toggleBack")
         } else {
-            BbCloudBundle.message("main.branch.comments.preview")
+            DiffyBundle.message("main.branch.comments.preview")
         }
         Tooltip(tooltip = { Text(text = previewLabel) }) {
             IconButton(onClick = { viewModel.togglePreview() }) {
@@ -346,7 +346,7 @@ private fun CommentMarkdownToolbar(viewModel: CommentComposerViewModel) {
  */
 @Composable
 private fun CommentMarkdownStyleButton(style: CommentMarkdownStyle, onClick: () -> Unit) {
-    val tooltip = BbCloudBundle.message(style.tooltipKey)
+    val tooltip = DiffyBundle.message(style.tooltipKey)
     Tooltip(tooltip = { Text(text = tooltip) }) {
         IconButton(
             onClick = onClick,
@@ -363,16 +363,16 @@ private fun CommentMarkdownStyleButton(style: CommentMarkdownStyle, onClick: () 
 /** The platform-style icon of a toolbar style. */
 private fun CommentMarkdownStyle.toolbarIconKey(): IconKey {
     return when (this) {
-        CommentMarkdownStyle.Bold -> BbCloudCommentToolbarIcons.bold
-        CommentMarkdownStyle.Italic -> BbCloudCommentToolbarIcons.italic
-        CommentMarkdownStyle.Strikethrough -> BbCloudCommentToolbarIcons.strikethrough
-        CommentMarkdownStyle.UnorderedList -> BbCloudCommentToolbarIcons.unorderedList
-        CommentMarkdownStyle.OrderedList -> BbCloudCommentToolbarIcons.orderedList
-        CommentMarkdownStyle.Blockquote -> BbCloudCommentToolbarIcons.blockquote
-        CommentMarkdownStyle.InlineCode -> BbCloudCommentToolbarIcons.inlineCode
-        CommentMarkdownStyle.Link -> BbCloudCommentToolbarIcons.link
+        CommentMarkdownStyle.Bold -> DiffyCommentToolbarIcons.bold
+        CommentMarkdownStyle.Italic -> DiffyCommentToolbarIcons.italic
+        CommentMarkdownStyle.Strikethrough -> DiffyCommentToolbarIcons.strikethrough
+        CommentMarkdownStyle.UnorderedList -> DiffyCommentToolbarIcons.unorderedList
+        CommentMarkdownStyle.OrderedList -> DiffyCommentToolbarIcons.orderedList
+        CommentMarkdownStyle.Blockquote -> DiffyCommentToolbarIcons.blockquote
+        CommentMarkdownStyle.InlineCode -> DiffyCommentToolbarIcons.inlineCode
+        CommentMarkdownStyle.Link -> DiffyCommentToolbarIcons.link
         // The Header style stays in the model but the toolbar shows no button for it, so it never asks for an icon.
-        CommentMarkdownStyle.Header -> BbCloudCommentToolbarIcons.bold
+        CommentMarkdownStyle.Header -> DiffyCommentToolbarIcons.bold
     }
 }
 

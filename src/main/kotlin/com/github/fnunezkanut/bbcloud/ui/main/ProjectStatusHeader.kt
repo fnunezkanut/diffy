@@ -12,8 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudOutlinedActionButton
+import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyOutlinedActionButton
 import com.github.fnunezkanut.bbcloud.ui.components.RoundedBadge
 import com.github.fnunezkanut.bbcloud.ui.components.actionButtonHoverBackground
 import org.jetbrains.jewel.ui.component.Icon
@@ -63,8 +63,8 @@ internal fun ProjectStatusHeader(
         excludeContent()
         Spacer(modifier = Modifier.weight(1f))
         if (state.isCreatePullRequestVisible) {
-            BbCloudOutlinedActionButton(
-                text = BbCloudBundle.message("main.pullRequests.create"),
+            DiffyOutlinedActionButton(
+                text = DiffyBundle.message("main.pullRequests.create"),
                 icon = AllIconsKeys.General.Add,
                 outlineColor = ActionButtonOutlines.green(),
                 enabled = true,
@@ -78,7 +78,7 @@ internal fun ProjectStatusHeader(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(key = AllIconsKeys.Actions.Refresh, contentDescription = null)
-                    Text(text = BbCloudBundle.message("main.pullRequests.refresh"))
+                    Text(text = DiffyBundle.message("main.pullRequests.refresh"))
                 }
             }
         }

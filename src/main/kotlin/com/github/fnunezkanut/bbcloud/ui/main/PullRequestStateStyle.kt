@@ -1,7 +1,7 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
 import androidx.compose.ui.graphics.Color
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.intellij.ui.JBColor
 import org.jetbrains.jewel.bridge.toComposeColor
@@ -28,9 +28,9 @@ object PullRequestStateStyle {
 
     fun label(state: PullRequestState): String {
         return when (state) {
-            PullRequestState.Open -> BbCloudBundle.message("main.pullRequests.state.open")
-            PullRequestState.Merged -> BbCloudBundle.message("main.pullRequests.state.merged")
-            PullRequestState.Declined -> BbCloudBundle.message("main.pullRequests.state.declined")
+            PullRequestState.Open -> DiffyBundle.message("main.pullRequests.state.open")
+            PullRequestState.Merged -> DiffyBundle.message("main.pullRequests.state.merged")
+            PullRequestState.Declined -> DiffyBundle.message("main.pullRequests.state.declined")
         }
     }
 }

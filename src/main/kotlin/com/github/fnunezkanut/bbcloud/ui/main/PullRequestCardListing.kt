@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequest
 import com.github.fnunezkanut.bbcloud.ui.components.BRANCH_ARROW
@@ -339,7 +339,7 @@ private fun ListingActivityCell(row: WorkspacePullRequestRow) {
     Tooltip(
         tooltip = {
             Text(
-                text = BbCloudBundle.message(
+                text = DiffyBundle.message(
                     "main.pullRequests.commentCount",
                     row.commentCount
                 )
@@ -380,7 +380,7 @@ private fun PullRequestTitleRow(row: WorkspacePullRequestRow, showStateBadge: Bo
             )
             if (row.isDraft) {
                 Badge(style = PullRequestBadgeStyles.draft()) {
-                    Text(text = BbCloudBundle.message("main.pullRequests.draft"))
+                    Text(text = DiffyBundle.message("main.pullRequests.draft"))
                 }
             }
             if (showStateBadge) {
@@ -401,7 +401,7 @@ private fun PullRequestTitleRow(row: WorkspacePullRequestRow, showStateBadge: Bo
             }
             if (row.isApprovedByMe && row.state == PullRequestState.Open) {
                 Badge(style = PullRequestBadgeStyles.approved()) {
-                    Text(text = BbCloudBundle.message("main.pullRequests.approved"))
+                    Text(text = DiffyBundle.message("main.pullRequests.approved"))
                 }
             }
         }

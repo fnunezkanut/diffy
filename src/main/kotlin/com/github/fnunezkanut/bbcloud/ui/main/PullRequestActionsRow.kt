@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestAction
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudOutlinedActionButton
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyOutlinedActionButton
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
 
@@ -42,7 +42,7 @@ internal fun PullRequestActionsRow(
             val actionEnabled = enabled && action !in disabledActions
             val tooltip = actionTooltips[action]
             if (tooltip == null) {
-                BbCloudOutlinedActionButton(
+                DiffyOutlinedActionButton(
                     text = PullRequestActionVisibility.label(action),
                     icon = PullRequestActionVisibility.iconKey(action),
                     outlineColor = PullRequestActionVisibility.outlineColor(action),
@@ -52,7 +52,7 @@ internal fun PullRequestActionsRow(
                 )
             } else {
                 Tooltip(tooltip = { Text(text = tooltip) }) {
-                    BbCloudOutlinedActionButton(
+                    DiffyOutlinedActionButton(
                         text = PullRequestActionVisibility.label(action),
                         icon = PullRequestActionVisibility.iconKey(action),
                         outlineColor = PullRequestActionVisibility.outlineColor(action),

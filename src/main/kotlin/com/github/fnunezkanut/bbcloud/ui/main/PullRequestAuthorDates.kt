@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
 
 /**
@@ -22,16 +22,16 @@ data class PullRequestAuthorDates(val visibleText: String, val tooltipText: Stri
 internal fun pullRequestAuthorDates(summary: PullRequestSummary, updatedRelative: String, createdRelative: String): PullRequestAuthorDates {
     val isSameMoment = summary.createdOn == summary.updatedOn || updatedRelative == createdRelative
     val visibleText = if (isSameMoment) {
-        BbCloudBundle.message("main.pullRequests.updatedOnly", updatedRelative)
+        DiffyBundle.message("main.pullRequests.updatedOnly", updatedRelative)
     } else {
-        BbCloudBundle.message("main.pullRequests.updatedCreated", updatedRelative, createdRelative)
+        DiffyBundle.message("main.pullRequests.updatedCreated", updatedRelative, createdRelative)
     }
     return PullRequestAuthorDates(visibleText = visibleText, tooltipText = pullRequestAbsoluteDatesTooltip(summary = summary))
 }
 
 /** The absolute created and updated timestamps of [summary], used as the tooltip of the relative date text. */
 internal fun pullRequestAbsoluteDatesTooltip(summary: PullRequestSummary): String {
-    return BbCloudBundle.message(
+    return DiffyBundle.message(
         "main.pullRequests.updatedCreated.tooltip",
         PullRequestRelativeTime.format(summary.createdOn),
         PullRequestRelativeTime.format(summary.updatedOn)

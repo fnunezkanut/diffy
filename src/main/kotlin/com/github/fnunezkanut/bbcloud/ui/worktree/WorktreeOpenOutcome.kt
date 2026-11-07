@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.worktree
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
 import com.github.fnunezkanut.bbcloud.git.WorktreeSetupResult
@@ -32,23 +32,23 @@ object WorktreeOpenMapping {
     /** The failure for a pull request that Bitbucket reports as merged or declined. */
     fun notOpenFailure(prNumber: Long, state: PullRequestState): WorktreeOpenOutcome.Failed {
         return WorktreeOpenOutcome.Failed(
-            content = BbCloudBundle.message("otherProjects.worktree.failed.prNotOpen", prNumber, state)
+            content = DiffyBundle.message("otherProjects.worktree.failed.prNotOpen", prNumber, state)
         )
     }
 
     /** The failure for a pull request that Bitbucket does not return. */
     fun notFoundFailure(prNumber: Long): WorktreeOpenOutcome.Failed {
-        return WorktreeOpenOutcome.Failed(content = BbCloudBundle.message("otherProjects.worktree.failed.prNotFound", prNumber))
+        return WorktreeOpenOutcome.Failed(content = DiffyBundle.message("otherProjects.worktree.failed.prNotFound", prNumber))
     }
 
     /** The failure for a pull request whose state could not be verified with Bitbucket. */
     fun stateCheckFailure(prNumber: Long): WorktreeOpenOutcome.Failed {
         return WorktreeOpenOutcome.Failed(
-            content = BbCloudBundle.message("otherProjects.worktree.failed.prStateCheckFailed", prNumber)
+            content = DiffyBundle.message("otherProjects.worktree.failed.prStateCheckFailed", prNumber)
         )
     }
 
-    /** Maps the result of [com.github.fnunezkanut.bbcloud.git.BbCloudWorktreeService.ensureWorktree] to an outcome. */
+    /** Maps the result of [com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService.ensureWorktree] to an outcome. */
     fun setupOutcome(summary: PullRequestSummary, setup: WorktreeSetupResult): WorktreeOpenOutcome {
         return when (setup) {
             is WorktreeSetupResult.Success -> {

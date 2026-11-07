@@ -2,9 +2,9 @@ package com.github.fnunezkanut.bbcloud.ui.diff
 
 import com.github.fnunezkanut.bbcloud.bitbucket.InlineCommentSide
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestPathMatcher
-import com.github.fnunezkanut.bbcloud.review.BbCloudWorktreePullRequestContext
+import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
 import com.github.fnunezkanut.bbcloud.review.PullRequestCommentDecorationContext
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestVirtualFile
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestVirtualFile
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -12,7 +12,7 @@ import com.intellij.openapi.vfs.VirtualFile
 /**
  * A resolved, commentable target line in a pull request review editor.
  *
- * The companion [from] / [canOffer] logic is the single place that answers "can bbcloud offer a line-anchored review
+ * The companion [from] / [canOffer] logic is the single place that answers "can Diffy offer a line-anchored review
  * comment here?". It is shared by the gutter controls model, the editor/gutter popup action and the attach path so the
  * green plus, the menu items and the attach gating all agree (plan decisions 3a, 4b, 6a, 9a).
  */
@@ -35,7 +35,7 @@ internal data class PullRequestReviewCommentTarget(
          */
         fun canOfferPullRequestLineComment(project: Project, file: VirtualFile?, pullRequestId: Long): Boolean {
             return canOfferPullRequestLineComment(
-                isPullRequestVirtualFile = file is BbCloudPullRequestVirtualFile,
+                isPullRequestVirtualFile = file is DiffyPullRequestVirtualFile,
                 hasFile = file != null,
                 isReviewable = isPullRequestReviewable(project = project, pullRequestId = pullRequestId),
                 hasInlineIndex = PullRequestCommentDecorationContext.resolveInlineCommentIndex(
@@ -64,7 +64,7 @@ internal data class PullRequestReviewCommentTarget(
          * request whose HEAD is part of it and whose changed files are known (decision 6a).
          */
         fun isPullRequestReviewable(project: Project, pullRequestId: Long): Boolean {
-            return BbCloudWorktreePullRequestContext.getInstance(project).binding?.pullRequestId == pullRequestId
+            return DiffyWorktreePullRequestContext.getInstance(project).binding?.pullRequestId == pullRequestId
         }
 
         /** Resolves a repository-relative path for [file], or null when it falls outside the project base path. */

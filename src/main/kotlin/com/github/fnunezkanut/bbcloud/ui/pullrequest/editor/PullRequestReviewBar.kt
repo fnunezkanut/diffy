@@ -10,8 +10,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.awt.ComposePanel
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestPathMatcher
 import com.github.fnunezkanut.bbcloud.git.FileLineCount
-import com.github.fnunezkanut.bbcloud.review.BbCloudPullRequestViewedFiles
-import com.github.fnunezkanut.bbcloud.review.BbCloudWorktreePullRequestContext
+import com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedFiles
+import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.diagnostic.logger
@@ -105,7 +105,7 @@ internal class PullRequestReviewBar internal constructor(
                 revision = revision,
                 surface = surface
             )
-            val viewedFiles = BbCloudPullRequestViewedFiles.getInstance(project)
+            val viewedFiles = DiffyPullRequestViewedFiles.getInstance(project)
             var panel: ComposePanel? = null
             val content = compose(config = { panel = this }) {
                 val viewed = viewedFiles.isViewed(
@@ -182,7 +182,7 @@ internal class PullRequestReviewBar internal constructor(
             pullRequestId: Long,
             project: Project,
             navigator: ReviewBarDiffChainNavigator?,
-            viewedFiles: BbCloudPullRequestViewedFiles
+            viewedFiles: DiffyPullRequestViewedFiles
         ): ReviewBarFileNavigationState? {
             if (navigator == null || chainPaths == null || chainPaths.size <= 1) {
                 return null
@@ -198,7 +198,7 @@ internal class PullRequestReviewBar internal constructor(
                     viewedFiles.isViewed(
                         pullRequestId = pullRequestId,
                         relativePath = path,
-                        revision = BbCloudWorktreePullRequestContext.getInstance(project).fileRevisionFor(relativePath = path)
+                        revision = DiffyWorktreePullRequestContext.getInstance(project).fileRevisionFor(relativePath = path)
                     )
                 },
                 onNavigate = { index, direction ->

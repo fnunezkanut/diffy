@@ -33,13 +33,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentEmojiResolver
 import com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestReviewer
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerStatus
-import com.github.fnunezkanut.bbcloud.settings.BbCloudSettings
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudOutlinedActionButton
+import com.github.fnunezkanut.bbcloud.settings.DiffySettings
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyOutlinedActionButton
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.toComposeImageBitmap
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.diagnostic.logger
@@ -84,7 +84,7 @@ fun PullRequestOverviewScreen(
 ) {
     val state by viewModel.state
     val leftScrollState = rememberScrollState()
-    val settings = remember { BbCloudSettings.getInstance() }
+    val settings = remember { DiffySettings.getInstance() }
     val splitState = rememberSplitLayoutState(initialSplitFraction = settings.prPageSplitFraction)
     PersistSplitFraction(splitState = splitState, settings = settings)
     HorizontalSplitLayout(
@@ -163,13 +163,13 @@ fun PullRequestOverviewScreen(
 }
 
 /**
- * Writes the divider position back to [BbCloudSettings] once the user stops dragging. The position is observed through
+ * Writes the divider position back to [DiffySettings] once the user stops dragging. The position is observed through
  * a debounce so the settings are not written on every drag frame. Changes within [SPLIT_PERSIST_TOLERANCE] of the
  * stored value are skipped, because the layout rounds the divider to whole pixels and the first layout pass after
  * opening the tab would otherwise write a value that differs only by rounding.
  */
 @Composable
-private fun PersistSplitFraction(splitState: SplitLayoutState, settings: BbCloudSettings) {
+private fun PersistSplitFraction(splitState: SplitLayoutState, settings: DiffySettings) {
     LaunchedEffect(splitState) {
         snapshotFlow { splitState.dividerPosition }
             .debounce(SPLIT_PERSIST_DEBOUNCE_MILLIS)
@@ -200,9 +200,9 @@ internal fun ActivityScrollEffect(conversationViewModel: PullRequestConversation
 
 @Composable
 private fun EditDescriptionButton(onClick: () -> Unit) {
-    val label = BbCloudBundle.message("main.branch.overview.description.edit")
+    val label = DiffyBundle.message("main.branch.overview.description.edit")
     Tooltip(tooltip = { Text(text = label) }) {
-        BbCloudOutlinedActionButton(
+        DiffyOutlinedActionButton(
             text = label,
             icon = AllIconsKeys.Actions.Edit,
             outlineColor = ActionButtonOutlines.blue(),
@@ -435,7 +435,7 @@ private fun ReviewersCard(viewModel: PullRequestOverviewViewModel) {
         }
         if (reviewers.isEditable) {
             IconLink(
-                text = BbCloudBundle.message("main.branch.reviewers.add"),
+                text = DiffyBundle.message("main.branch.reviewers.add"),
                 icon = AllIconsKeys.General.Add,
                 enabled = !reviewers.isUpdating,
                 onClick = viewModel::onAddReviewer
@@ -475,9 +475,9 @@ private fun reviewerStatusIconKey(status: ReviewerStatus): IconKey {
 
 internal fun reviewerStatusTooltip(status: ReviewerStatus): String {
     return when (status) {
-        ReviewerStatus.Approved -> BbCloudBundle.message("main.branch.reviewers.status.approved")
-        ReviewerStatus.ChangesRequested -> BbCloudBundle.message("main.branch.reviewers.status.changesRequested")
-        ReviewerStatus.None -> BbCloudBundle.message("main.branch.reviewers.status.none")
+        ReviewerStatus.Approved -> DiffyBundle.message("main.branch.reviewers.status.approved")
+        ReviewerStatus.ChangesRequested -> DiffyBundle.message("main.branch.reviewers.status.changesRequested")
+        ReviewerStatus.None -> DiffyBundle.message("main.branch.reviewers.status.none")
     }
 }
 
@@ -510,7 +510,7 @@ private fun TasksCard(viewModel: PullRequestOverviewViewModel) {
         }
     ) {
         when {
-            tasks.isError -> MessageText(text = BbCloudBundle.message("main.branch.tasks.error"))
+            tasks.isError -> MessageText(text = DiffyBundle.message("main.branch.tasks.error"))
             tasks.mode == TasksMode.Editing -> TasksEditContent(tasks = tasks, viewModel = viewModel)
             else -> TasksViewContent(tasks = tasks, viewModel = viewModel)
         }
@@ -537,7 +537,7 @@ private fun TasksViewContent(tasks: TasksSectionState, viewModel: PullRequestOve
         CreateTaskField(tasks = tasks, viewModel = viewModel)
     } else {
         IconLink(
-            text = BbCloudBundle.message("main.branch.tasks.create"),
+            text = DiffyBundle.message("main.branch.tasks.create"),
             icon = AllIconsKeys.General.Add,
             enabled = !tasks.isUpdating,
             onClick = viewModel::onStartCreating
@@ -545,7 +545,7 @@ private fun TasksViewContent(tasks: TasksSectionState, viewModel: PullRequestOve
     }
     if (tasks.viewRows.isNotEmpty() && tasks.mode == TasksMode.View) {
         Link(
-            text = BbCloudBundle.message("main.branch.tasks.edit"),
+            text = DiffyBundle.message("main.branch.tasks.edit"),
             onClick = viewModel::onStartEditing,
             enabled = !tasks.isUpdating
         )
@@ -574,12 +574,12 @@ private fun CreateTaskField(tasks: TasksSectionState, viewModel: PullRequestOver
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Link(
-            text = BbCloudBundle.message("main.branch.tasks.save"),
+            text = DiffyBundle.message("main.branch.tasks.save"),
             onClick = viewModel::onSubmitCreate,
             enabled = !tasks.isUpdating && fieldValue.text.isNotBlank()
         )
         Link(
-            text = BbCloudBundle.message("main.branch.tasks.cancel"),
+            text = DiffyBundle.message("main.branch.tasks.cancel"),
             onClick = viewModel::onStopCreating,
             enabled = !tasks.isUpdating
         )
@@ -593,13 +593,13 @@ private fun TasksEditContent(tasks: TasksSectionState, viewModel: PullRequestOve
     }
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Link(
-            text = BbCloudBundle.message("main.branch.tasks.cancel"),
+            text = DiffyBundle.message("main.branch.tasks.cancel"),
             onClick = viewModel::onStopEditing,
             enabled = !tasks.isUpdating
         )
         Spacer(modifier = Modifier.weight(1f))
         Link(
-            text = BbCloudBundle.message("main.branch.tasks.save"),
+            text = DiffyBundle.message("main.branch.tasks.save"),
             onClick = viewModel::onSubmitEdits,
             enabled = tasks.saveEnabled
         )
@@ -624,7 +624,7 @@ private fun TaskEditRowView(row: TaskEditRow, isUpdating: Boolean, viewModel: Pu
             modifier = Modifier.weight(1f),
             enabled = row.enabled
         )
-        Tooltip(tooltip = { Text(text = BbCloudBundle.message("main.branch.tasks.delete")) }) {
+        Tooltip(tooltip = { Text(text = DiffyBundle.message("main.branch.tasks.delete")) }) {
             ClickableIcon(
                 icon = AllIconsKeys.Actions.Close,
                 description = "Delete task",

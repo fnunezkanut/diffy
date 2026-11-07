@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.setup
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 
 @Tag("unit")
 class SetupFooterTextTest {
-    private val disclaimer = BbCloudBundle.message("setup.disclaimer")
+    private val disclaimer = DiffyBundle.message("setup.disclaimer")
     private val separator = "\u2022"
 
     @Test
@@ -23,7 +23,7 @@ class SetupFooterTextTest {
 
         // THEN
         assertSoftly {
-            result shouldContain "Bitbucket Cloud PR review plugin: $version"
+            result shouldContain "Diffy - Bitbucket PR Review plugin: $version"
             result shouldContain "$separator $disclaimer"
         }
     }
@@ -39,9 +39,9 @@ class SetupFooterTextTest {
         // THEN
         assertSoftly {
             // The ": <version>" suffix is dropped; the disclaimer keeps its own colon.
-            result shouldNotContain "Bitbucket Cloud PR review plugin:"
+            result shouldNotContain "Diffy - Bitbucket PR Review plugin:"
             result shouldNotContain "Unknown"
-            result shouldContain "Bitbucket Cloud PR review plugin $separator $disclaimer"
+            result shouldContain "Diffy - Bitbucket PR Review plugin $separator $disclaimer"
         }
     }
 
@@ -54,7 +54,7 @@ class SetupFooterTextTest {
         val result = SetupFooterText.build(version)
 
         // THEN
-        result shouldContain "Bitbucket Cloud PR review plugin $separator $disclaimer"
+        result shouldContain "Diffy - Bitbucket PR Review plugin $separator $disclaimer"
     }
 
     @Test
@@ -64,7 +64,7 @@ class SetupFooterTextTest {
 
         // THEN
         assertSoftly {
-            result shouldBe "Bitbucket Cloud PR review plugin"
+            result shouldBe "Diffy - Bitbucket PR Review plugin"
             result shouldNotContain disclaimer
             result shouldNotContain separator
         }
@@ -98,7 +98,7 @@ class SetupFooterTextTest {
         assertSoftly {
             result shouldContain ": $version"
             result shouldContain "$separator $disclaimer"
-            result shouldNotContain "Bitbucket Cloud PR review plugin"
+            result shouldNotContain "Diffy - Bitbucket PR Review plugin"
         }
     }
 

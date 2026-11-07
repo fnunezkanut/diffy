@@ -25,7 +25,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.ui.main.MainPanelStatusSupport
 import com.github.fnunezkanut.bbcloud.ui.main.MarkdownDraftEditor
 import com.github.fnunezkanut.bbcloud.ui.main.ReviewerIdentityRow
@@ -62,7 +62,7 @@ internal fun NewPullRequestScreen(viewModel: NewPullRequestViewModel, repository
                 BranchesCard(state = state, viewModel = viewModel)
                 ExistingPullRequestWarning(state = state, viewModel = viewModel)
                 WorkingTreeWarning(state = state, viewModel = viewModel)
-                TitledCardBox(title = BbCloudBundle.message("newPr.description.label")) {
+                TitledCardBox(title = DiffyBundle.message("newPr.description.label")) {
                     MarkdownDraftEditor(
                         viewModel = viewModel.descriptionComposer,
                         editorMaxHeight = DESCRIPTION_EDITOR_MAX_HEIGHT
@@ -70,7 +70,7 @@ internal fun NewPullRequestScreen(viewModel: NewPullRequestViewModel, repository
                 }
                 ReviewersCard(state = state, viewModel = viewModel)
                 CheckboxRow(
-                    text = BbCloudBundle.message("newPr.closeSourceBranch"),
+                    text = DiffyBundle.message("newPr.closeSourceBranch"),
                     checked = state.closeSourceBranch,
                     onCheckedChange = viewModel::onCloseSourceBranchChanged,
                     enabled = !state.isSubmitting
@@ -87,7 +87,7 @@ internal fun NewPullRequestScreen(viewModel: NewPullRequestViewModel, repository
 @Composable
 private fun HeadingSection(repositorySlug: String) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(text = BbCloudBundle.message("newPr.heading"), fontWeight = FontWeight.Bold)
+        Text(text = DiffyBundle.message("newPr.heading"), fontWeight = FontWeight.Bold)
         if (repositorySlug.isNotBlank()) {
             Text(text = repositorySlug, color = JewelTheme.globalColors.text.info)
         }
@@ -96,7 +96,7 @@ private fun HeadingSection(repositorySlug: String) {
 
 @Composable
 private fun TitleCard(title: String, isSubmitting: Boolean, onTitleChanged: (String) -> Unit) {
-    TitledCardBox(title = BbCloudBundle.message("newPr.title.label")) {
+    TitledCardBox(title = DiffyBundle.message("newPr.title.label")) {
         // Hold the TextFieldValue locally so the caret advances with typing; resync from the incoming title only when
         // the backing text actually differs (for example a programmatic clear), so an external update never snaps the
         // caret back to the start mid-edit.
@@ -114,27 +114,27 @@ private fun TitleCard(title: String, isSubmitting: Boolean, onTitleChanged: (Str
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = !isSubmitting,
-            placeholder = { Text(text = BbCloudBundle.message("newPr.title.placeholder")) }
+            placeholder = { Text(text = DiffyBundle.message("newPr.title.placeholder")) }
         )
     }
 }
 
 @Composable
 private fun BranchesCard(state: NewPullRequestUiState, viewModel: NewPullRequestViewModel) {
-    TitledCardBox(title = BbCloudBundle.message("newPr.branches.label")) {
+    TitledCardBox(title = DiffyBundle.message("newPr.branches.label")) {
         when (state.branchesLoad) {
-            BranchesLoad.Loading -> Text(text = BbCloudBundle.message("newPr.branches.loading"))
+            BranchesLoad.Loading -> Text(text = DiffyBundle.message("newPr.branches.loading"))
             BranchesLoad.Failed -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(text = BbCloudBundle.message("newPr.branches.failed"), color = MainPanelStatusSupport.errorForeground())
-                Link(text = BbCloudBundle.message("newPr.branches.retry"), onClick = viewModel::onRetryBranchesClicked)
+                Text(text = DiffyBundle.message("newPr.branches.failed"), color = MainPanelStatusSupport.errorForeground())
+                Link(text = DiffyBundle.message("newPr.branches.retry"), onClick = viewModel::onRetryBranchesClicked)
             }
             BranchesLoad.Loaded -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 BranchSelectorRow(state = state, viewModel = viewModel)
                 if (state.sourceOptions.isEmpty()) {
-                    Text(text = BbCloudBundle.message("newPr.branches.noSource"), color = MainPanelStatusSupport.warningForeground())
+                    Text(text = DiffyBundle.message("newPr.branches.noSource"), color = MainPanelStatusSupport.warningForeground())
                 }
                 if (state.isBranchListTruncated) {
-                    Text(text = BbCloudBundle.message("newPr.branches.truncated"), color = JewelTheme.globalColors.text.info)
+                    Text(text = DiffyBundle.message("newPr.branches.truncated"), color = JewelTheme.globalColors.text.info)
                 }
             }
         }
@@ -150,7 +150,7 @@ private fun BranchSelectorRow(state: NewPullRequestUiState, viewModel: NewPullRe
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         LabeledBranchComboBox(
-            label = BbCloudBundle.message("newPr.branches.source"),
+            label = DiffyBundle.message("newPr.branches.source"),
             options = state.sourceOptions,
             selected = state.selectedSource,
             enabled = controlsEnabled,
@@ -159,7 +159,7 @@ private fun BranchSelectorRow(state: NewPullRequestUiState, viewModel: NewPullRe
         )
         Icon(key = AllIconsKeys.Actions.Forward, contentDescription = null)
         LabeledBranchComboBox(
-            label = BbCloudBundle.message("newPr.branches.destination"),
+            label = DiffyBundle.message("newPr.branches.destination"),
             options = state.destinationOptions,
             selected = state.selectedDestination,
             enabled = controlsEnabled,
@@ -192,14 +192,14 @@ private fun ExistingPullRequestWarning(state: NewPullRequestUiState, viewModel: 
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(key = AllIconsKeys.General.BalloonWarning, contentDescription = null)
-            Text(text = BbCloudBundle.message("newPr.existing.message"), color = MainPanelStatusSupport.warningForeground())
+            Text(text = DiffyBundle.message("newPr.existing.message"), color = MainPanelStatusSupport.warningForeground())
             Link(
-                text = BbCloudBundle.message("newPr.existing.link", existing.pullRequestId),
+                text = DiffyBundle.message("newPr.existing.link", existing.pullRequestId),
                 onClick = viewModel::onExistingPullRequestLinkClicked
             )
         }
         ExistingPullRequestCheck.Checking -> Text(
-            text = BbCloudBundle.message("newPr.existing.checking"),
+            text = DiffyBundle.message("newPr.existing.checking"),
             color = JewelTheme.globalColors.text.info
         )
         else -> Unit
@@ -214,12 +214,12 @@ private fun WorkingTreeWarning(state: NewPullRequestUiState, viewModel: NewPullR
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(key = AllIconsKeys.General.BalloonWarning, contentDescription = null)
-            val branch = workingTree.currentBranch ?: BbCloudBundle.message("newPr.workingTree.detached")
-            Text(text = BbCloudBundle.message("newPr.workingTree.blocked", branch), color = MainPanelStatusSupport.warningForeground())
-            Link(text = BbCloudBundle.message("newPr.workingTree.recheck"), onClick = viewModel::onRecheckWorkingTreeClicked)
+            val branch = workingTree.currentBranch ?: DiffyBundle.message("newPr.workingTree.detached")
+            Text(text = DiffyBundle.message("newPr.workingTree.blocked", branch), color = MainPanelStatusSupport.warningForeground())
+            Link(text = DiffyBundle.message("newPr.workingTree.recheck"), onClick = viewModel::onRecheckWorkingTreeClicked)
         }
         WorkingTreeCheck.Checking -> Text(
-            text = BbCloudBundle.message("newPr.workingTree.checking"),
+            text = DiffyBundle.message("newPr.workingTree.checking"),
             color = JewelTheme.globalColors.text.info
         )
         else -> Unit
@@ -228,10 +228,10 @@ private fun WorkingTreeWarning(state: NewPullRequestUiState, viewModel: NewPullR
 
 @Composable
 private fun ReviewersCard(state: NewPullRequestUiState, viewModel: NewPullRequestViewModel) {
-    TitledCardBox(title = BbCloudBundle.message("newPr.reviewers.label")) {
+    TitledCardBox(title = DiffyBundle.message("newPr.reviewers.label")) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (state.reviewers.isEmpty()) {
-                Text(text = BbCloudBundle.message("main.branch.reviewers.empty"), color = JewelTheme.globalColors.text.info)
+                Text(text = DiffyBundle.message("main.branch.reviewers.empty"), color = JewelTheme.globalColors.text.info)
             }
             state.reviewers.forEach { reviewer ->
                 val avatar = remember(reviewer.avatarUrl, state.avatarRevision) {
@@ -249,7 +249,7 @@ private fun ReviewersCard(state: NewPullRequestUiState, viewModel: NewPullReques
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(key = AllIconsKeys.General.Add, contentDescription = null)
                 Link(
-                    text = BbCloudBundle.message("main.branch.reviewers.add"),
+                    text = DiffyBundle.message("main.branch.reviewers.add"),
                     onClick = viewModel::onAddReviewerClicked,
                     enabled = !state.isSubmitting
                 )
@@ -268,17 +268,17 @@ private fun ButtonRow(state: NewPullRequestUiState, viewModel: NewPullRequestVie
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (state.isSubmitting) {
-            Text(text = BbCloudBundle.message("newPr.creating"), color = JewelTheme.globalColors.text.info)
+            Text(text = DiffyBundle.message("newPr.creating"), color = JewelTheme.globalColors.text.info)
         }
         OutlinedButton(onClick = viewModel::onCancelClicked, modifier = handModifier()) {
-            Text(text = BbCloudBundle.message("newPr.cancel"))
+            Text(text = DiffyBundle.message("newPr.cancel"))
         }
         if (createVisible) {
             OutlinedButton(onClick = viewModel::onCreateDraftClicked, enabled = createEnabled, modifier = handModifier()) {
-                Text(text = BbCloudBundle.message("newPr.createDraft"))
+                Text(text = DiffyBundle.message("newPr.createDraft"))
             }
             DefaultButton(onClick = viewModel::onCreatePullRequestClicked, enabled = createEnabled, modifier = handModifier()) {
-                Text(text = BbCloudBundle.message("newPr.create"))
+                Text(text = DiffyBundle.message("newPr.create"))
             }
         }
     }

@@ -38,7 +38,7 @@ class OkHttpBitbucketOAuthTokenClientTest {
                 form["code"] shouldBe "the-code"
                 form["code_verifier"] shouldBe "the-verifier"
                 form["redirect_uri"] shouldBe "http://127.0.0.1:42424/bbcloud"
-                form[BbCloudConsumerMaterial.primaryField()] shouldBe BbCloudConsumerMaterial.primary()
+                form[DiffyConsumerMaterial.primaryField()] shouldBe DiffyConsumerMaterial.primary()
             }
         }
 
@@ -58,8 +58,8 @@ class OkHttpBitbucketOAuthTokenClientTest {
             val header = requests.single().header("Authorization")
             assertSoftly {
                 header shouldBe Credentials.basic(
-                    username = BbCloudConsumerMaterial.primary(),
-                    password = BbCloudConsumerMaterial.secondary(),
+                    username = DiffyConsumerMaterial.primary(),
+                    password = DiffyConsumerMaterial.secondary(),
                     charset = Charsets.UTF_8
                 )
                 header?.startsWith("Basic ") shouldBe true
@@ -82,8 +82,8 @@ class OkHttpBitbucketOAuthTokenClientTest {
             val header = requests.single().header("Authorization")
             assertSoftly {
                 header shouldBe Credentials.basic(
-                    username = BbCloudConsumerMaterial.primary(),
-                    password = BbCloudConsumerMaterial.secondary(),
+                    username = DiffyConsumerMaterial.primary(),
+                    password = DiffyConsumerMaterial.secondary(),
                     charset = Charsets.UTF_8
                 )
                 header?.startsWith("Basic ") shouldBe true
@@ -110,9 +110,9 @@ class OkHttpBitbucketOAuthTokenClientTest {
                     "code",
                     "code_verifier",
                     "redirect_uri",
-                    BbCloudConsumerMaterial.primaryField()
+                    DiffyConsumerMaterial.primaryField()
                 )
-                form.values.contains(BbCloudConsumerMaterial.secondary()) shouldBe false
+                form.values.contains(DiffyConsumerMaterial.secondary()) shouldBe false
             }
         }
 
@@ -133,7 +133,7 @@ class OkHttpBitbucketOAuthTokenClientTest {
             assertSoftly {
                 form["grant_type"] shouldBe "refresh_token"
                 form["refresh_token"] shouldBe "old-rt"
-                form[BbCloudConsumerMaterial.primaryField()] shouldBe BbCloudConsumerMaterial.primary()
+                form[DiffyConsumerMaterial.primaryField()] shouldBe DiffyConsumerMaterial.primary()
             }
         }
 

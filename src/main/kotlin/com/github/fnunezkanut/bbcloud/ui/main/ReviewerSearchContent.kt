@@ -29,7 +29,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerCandidate
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.toComposeImageBitmap
 import org.jetbrains.jewel.ui.component.Icon
@@ -92,7 +92,7 @@ private fun ReviewerSearchField(query: String, onQueryChanged: (String) -> Unit,
             onQueryChanged(updated.text)
         },
         modifier = Modifier.fillMaxWidth().padding(4.dp),
-        placeholder = { Text(text = BbCloudBundle.message("main.branch.reviewers.search.placeholder")) },
+        placeholder = { Text(text = DiffyBundle.message("main.branch.reviewers.search.placeholder")) },
         leadingIcon = { Icon(key = AllIconsKeys.Actions.Search, contentDescription = null) },
         keyboardActions = KeyboardActions(onDone = { onSubmit() })
     )
@@ -122,7 +122,7 @@ private fun ReviewerCandidateRow(
         Image(bitmap = bitmap, contentDescription = null, modifier = Modifier.size(REVIEWER_AVATAR_SIZE))
         Text(text = candidate.displayName)
         if (isDefaultReviewer) {
-            Text(text = BbCloudBundle.message("main.branch.reviewers.search.defaultReviewer"))
+            Text(text = DiffyBundle.message("main.branch.reviewers.search.defaultReviewer"))
         }
     }
 }
@@ -131,8 +131,8 @@ private fun ReviewerCandidateRow(
 @Composable
 private fun ReviewerSearchStatus(isLoading: Boolean, hasError: Boolean, message: String?) {
     val text = when {
-        isLoading -> BbCloudBundle.message("main.branch.reviewers.search.loading")
-        hasError -> BbCloudBundle.message("main.branch.reviewers.search.error")
+        isLoading -> DiffyBundle.message("main.branch.reviewers.search.loading")
+        hasError -> DiffyBundle.message("main.branch.reviewers.search.error")
         else -> message
     }
     if (text == null) {

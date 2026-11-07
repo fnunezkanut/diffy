@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.markdowndiff
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -23,16 +23,16 @@ class GitMarkdownDiffContentSource(private val project: Project, private val fil
     override val fileName: String = file.name
 
     override val comparisons: List<MarkdownDiffComparison> = GitComparison.entries.map { comparison ->
-        MarkdownDiffComparison(id = comparison.id, label = BbCloudBundle.message(comparison.labelKey))
+        MarkdownDiffComparison(id = comparison.id, label = DiffyBundle.message(comparison.labelKey))
     }
 
     override fun load(comparison: MarkdownDiffComparison): MarkdownDiffContentResult {
         val gitComparison = GitComparison.entries.firstOrNull { entry -> entry.id == comparison.id }
-            ?: return MarkdownDiffContentResult.Failed(message = BbCloudBundle.message("markdownDiff.error.unknownComparison"))
+            ?: return MarkdownDiffContentResult.Failed(message = DiffyBundle.message("markdownDiff.error.unknownComparison"))
         val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)
-            ?: return MarkdownDiffContentResult.Failed(message = BbCloudBundle.message("markdownDiff.error.notInRepository"))
+            ?: return MarkdownDiffContentResult.Failed(message = DiffyBundle.message("markdownDiff.error.notInRepository"))
         val relativePath = VfsUtilCore.getRelativePath(file, repository.root)
-            ?: return MarkdownDiffContentResult.Failed(message = BbCloudBundle.message("markdownDiff.error.notInRepository"))
+            ?: return MarkdownDiffContentResult.Failed(message = DiffyBundle.message("markdownDiff.error.notInRepository"))
         return try {
             MarkdownDiffContentResult.Loaded(
                 left = side(repository = repository, relativePath = relativePath, revision = gitComparison.left),
@@ -40,12 +40,12 @@ class GitMarkdownDiffContentSource(private val project: Project, private val fil
             )
         } catch (exception: VcsException) {
             LOG.debug("Could not read a git revision of $relativePath", exception)
-            MarkdownDiffContentResult.Failed(message = BbCloudBundle.message("markdownDiff.error.gitFailed", exception.message.orEmpty()))
+            MarkdownDiffContentResult.Failed(message = DiffyBundle.message("markdownDiff.error.gitFailed", exception.message.orEmpty()))
         }
     }
 
     private fun side(repository: GitRepository, relativePath: String, revision: GitRevision): MarkdownDiffSide {
-        val label = BbCloudBundle.message(revision.labelKey)
+        val label = DiffyBundle.message(revision.labelKey)
         val text = when (revision) {
             GitRevision.HEAD -> readRevision(repository = repository, relativePath = relativePath, revision = HEAD_REVISION)
             GitRevision.INDEX -> readRevision(repository = repository, relativePath = relativePath, revision = INDEX_REVISION)

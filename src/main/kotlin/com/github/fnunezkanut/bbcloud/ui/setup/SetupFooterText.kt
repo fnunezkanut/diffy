@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.setup
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 
 /**
  * Builds the single-line footer under the Compose Settings form. It lives outside the screen so it can be unit tested
@@ -12,11 +12,11 @@ import com.github.fnunezkanut.bbcloud.BbCloudBundle
  */
 object SetupFooterText {
     /** The GitHub project the footer label links to. */
-    const val PROJECT_URL = "https://github.com/fnunezkanut/bbcloud"
+    const val PROJECT_URL = "https://github.com/fnunezkanut/diffy"
 
     /** The plugin-name label; the screen renders this as the clickable link. */
     fun label(): String {
-        return BbCloudBundle.message("about.footer.label")
+        return DiffyBundle.message("about.footer.label")
     }
 
     /**
@@ -25,12 +25,12 @@ object SetupFooterText {
      * "Unknown".
      */
     fun buildSuffix(version: String?): String {
-        val disclaimer = BbCloudBundle.message("setup.disclaimer")
+        val disclaimer = DiffyBundle.message("setup.disclaimer")
         val normalizedVersion = version?.trim().orEmpty()
         return if (normalizedVersion.isEmpty()) {
-            BbCloudBundle.message("about.footer.suffixNoVersion", disclaimer)
+            DiffyBundle.message("about.footer.suffixNoVersion", disclaimer)
         } else {
-            BbCloudBundle.message("about.footer.suffix", normalizedVersion, disclaimer)
+            DiffyBundle.message("about.footer.suffix", normalizedVersion, disclaimer)
         }
     }
 

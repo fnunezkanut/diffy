@@ -1,10 +1,10 @@
 package com.github.fnunezkanut.bbcloud.ui.worktree
 
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
-import com.github.fnunezkanut.bbcloud.bitbucket.BbCloudOpenPullRequestService
+import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
-import com.github.fnunezkanut.bbcloud.git.BbCloudBranchCheckoutService
 import com.github.fnunezkanut.bbcloud.git.BranchCheckoutResult
+import com.github.fnunezkanut.bbcloud.git.DiffyBranchCheckoutService
 import com.github.fnunezkanut.bbcloud.git.WorktreeCollisionSwitchDecision
 import com.github.fnunezkanut.bbcloud.git.WorktreeCollisionSwitchPlan
 import com.github.fnunezkanut.bbcloud.git.collisionMainBranch
@@ -30,9 +30,9 @@ import java.nio.file.Path
  * fallback dialog on [CollisionResolution.ShowDialog].
  */
 class WorktreeBranchCollisionResolver(
-    private val branchCheckoutService: BbCloudBranchCheckoutService,
-    private val openPullRequestService: BbCloudOpenPullRequestService,
-    private val notificationGroupId: String = "BbCloud"
+    private val branchCheckoutService: DiffyBranchCheckoutService,
+    private val openPullRequestService: DiffyOpenPullRequestService,
+    private val notificationGroupId: String = "Diffy"
 ) {
     /** The outcome of resolving a collision, driving what the caller does next. */
     sealed interface CollisionResolution {
@@ -131,7 +131,7 @@ class WorktreeBranchCollisionResolver(
         NotificationGroupManager.getInstance()
             .getNotificationGroup(notificationGroupId)
             .createNotification(
-                BbCloudBundle.message("otherProjects.worktree.switchMain.switched", mainBranchName, prNumber),
+                DiffyBundle.message("otherProjects.worktree.switchMain.switched", mainBranchName, prNumber),
                 NotificationType.INFORMATION
             )
             .notify(project)
@@ -140,19 +140,19 @@ class WorktreeBranchCollisionResolver(
     private fun showSwitchFailedNotification(project: Project, summary: PullRequestSummary, output: String) {
         val trimmed = output.trim()
         val balloonContent = when {
-            trimmed.isBlank() -> BbCloudBundle.message("newPr.switchMain.failed.generic")
+            trimmed.isBlank() -> DiffyBundle.message("newPr.switchMain.failed.generic")
             trimmed.length > MAX_FAILURE_POPUP_LENGTH -> trimmed.substring(0, MAX_FAILURE_POPUP_LENGTH) + "\u2026"
             else -> trimmed
         }
         val notification = NotificationGroupManager.getInstance()
             .getNotificationGroup(notificationGroupId)
             .createNotification(
-                BbCloudBundle.message("newPr.switchMain.failed.title", summary.id),
+                DiffyBundle.message("newPr.switchMain.failed.title", summary.id),
                 balloonContent,
                 NotificationType.ERROR
             )
         notification.addAction(
-            NotificationAction.createSimpleExpiring(BbCloudBundle.message("otherProjects.worktree.branchCheckedOut.openInBitbucket")) {
+            NotificationAction.createSimpleExpiring(DiffyBundle.message("otherProjects.worktree.branchCheckedOut.openInBitbucket")) {
                 BrowserUtil.browse(summary.webUrl)
             }
         )

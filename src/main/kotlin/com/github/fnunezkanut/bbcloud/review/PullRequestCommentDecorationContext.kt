@@ -2,23 +2,23 @@ package com.github.fnunezkanut.bbcloud.review
 
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestComment
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestInlineCommentIndex
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.BbCloudPullRequestVirtualFile
+import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestVirtualFile
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 
 /**
  * Resolves which pull request and inline comment index should drive editor/diff decoration.
  *
- * The review bar follows [BbCloudWorktreePullRequestContext.binding]; decoration must not depend only on the selected
+ * The review bar follows [DiffyWorktreePullRequestContext.binding]; decoration must not depend only on the selected
  * editor tab, because reviewers often keep the PR tab open while editing files in the work tree.
  */
 internal object PullRequestCommentDecorationContext {
     fun resolvePullRequestId(project: Project): Long? {
-        val reviewState = BbCloudPullRequestReviewState.getInstance(project)
+        val reviewState = DiffyPullRequestReviewState.getInstance(project)
         return resolvePullRequestId(
             activeReviewPullRequestId = reviewState.activePullRequestId,
             openPullRequestTabId = openPullRequestTabId(project = project),
-            worktreeBindingPullRequestId = BbCloudWorktreePullRequestContext.getInstance(project).binding?.pullRequestId
+            worktreeBindingPullRequestId = DiffyWorktreePullRequestContext.getInstance(project).binding?.pullRequestId
         )
     }
 
@@ -29,8 +29,8 @@ internal object PullRequestCommentDecorationContext {
     }
 
     fun resolveInlineCommentIndex(project: Project, pullRequestId: Long, requestReloadWhenEmpty: Boolean = true): PullRequestInlineCommentIndex? {
-        val reviewState = BbCloudPullRequestReviewState.getInstance(project)
-        val worktreeContext = BbCloudWorktreePullRequestContext.getInstance(project)
+        val reviewState = DiffyPullRequestReviewState.getInstance(project)
+        val worktreeContext = DiffyWorktreePullRequestContext.getInstance(project)
         val index = resolveInlineCommentIndex(
             pullRequestId = pullRequestId,
             reviewStatePullRequestId = reviewState.activePullRequestId,
@@ -66,13 +66,13 @@ internal object PullRequestCommentDecorationContext {
         return null
     }
 
-    /** Writes the worktree comment snapshot into [BbCloudPullRequestReviewState] when it matches [pullRequestId]. */
+    /** Writes the worktree comment snapshot into [DiffyPullRequestReviewState] when it matches [pullRequestId]. */
     fun syncInlineIndexFromWorktree(project: Project, pullRequestId: Long, requestReloadWhenEmpty: Boolean = true): Boolean {
-        val reviewState = BbCloudPullRequestReviewState.getInstance(project)
+        val reviewState = DiffyPullRequestReviewState.getInstance(project)
         if (reviewState.activePullRequestId != pullRequestId) {
             reviewState.bindPullRequest(pullRequestId = pullRequestId)
         }
-        val worktreeContext = BbCloudWorktreePullRequestContext.getInstance(project)
+        val worktreeContext = DiffyWorktreePullRequestContext.getInstance(project)
         if (worktreeContext.binding?.pullRequestId != pullRequestId) {
             return false
         }
@@ -91,7 +91,7 @@ internal object PullRequestCommentDecorationContext {
     fun openPullRequestTabId(project: Project): Long? {
         val fileManager = FileEditorManager.getInstance(project)
         return fileManager.openFiles
-            .filterIsInstance<BbCloudPullRequestVirtualFile>()
+            .filterIsInstance<DiffyPullRequestVirtualFile>()
             .firstOrNull()
             ?.pullRequestPath
             ?.pullRequestId

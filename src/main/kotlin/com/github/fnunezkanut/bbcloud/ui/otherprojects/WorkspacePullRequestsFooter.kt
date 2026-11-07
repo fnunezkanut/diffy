@@ -11,7 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.ui.main.MainPanelStatusSupport
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestListingSource
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestsUiState
@@ -74,7 +74,7 @@ internal fun WorkspacePullRequestsFooter(state: PullRequestsUiState, onGoToWatch
 @Composable
 private fun WarningLine(messageKey: String) {
     Text(
-        text = BbCloudBundle.message(messageKey),
+        text = DiffyBundle.message(messageKey),
         color = MainPanelStatusSupport.warningForeground()
     )
 }
@@ -84,11 +84,11 @@ private fun WarningLine(messageKey: String) {
 private fun ScopeNoteLink(onGoToWatchedProjects: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = BbCloudBundle.message("otherProjects.attention.scopeNote.prefix"),
+            text = DiffyBundle.message("otherProjects.attention.scopeNote.prefix"),
             color = MainPanelStatusSupport.warningForeground()
         )
         Link(
-            text = BbCloudBundle.message("otherProjects.attention.scopeNote.watchedProjectsLink"),
+            text = DiffyBundle.message("otherProjects.attention.scopeNote.watchedProjectsLink"),
             onClick = {
                 LOG.info("User opened the Watched Projects tab from the Workspace scope note")
                 onGoToWatchedProjects()

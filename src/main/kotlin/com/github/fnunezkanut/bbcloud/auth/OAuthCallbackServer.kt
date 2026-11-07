@@ -41,12 +41,12 @@ fun interface OAuthCallbackServerFactory {
 }
 
 /**
- * Production factory: binds a JDK [HttpServer] to IPv4 loopback ([BbCloudOAuthConfig.CALLBACK_HOST]) on [port], never a
+ * Production factory: binds a JDK [HttpServer] to IPv4 loopback ([DiffyOAuthConfig.CALLBACK_HOST]) on [port], never a
  * wildcard address. The executor is a single named daemon thread. [resultPageWait] is injectable so tests stay fast.
  */
 class JdkOAuthCallbackServerFactory(
-    private val port: Int = BbCloudOAuthConfig.CALLBACK_PORT,
-    private val resultPageWait: kotlin.time.Duration = BbCloudOAuthConfig.RESULT_PAGE_WAIT
+    private val port: Int = DiffyOAuthConfig.CALLBACK_PORT,
+    private val resultPageWait: kotlin.time.Duration = DiffyOAuthConfig.RESULT_PAGE_WAIT
 ) : OAuthCallbackServerFactory {
     /** The port the most recently started server actually bound to; useful when [port] is 0 in tests. */
     @Volatile
@@ -55,7 +55,7 @@ class JdkOAuthCallbackServerFactory(
 
     override fun start(expectedState: String): OAuthCallbackServer {
         val server = try {
-            HttpServer.create(InetSocketAddress(InetAddress.getByName(BbCloudOAuthConfig.CALLBACK_HOST), port), 0)
+            HttpServer.create(InetSocketAddress(InetAddress.getByName(DiffyOAuthConfig.CALLBACK_HOST), port), 0)
         } catch (exception: BindException) {
             throw OAuthCallbackServerUnavailableException(cause = exception)
         } catch (exception: IOException) {
@@ -88,7 +88,7 @@ private class JdkOAuthCallbackServer(private val server: HttpServer, private val
     override val resultPageServed: Deferred<Unit> get() = resultPageServedDeferred
 
     init {
-        server.createContext(BbCloudOAuthConfig.CALLBACK_PATH) { exchange -> handleCallbackContext(exchange = exchange) }
+        server.createContext(DiffyOAuthConfig.CALLBACK_PATH) { exchange -> handleCallbackContext(exchange = exchange) }
         server.createContext("/") { exchange -> handleFallback(exchange = exchange) }
         server.executor = executor
         server.start()
@@ -104,8 +104,8 @@ private class JdkOAuthCallbackServer(private val server: HttpServer, private val
         exchange.use {
             // The JDK context matches sub-paths too, so dispatch on the exact path here.
             when (exchange.requestURI.path) {
-                BbCloudOAuthConfig.CALLBACK_PATH -> handleCallback(exchange = exchange)
-                BbCloudOAuthConfig.RESULT_PATH -> handleResultPage(exchange = exchange)
+                DiffyOAuthConfig.CALLBACK_PATH -> handleCallback(exchange = exchange)
+                DiffyOAuthConfig.RESULT_PATH -> handleResultPage(exchange = exchange)
                 else -> respondNotFound(exchange = exchange)
             }
         }
@@ -171,7 +171,7 @@ private class JdkOAuthCallbackServer(private val server: HttpServer, private val
     }
 
     private fun respondRedirect(exchange: HttpExchange) {
-        exchange.responseHeaders.add("Location", BbCloudOAuthConfig.RESULT_PATH)
+        exchange.responseHeaders.add("Location", DiffyOAuthConfig.RESULT_PATH)
         exchange.responseHeaders.add("Cache-Control", "no-store")
         exchange.responseHeaders.add("Referrer-Policy", "no-referrer")
         exchange.sendResponseHeaders(302, -1)
@@ -241,7 +241,7 @@ private class JdkOAuthCallbackServer(private val server: HttpServer, private val
 
 private object DaemonThreadFactory : ThreadFactory {
     override fun newThread(runnable: Runnable): Thread {
-        val thread = Thread(runnable, "BbCloud-OAuth-Callback")
+        val thread = Thread(runnable, "Diffy-OAuth-Callback")
         thread.isDaemon = true
         return thread
     }

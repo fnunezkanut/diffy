@@ -39,14 +39,14 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.github.fnunezkanut.bbcloud.BbCloudBundle
+import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentChange
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestComment
 import com.github.fnunezkanut.bbcloud.bitbucket.TimelineEntry
 import com.github.fnunezkanut.bbcloud.ui.air.AirChatBridge
 import com.github.fnunezkanut.bbcloud.ui.air.AirCommentSender
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudCompactOutlinedIconButton
-import com.github.fnunezkanut.bbcloud.ui.components.BbCloudPluginIcons
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyCompactOutlinedIconButton
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyPluginIcons
 import com.github.fnunezkanut.bbcloud.ui.components.RoundedBadge
 import com.github.fnunezkanut.bbcloud.ui.components.commentThreadContentBackground
 import com.github.fnunezkanut.bbcloud.ui.components.conversationMetaStripBackground
@@ -230,7 +230,7 @@ private fun CardLocationStrip(
         verticalAlignment = Alignment.CenterVertically
     ) {
         RoundedBadge(
-            text = BbCloudBundle.message("main.branch.comments.thread.viewed"),
+            text = DiffyBundle.message("main.branch.comments.thread.viewed"),
             fillColor = reviewBarPurple(),
             modifier = Modifier.clickable { onViewedToggled(!viewed) }.pointerHoverIcon(PointerIcon.Hand),
             leadingContent = { Checkbox(checked = viewed, onCheckedChange = onViewedToggled) }
@@ -238,10 +238,10 @@ private fun CardLocationStrip(
         Row(verticalAlignment = Alignment.CenterVertically) {
             val path = ConversationThreadRules.existingInlinePath(comment = comment) { candidate -> host.fileExists(path = candidate) }
             if (path == null) {
-                Tooltip(tooltip = { Text(text = BbCloudBundle.message("main.branch.history.location.pr.tooltip")) }) {
+                Tooltip(tooltip = { Text(text = DiffyBundle.message("main.branch.history.location.pr.tooltip")) }) {
                     Icon(
-                        key = BbCloudPluginIcons.pr,
-                        contentDescription = BbCloudBundle.message("main.branch.history.location.pr"),
+                        key = DiffyPluginIcons.pr,
+                        contentDescription = DiffyBundle.message("main.branch.history.location.pr"),
                         modifier = Modifier.size(CARD_LOCATION_ICON_SIZE)
                     )
                 }
@@ -258,13 +258,13 @@ private fun CardLocationStrip(
                         }
                     )
                 }
-                Tooltip(tooltip = { Text(text = BbCloudBundle.message("main.branch.history.location.copy.tooltip")) }) {
+                Tooltip(tooltip = { Text(text = DiffyBundle.message("main.branch.history.location.copy.tooltip")) }) {
                     IconButton(
                         onClick = { host.copyPath(path = fullPath) }
                     ) {
                         Icon(
                             key = org.jetbrains.jewel.ui.icons.AllIconsKeys.Actions.Copy,
-                            contentDescription = BbCloudBundle.message("main.branch.history.location.copy.tooltip")
+                            contentDescription = DiffyBundle.message("main.branch.history.location.copy.tooltip")
                         )
                     }
                 }
@@ -331,13 +331,13 @@ private fun CardMetaBlock(comment: PullRequestComment, headlineKind: Conversatio
                 .padding(CARD_META_BODY_PADDING)
         ) {
             if (comment.isDeleted) {
-                Text(text = BbCloudBundle.message("main.branch.history.comment.deleted"))
+                Text(text = DiffyBundle.message("main.branch.history.comment.deleted"))
             } else {
                 MarkdownDescription(
                     markdown = ConversationThreadRules.commentBodyMarkdown(
                         comment = comment,
                         mentions = host.mentions,
-                        pendingMentionLabel = if (host.mentionsPending) BbCloudBundle.message("main.branch.history.mention.pending") else null
+                        pendingMentionLabel = if (host.mentionsPending) DiffyBundle.message("main.branch.history.mention.pending") else null
                     )
                 )
             }
@@ -368,7 +368,7 @@ private fun CardMetaHeadline(authorName: String, headlineKind: ConversationMetaH
         Text(text = authorName, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false), overflow = TextOverflow.Ellipsis, maxLines = 1)
         Text(
             text =
-                BbCloudBundle.message(actionKey) + " " + BbCloudBundle.message("main.branch.comments.reply.headlineOn") + " " +
+                DiffyBundle.message(actionKey) + " " + DiffyBundle.message("main.branch.comments.reply.headlineOn") + " " +
                     PullRequestRelativeTime.format(date),
             color = JewelTheme.globalColors.text.info,
             modifier = Modifier.weight(1f),
@@ -395,7 +395,7 @@ private fun CardMetaActions(comment: PullRequestComment, headlineKind: Conversat
         actions.forEach { action ->
             val tooltip = CommentThreadActionVisibility.tooltip(action = action)
             Tooltip(tooltip = { Text(text = tooltip) }) {
-                BbCloudCompactOutlinedIconButton(
+                DiffyCompactOutlinedIconButton(
                     icon = CommentThreadActionVisibility.iconKey(action = action),
                     contentDescription = tooltip,
                     outlineColor = CommentThreadActionVisibility.outlineColor(action = action),
@@ -405,8 +405,8 @@ private fun CardMetaActions(comment: PullRequestComment, headlineKind: Conversat
                             val project = host.project()
                             if (project != null && Messages.showYesNoDialog(
                                     project,
-                                    BbCloudBundle.message("main.branch.comments.delete.confirm.message"),
-                                    BbCloudBundle.message("main.branch.comments.delete.confirm.title"),
+                                    DiffyBundle.message("main.branch.comments.delete.confirm.message"),
+                                    DiffyBundle.message("main.branch.comments.delete.confirm.title"),
                                     Messages.getQuestionIcon()
                                 ) == Messages.YES
                             ) {
@@ -438,10 +438,10 @@ private fun CardMetaActions(comment: PullRequestComment, headlineKind: Conversat
 /** Sends the comment to the JetBrains Air chat. It is offered on every comment, and only when the Air plugin is available. */
 @Composable
 private fun CardSendToAirButton(comment: PullRequestComment, host: CommentThreadCardHost) {
-    val label = BbCloudBundle.message("main.branch.comments.actions.sendToAir")
+    val label = DiffyBundle.message("main.branch.comments.actions.sendToAir")
     Tooltip(tooltip = { Text(text = label) }) {
-        BbCloudCompactOutlinedIconButton(
-            icon = BbCloudPluginIcons.sendToAir,
+        DiffyCompactOutlinedIconButton(
+            icon = DiffyPluginIcons.sendToAir,
             contentDescription = label,
             outlineColor = ActionButtonOutlines.blue(),
             enabled = !comment.isDeleted && !host.isUpdating(commentId = comment.id),
@@ -472,7 +472,7 @@ private fun CardActionsFooter(comment: PullRequestComment, host: CommentThreadCa
             verticalAlignment = Alignment.CenterVertically
         ) {
             actions.forEach { action ->
-                BbCloudCompactOutlinedIconButton(
+                DiffyCompactOutlinedIconButton(
                     icon = CommentThreadActionVisibility.iconKey(action = action),
                     contentDescription = CommentThreadActionVisibility.label(action = action),
                     outlineColor = ActionButtonOutlines.green(),
@@ -489,16 +489,16 @@ private fun CardActionsFooter(comment: PullRequestComment, host: CommentThreadCa
                 )
             }
             if (host.currentUserUuid != null) {
-                BbCloudCompactOutlinedIconButton(
+                DiffyCompactOutlinedIconButton(
                     icon = CommentThreadActionVisibility.iconKey(action = CommentThreadAction.Resolve),
-                    contentDescription = BbCloudBundle.message("main.branch.comments.actions.resolveThread"),
+                    contentDescription = DiffyBundle.message("main.branch.comments.actions.resolveThread"),
                     outlineColor = reviewBarPurple(),
                     enabled = !host.isUpdating(commentId = comment.id),
                     onClick = { host.applyCommentChange(CommentChange.Resolve(commentId = comment.id)) },
                     showOutline = true,
                     modifier = Modifier.pointerHoverIcon(PointerIcon.Hand),
                     trailingContent = {
-                        Text(text = BbCloudBundle.message("main.branch.comments.actions.resolveThread"))
+                        Text(text = DiffyBundle.message("main.branch.comments.actions.resolveThread"))
                     }
                 )
             }
@@ -545,13 +545,13 @@ private fun ResolvedCardThread(thread: TimelineEntry.CommentThread, host: Commen
                 true -> "main.branch.comments.actions.hideResolved"
                 false -> "main.branch.comments.actions.showResolved"
             }
-            Text(text = BbCloudBundle.message(labelKey))
+            Text(text = DiffyBundle.message(labelKey))
         }
         OutlinedButton(
             onClick = { host.applyCommentChange(CommentChange.Unresolve(commentId = thread.root.id)) },
             enabled = !host.isUpdating(commentId = thread.root.id)
         ) {
-            Text(text = BbCloudBundle.message("main.branch.comments.actions.unresolve"))
+            Text(text = DiffyBundle.message("main.branch.comments.actions.unresolve"))
         }
     }
 }

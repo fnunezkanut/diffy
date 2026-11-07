@@ -14,7 +14,7 @@ plugins {
 }
 
 group = "com.github.fnunezkanut"
-version = "1.8.0"
+version = "1.9.0"
 
 val isLocalBuild = providers.environmentVariable("CI").orNull.isNullOrEmpty()
 
@@ -71,9 +71,9 @@ kotlin {
     }
 }
 
-// Fills bbcloud-build.properties with the plugin version so the About section does not depend on PluginManager.
+// Fills diffy-build.properties with the plugin version so the About section does not depend on PluginManager.
 tasks.processResources {
-    filesMatching("bbcloud-build.properties") {
+    filesMatching("diffy-build.properties") {
         expand(mapOf("version" to project.version))
     }
     // Packages the Work Trees help page from docs/ so the plugin and README share one copy of the markdown and images.
@@ -85,8 +85,8 @@ tasks.processResources {
 
 intellijPlatform {
     pluginConfiguration {
-        id = "com.github.fnunezkanut.bbcloud"
-        name = "Bitbucket Cloud PR Review"
+        id = "com.github.fnunezkanut.bbcloud" // initial project name was bbcloud, now its diffy
+        name = "Diffy - Bitbucket PR Review"
         ideaVersion {
             sinceBuild = "263.7307.200"
             untilBuild = "263.*"
