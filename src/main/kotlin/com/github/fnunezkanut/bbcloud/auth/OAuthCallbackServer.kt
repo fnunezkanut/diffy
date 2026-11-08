@@ -22,7 +22,7 @@ class OAuthCallbackServerUnavailableException(cause: Throwable) : Exception(caus
 
 /**
  * A short-lived local HTTP server that receives the OAuth redirect. [callback] completes with the first valid redirect;
- * [publishOutcome] hands the token-exchange outcome to the `/bbcloud/done` page, and [resultPageServed] completes once
+ * [publishOutcome] hands the token-exchange outcome to the `/diffy/done` page, and [resultPageServed] completes once
  * that page has been written to the browser. [close] stops the server and is idempotent.
  */
 interface OAuthCallbackServer : AutoCloseable {

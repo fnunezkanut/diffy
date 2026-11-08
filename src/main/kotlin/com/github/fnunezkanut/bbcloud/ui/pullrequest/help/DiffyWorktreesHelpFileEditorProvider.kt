@@ -17,7 +17,7 @@ class DiffyWorktreesHelpFileEditorProvider :
 
     override fun createEditor(project: Project, file: VirtualFile): FileEditor {
         LOG.debug("Creating the Work Trees help editor")
-        return DiffyWorktreesHelpFileEditor(file = file as DiffyWorktreesHelpVirtualFile)
+        return DiffyHelpFileEditor(file = file, markdown = WorktreesHelpMarkdown.load())
     }
 
     override fun getEditorTypeId(): String {

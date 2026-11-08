@@ -24,12 +24,12 @@ class JdkOAuthCallbackServerTest {
             val server = factory.start(expectedState = state)
             try {
                 // WHEN
-                val connection = get(port = factory.boundPort, path = "/bbcloud?code=the-code&state=$state")
+                val connection = get(port = factory.boundPort, path = "/diffy?code=the-code&state=$state")
 
                 // THEN
                 assertSoftly {
                     connection.responseCode shouldBe 302
-                    connection.getHeaderField("Location") shouldBe "/bbcloud/done"
+                    connection.getHeaderField("Location") shouldBe "/diffy/done"
                     connection.getHeaderField("Cache-Control") shouldBe "no-store"
                     connection.getHeaderField("Referrer-Policy") shouldBe "no-referrer"
                 }
@@ -48,16 +48,16 @@ class JdkOAuthCallbackServerTest {
             val factory = JdkOAuthCallbackServerFactory(port = 0)
             val server = factory.start(expectedState = state)
             try {
-                get(port = factory.boundPort, path = "/bbcloud?code=c&state=$state")
+                get(port = factory.boundPort, path = "/diffy?code=c&state=$state")
                 withTimeout(2.seconds) { server.callback.await() }
                 server.publishOutcome(page = OAuthResultPage(success = true, message = ""))
 
                 // WHEN
-                val connection = get(port = factory.boundPort, path = "/bbcloud/done")
+                val connection = get(port = factory.boundPort, path = "/diffy/done")
 
                 // THEN
                 connection.responseCode shouldBe 200
-                connection.inputStream.bufferedReader().readText() shouldContain "succeeded"
+                connection.inputStream.bufferedReader().readText() shouldContain "Diffy is now connected to Bitbucket. You can close this tab."
                 withTimeout(2.seconds) { server.resultPageServed.await() }
             } finally {
                 server.close()
@@ -71,11 +71,11 @@ class JdkOAuthCallbackServerTest {
             val factory = JdkOAuthCallbackServerFactory(port = 0, resultPageWait = 1.seconds)
             val server = factory.start(expectedState = state)
             try {
-                get(port = factory.boundPort, path = "/bbcloud?code=c&state=$state")
+                get(port = factory.boundPort, path = "/diffy?code=c&state=$state")
                 withTimeout(2.seconds) { server.callback.await() }
 
                 // WHEN
-                val connection = get(port = factory.boundPort, path = "/bbcloud/done")
+                val connection = get(port = factory.boundPort, path = "/diffy/done")
 
                 // THEN
                 connection.responseCode shouldBe 200
@@ -92,7 +92,7 @@ class JdkOAuthCallbackServerTest {
         val server = factory.start(expectedState = state)
         try {
             // WHEN
-            val connection = get(port = factory.boundPort, path = "/bbcloud/done")
+            val connection = get(port = factory.boundPort, path = "/diffy/done")
 
             // THEN
             connection.responseCode shouldBe 404
@@ -108,7 +108,7 @@ class JdkOAuthCallbackServerTest {
         val server = factory.start(expectedState = state)
         try {
             // WHEN
-            val connection = get(port = factory.boundPort, path = "/bbcloud?code=c&state=wrong")
+            val connection = get(port = factory.boundPort, path = "/diffy?code=c&state=wrong")
 
             // THEN
             assertSoftly {
@@ -128,7 +128,7 @@ class JdkOAuthCallbackServerTest {
             val server = factory.start(expectedState = state)
             try {
                 // WHEN
-                get(port = factory.boundPort, path = "/bbcloud?error=access_denied&state=$state")
+                get(port = factory.boundPort, path = "/diffy?error=access_denied&state=$state")
 
                 // THEN
                 val result = withTimeout(2.seconds) { server.callback.await() }
@@ -146,9 +146,9 @@ class JdkOAuthCallbackServerTest {
         try {
             // WHEN / THEN
             assertSoftly {
-                get(port = factory.boundPort, path = "/bbcloudx").responseCode shouldBe 404
+                get(port = factory.boundPort, path = "/diffyx").responseCode shouldBe 404
                 get(port = factory.boundPort, path = "/other").responseCode shouldBe 404
-                post(port = factory.boundPort, path = "/bbcloud?code=c&state=$state").responseCode shouldBe 405
+                post(port = factory.boundPort, path = "/diffy?code=c&state=$state").responseCode shouldBe 405
             }
         } finally {
             server.close()

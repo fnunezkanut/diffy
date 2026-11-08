@@ -28,8 +28,20 @@ data class PullRequestSummary(
     val authorAccountId: String? = null
 )
 
+/** Where a successful listing came from. Only [Live] reflects Bitbucket's answer at this moment. */
+enum class PullRequestListSource {
+    /** Fetched from Bitbucket by this load. */
+    Live,
+
+    /** Served from a fresh cache snapshot, with no request. */
+    Cache,
+
+    /** Served from an older cache snapshot because the request failed. */
+    StaleFallback
+}
+
 sealed class PullRequestListResult {
-    data class Success(val pullRequests: List<PullRequestSummary>) : PullRequestListResult()
+    data class Success(val pullRequests: List<PullRequestSummary>, val source: PullRequestListSource = PullRequestListSource.Live) : PullRequestListResult()
 
     data class Failed(val cause: Throwable? = null) : PullRequestListResult()
 }

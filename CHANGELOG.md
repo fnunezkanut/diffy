@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## *1.10.0* - 2026-11-08
+* Added: the Chrome extension (1.4.0) shows a floating "Diffy sync" button at the bottom left of bitbucket.org pages for signed-in users; it also auto syncs every 15 minute timer
+* Added: a Notifications tab before Settings shows the Bitbucket notifications the Chrome extension captured, newest first
+* Added: the Chrome extension's pull request data refreshes the plugin's pull request cache (comment counts, titles, draft flag, approvals, merged or declined)
+
 ## *1.9.0* - 2026-11-07
 * Changed: renamed plugin to "Diffy - Bitbucket PR Review"; the plugin id is unchanged, so existing installs and settings carry over
 * Changed: the Chrome extension is renamed to "Diffy - Bitbucket PR Review" and its folder is now `diffy-chrome-ext`

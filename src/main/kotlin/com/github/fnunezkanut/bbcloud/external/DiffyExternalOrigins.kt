@@ -1,6 +1,6 @@
 package com.github.fnunezkanut.bbcloud.external
 
-/** Browser origins that may call the Diffy REST endpoint `/api/diffy/open`. */
+/** Browser origins that may call the Diffy REST endpoints `/api/diffy/open` and `/api/diffy/snapshot`. */
 object DiffyExternalOrigins {
     /** The scheme prefix of every Chrome extension origin. */
     const val CHROME_EXTENSION_PREFIX = "chrome-extension://"

@@ -33,11 +33,15 @@ class DiffyPluginDescriptorTest {
             implementations shouldContainExactlyInAnyOrder listOf(
                 "com.github.fnunezkanut.bbcloud.settings.DiffySettings",
                 "com.github.fnunezkanut.bbcloud.review.DiffyKnownUsersState",
+                "com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCacheState",
+                "com.github.fnunezkanut.bbcloud.external.DiffyNotificationsState",
                 "com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService",
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.decline.DiffyPullRequestDeclineCoordinator",
                 "com.github.fnunezkanut.bbcloud.credentials.PasswordSafeDiffyCredentialStore",
                 "com.github.fnunezkanut.bbcloud.auth.DiffyAuthService",
                 "com.github.fnunezkanut.bbcloud.auth.DiffyOAuthLoginService",
+                "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotStore",
+                "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotCacheService",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestReviewState",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedFiles",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedThreads",
@@ -49,6 +53,7 @@ class DiffyPluginDescriptorTest {
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorOpener",
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.create.DiffyNewPullRequestEditorOpener",
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpEditorOpener",
+                "com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyNotificationsHelpEditorOpener",
                 "com.github.fnunezkanut.bbcloud.ui.markdowndiff.DiffyMarkdownDiffEditorOpener",
                 "com.github.fnunezkanut.bbcloud.ui.DiffyToolWindowPanel"
             )
@@ -76,7 +81,11 @@ class DiffyPluginDescriptorTest {
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.decline.DiffyPullRequestDeclineCoordinator",
                 "com.github.fnunezkanut.bbcloud.settings.DiffySettings",
                 "com.github.fnunezkanut.bbcloud.review.DiffyKnownUsersState",
+                "com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCacheState",
+                "com.github.fnunezkanut.bbcloud.external.DiffyNotificationsState",
                 "com.github.fnunezkanut.bbcloud.auth.DiffyOAuthLoginService",
+                "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotStore",
+                "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotCacheService",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestReviewState",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedFiles",
                 "com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext",
@@ -87,6 +96,7 @@ class DiffyPluginDescriptorTest {
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorOpener",
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.create.DiffyNewPullRequestEditorOpener",
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpEditorOpener",
+                "com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyNotificationsHelpEditorOpener",
                 "com.github.fnunezkanut.bbcloud.ui.markdowndiff.DiffyMarkdownDiffEditorOpener",
                 "com.github.fnunezkanut.bbcloud.ui.DiffyToolWindowPanel"
             )
@@ -136,6 +146,7 @@ class DiffyPluginDescriptorTest {
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestFileEditorProvider",
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.create.DiffyNewPullRequestFileEditorProvider",
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpFileEditorProvider",
+                "com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyNotificationsHelpFileEditorProvider",
                 "com.github.fnunezkanut.bbcloud.ui.markdowndiff.DiffyMarkdownDiffFileEditorProvider"
             )
             titleProviders.map { it.getAttribute("implementationClass") } shouldContainExactly listOf(
@@ -158,6 +169,7 @@ class DiffyPluginDescriptorTest {
             activities.map { it.getAttribute("implementation") } shouldContainExactly listOf(
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorStartupActivity",
                 "com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContextStartupActivity",
+                "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotCacheStartupActivity",
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.DiffyPullRequestProjectViewRefreshStartupActivity"
             )
         }
@@ -174,7 +186,9 @@ class DiffyPluginDescriptorTest {
 
         // THEN
         handlers.map { it.getAttribute("implementation") } shouldContainExactly listOf(
-            "com.github.fnunezkanut.bbcloud.external.DiffyOpenPullRequestRestService"
+            "com.github.fnunezkanut.bbcloud.external.DiffyOpenPullRequestRestService",
+            "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotRestService",
+            "com.github.fnunezkanut.bbcloud.external.DiffyWorkspaceRestService"
         )
     }
 

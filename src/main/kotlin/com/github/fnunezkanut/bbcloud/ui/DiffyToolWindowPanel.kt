@@ -10,11 +10,14 @@ import com.github.fnunezkanut.bbcloud.bitbucket.DiffyReviewQueueService
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketPullRequestClient
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketRepositoryClient
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
+import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.project.LocalProjectRepositorySlug
 import com.github.fnunezkanut.bbcloud.toolwindow.DiffyToolWindowTab
 import com.github.fnunezkanut.bbcloud.toolwindow.DiffyToolWindowTabResolver
 import com.github.fnunezkanut.bbcloud.ui.main.DiffyMainPanel
+import com.github.fnunezkanut.bbcloud.ui.notifications.NotificationsPanel
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.DiffyOtherProjectsPanel
 import com.github.fnunezkanut.bbcloud.ui.recentprojects.RecentProjectsPanel
 import com.github.fnunezkanut.bbcloud.ui.setup.DiffySettingsScreen
@@ -46,7 +49,7 @@ import javax.swing.Icon
 import javax.swing.JComponent
 
 /**
- * Owns the five tool window tabs and the panels behind them. The Current Project tab opens by default once a
+ * Owns the six tool window tabs and the panels behind them. The Current Project tab opens by default once a
  * Bitbucket workspace and API token exist, otherwise the Settings tab opens. Tabs are never redirected: while the plugin
  * is unconfigured, the other tabs offer a link to the Settings tab instead.
  */
@@ -87,20 +90,27 @@ class DiffyToolWindowPanel(private val project: Project) {
         isPruneInProgress = { otherProjectsPanel.isPruneInProgress() }
     )
 
+    private val notificationsPanel = NotificationsPanel(
+        project = project,
+        coroutineScope = coroutineScope,
+        onGoToSettings = { selectTab(tab = DiffyToolWindowTab.Settings) }
+    )
+
     /** Set by the async configuration check; null while it is still in flight. */
     private var isConfigured: Boolean? = null
     private var contentManager: ContentManager? = null
     private var isProgrammaticSelection = false
     private var contentByTab: Map<DiffyToolWindowTab, Content> = emptyMap()
 
-    /** Non-closeable components for each of the five tabs; wired from coordinators. */
+    /** Non-closeable components for each of the six tabs; wired from coordinators. */
     val projectPrsComponent: JComponent = mainPanel.projectPrsTabComponent
     val workspacePrsComponent: JComponent = otherProjectsPanel.workspacePrsTabComponent
     val workspaceWatchedProjectsComponent: JComponent = otherProjectsPanel.watchedProjectsTabComponent
     val recentProjectsComponent: JComponent = recentProjectsPanel.component
+    val notificationsComponent: JComponent = notificationsPanel.component
     val settingsComponent: JComponent = settingsComposeComponent
 
-    /** Builds the five non-closeable tabs, in header order. */
+    /** Builds the six non-closeable tabs, in header order. */
     fun createContents(): List<Content> {
         val contentFactory = ContentFactory.getInstance()
         val contents = DiffyToolWindowTab.entries.map { tab ->
@@ -177,6 +187,7 @@ class DiffyToolWindowPanel(private val project: Project) {
     /** Starts listening for tab selection and resolves the tab that opens with the tool window. */
     fun bind(contentManager: ContentManager, parentDisposable: Disposable) {
         this.contentManager = contentManager
+        notificationsPanel.start()
         val listener = object : ContentManagerListener {
             override fun selectionChanged(event: ContentManagerEvent) {
                 if (isProgrammaticSelection) {
@@ -226,6 +237,7 @@ class DiffyToolWindowPanel(private val project: Project) {
             DiffyToolWindowTab.WorkspacePrs -> refreshWorkspacePrs()
             DiffyToolWindowTab.WorkspaceWatchedProjects -> refreshWorkspaceWatchedProjects()
             DiffyToolWindowTab.RecentProjects -> refreshRecentProjects()
+            DiffyToolWindowTab.Notifications -> refreshNotifications()
             DiffyToolWindowTab.Settings -> bindSettingsState()
         }
     }
@@ -290,6 +302,23 @@ class DiffyToolWindowPanel(private val project: Project) {
         recentProjectsPanel.reload()
     }
 
+    private fun refreshNotifications() {
+        LOG.debug("Refreshing the Notifications tab")
+        coroutineScope.launch {
+            val configured = configurationService.isConfigured()
+            ApplicationManager.getApplication().invokeLater {
+                isConfigured = configured
+                if (isSelected(tab = DiffyToolWindowTab.Notifications)) {
+                    if (configured) {
+                        notificationsPanel.showContent()
+                    } else {
+                        notificationsPanel.showNotConfigured()
+                    }
+                }
+            }
+        }
+    }
+
     /** Reloads the Settings tab from the stored state: the token outline, OAuth status, and projects-directory status. */
     private fun bindSettingsState() {
         coroutineScope.launch {
@@ -343,6 +372,7 @@ class DiffyToolWindowPanel(private val project: Project) {
             DiffyToolWindowTab.WorkspacePrs -> workspacePrsComponent
             DiffyToolWindowTab.WorkspaceWatchedProjects -> workspaceWatchedProjectsComponent
             DiffyToolWindowTab.RecentProjects -> recentProjectsComponent
+            DiffyToolWindowTab.Notifications -> notificationsComponent
             DiffyToolWindowTab.Settings -> settingsComposeComponent
         }
     }
@@ -353,6 +383,7 @@ class DiffyToolWindowPanel(private val project: Project) {
             DiffyToolWindowTab.WorkspacePrs -> "toolwindow.tab.workspacePrs"
             DiffyToolWindowTab.WorkspaceWatchedProjects -> "toolwindow.tab.workspaceWatchedProjects"
             DiffyToolWindowTab.RecentProjects -> "toolwindow.tab.recentProjects"
+            DiffyToolWindowTab.Notifications -> "toolwindow.tab.notifications"
             DiffyToolWindowTab.Settings -> "toolwindow.tab.settings"
         }
     }
@@ -363,6 +394,7 @@ class DiffyToolWindowPanel(private val project: Project) {
             DiffyToolWindowTab.WorkspacePrs -> AllIcons.Nodes.ModuleGroup
             DiffyToolWindowTab.WorkspaceWatchedProjects -> AllIcons.Actions.Show
             DiffyToolWindowTab.RecentProjects -> AllIcons.Vcs.History
+            DiffyToolWindowTab.Notifications -> AllIcons.Toolwindows.Notifications
             DiffyToolWindowTab.Settings -> AllIcons.General.Settings
         }
     }
@@ -390,9 +422,11 @@ class DiffyToolWindowPanel(private val project: Project) {
             }
             val excludedRepoSlug = LocalProjectRepositorySlug.fromBasePath(project.basePath)
             ApplicationManager.getApplication().invokeLater {
+                // The Refresh button re-checks the watched projects, then loads both tabs from Bitbucket.
                 otherProjectsPanel.loadWorkspacePullRequests(
                     excludedRepoSlug = excludedRepoSlug,
-                    coroutineScope = coroutineScope
+                    coroutineScope = coroutineScope,
+                    refresh = PullRequestCacheRefresh.Force
                 )
                 otherProjectsPanel.bindWatchedProjects()
             }
@@ -451,7 +485,8 @@ class DiffyToolWindowPanel(private val project: Project) {
             return DiffyOpenPullRequestService(
                 accessTokenProvider = application.service<DiffyAccessTokenProvider>(),
                 pullRequestClient = OkHttpBitbucketPullRequestClient(),
-                configurationService = configurationService
+                configurationService = configurationService,
+                pullRequestCache = DiffyPullRequestCache.getInstance()
             )
         }
 
@@ -459,7 +494,8 @@ class DiffyToolWindowPanel(private val project: Project) {
             val application = ApplicationManager.getApplication()
             return DiffyReviewQueueService(
                 accessTokenProvider = application.service<DiffyAccessTokenProvider>(),
-                pullRequestClient = OkHttpBitbucketPullRequestClient()
+                pullRequestClient = OkHttpBitbucketPullRequestClient(),
+                pullRequestCache = DiffyPullRequestCache.getInstance()
             )
         }
 
@@ -468,7 +504,8 @@ class DiffyToolWindowPanel(private val project: Project) {
             val application = ApplicationManager.getApplication()
             return DiffyAuthoredPullRequestService(
                 accessTokenProvider = application.service<DiffyAccessTokenProvider>(),
-                pullRequestClient = OkHttpBitbucketPullRequestClient()
+                pullRequestClient = OkHttpBitbucketPullRequestClient(),
+                pullRequestCache = DiffyPullRequestCache.getInstance()
             )
         }
     }

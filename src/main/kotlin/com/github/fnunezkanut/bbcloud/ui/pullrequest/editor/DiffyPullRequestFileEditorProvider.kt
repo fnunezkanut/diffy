@@ -2,6 +2,7 @@ package com.github.fnunezkanut.bbcloud.ui.pullrequest.editor
 
 import com.github.fnunezkanut.bbcloud.auth.DiffyAccessTokenProvider
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
+import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.DiffyBranchCheckoutService
 import com.github.fnunezkanut.bbcloud.git.DiffyPullRequestBranchDiffService
@@ -47,7 +48,8 @@ class DiffyPullRequestFileEditorProvider :
         return DiffyOpenPullRequestService(
             accessTokenProvider = application.service<DiffyAccessTokenProvider>(),
             pullRequestClient = com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketPullRequestClient(),
-            configurationService = configurationService
+            configurationService = configurationService,
+            pullRequestCache = DiffyPullRequestCache.getInstance()
         )
     }
 

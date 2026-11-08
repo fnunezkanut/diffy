@@ -11,10 +11,8 @@ import java.awt.Dimension
 import javax.swing.JComponent
 import javax.swing.JPanel
 
-/** The editor behind the `help.pr` Work Trees help tab. It hosts the Compose help screen and disposes it with the tab. */
-class DiffyWorktreesHelpFileEditor(private val file: DiffyWorktreesHelpVirtualFile) : FileEditorBase() {
-    private val markdown = WorktreesHelpMarkdown.load()
-
+/** The editor behind a help tab (Work Trees, Notifications). It hosts the Compose help screen and disposes it with the tab. */
+class DiffyHelpFileEditor(private val file: VirtualFile, private val markdown: String) : FileEditorBase() {
     private var composePanel: ComposePanel? = null
 
     // The ComposePanel must never be asked to size against unbounded height, or the scrolling container inside blows up.

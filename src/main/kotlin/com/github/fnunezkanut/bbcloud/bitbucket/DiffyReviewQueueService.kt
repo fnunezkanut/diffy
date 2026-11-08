@@ -1,6 +1,12 @@
 package com.github.fnunezkanut.bbcloud.bitbucket
 
 import com.github.fnunezkanut.bbcloud.auth.DiffyAccessTokenProvider
+import com.github.fnunezkanut.bbcloud.cache.CachedPullRequestMapper
+import com.github.fnunezkanut.bbcloud.cache.NoOpPullRequestCacheStore
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheKey
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheStore
+import com.github.fnunezkanut.bbcloud.cache.PullRequestListingIds
 import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -13,12 +19,25 @@ import kotlinx.coroutines.sync.withPermit
  * configured workspace; each repository slug is used as given; the current project is left out; a 404 or 403 skips a
  * repository; a 401 fails the load; failed repositories and the cap mark the result as truncated.
  */
-class DiffyReviewQueueService(private val accessTokenProvider: DiffyAccessTokenProvider, private val pullRequestClient: BitbucketPullRequestClient) {
+class DiffyReviewQueueService(
+    private val accessTokenProvider: DiffyAccessTokenProvider,
+    private val pullRequestClient: BitbucketPullRequestClient,
+    /** Production callers pass [com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache.getInstance]. */
+    private val pullRequestCache: PullRequestCacheStore = NoOpPullRequestCacheStore
+) {
     /**
      * Lists the open pull requests the current user reviews, across [repoSlugs]. Empty [repoSlugs] yields an empty
      * success without any repository request.
+     *
+     * An [PullRequestCacheRefresh.IfStale] load asks Bitbucket only for the repositories whose stored listing is not
+     * fresh. A repository whose request fails falls back to its stored listing when one exists.
      */
-    suspend fun listReviewingPullRequests(organizationUrl: String, excludedRepoSlug: String?, repoSlugs: List<String>): ReviewingPullRequestListResult {
+    suspend fun listReviewingPullRequests(
+        organizationUrl: String,
+        excludedRepoSlug: String?,
+        repoSlugs: List<String>,
+        refresh: PullRequestCacheRefresh = PullRequestCacheRefresh.IfStale
+    ): ReviewingPullRequestListResult {
         val workspace = BitbucketRepositoryUrls.workspaceFromOrganizationUrl(organizationUrl)
         if (workspace == null) {
             LOG.info("Cannot list the pull requests to review: no workspace in organization URL $organizationUrl")
@@ -32,11 +51,16 @@ class DiffyReviewQueueService(private val accessTokenProvider: DiffyAccessTokenP
         }
 
         // The reviewer filter is keyed by uuid, which the nickname-based route does not expose.
-        val reviewerUuid = pullRequestClient.getCurrentUser(apiToken = apiToken)?.uuid
+        val reviewerUuid = currentUserThroughCache(
+            pullRequestCache = pullRequestCache,
+            pullRequestClient = pullRequestClient,
+            apiToken = apiToken
+        )?.uuid
         if (reviewerUuid == null) {
             LOG.info("Cannot list the pull requests to review: the current Bitbucket user uuid is unknown")
             return ReviewingPullRequestListResult.Failed()
         }
+        pullRequestCache.bindUser(userUuid = reviewerUuid)
 
         val targets = ReviewingPullRequestAssembler.repositoryTargets(
             repoSlugs = repoSlugs,
@@ -53,12 +77,12 @@ class DiffyReviewQueueService(private val accessTokenProvider: DiffyAccessTokenP
             targets.map { repoSlug ->
                 async {
                     permits.withPermit {
-                        repoSlug to pullRequestClient.listOpenPullRequestsReviewedBy(
+                        repoSlug to queryRepository(
                             workspace = workspace,
                             repoSlug = repoSlug,
                             reviewerUuid = reviewerUuid,
-                            pageLen = MAX_LISTED_PULL_REQUESTS,
-                            apiToken = apiToken
+                            apiToken = apiToken,
+                            refresh = refresh
                         )
                     }
                 }
@@ -100,6 +124,58 @@ class DiffyReviewQueueService(private val accessTokenProvider: DiffyAccessTokenP
         return when (assembled) {
             is ReviewingPullRequestListResult.Success -> assembled.copy(currentUserUuid = reviewerUuid)
             is ReviewingPullRequestListResult.Failed -> assembled
+        }
+    }
+
+    /**
+     * One repository's reviewing listing: the stored listing when it is fresh and the load allows it, otherwise a request.
+     * A fetched listing replaces the stored one. [ReviewerQueueQueryResult.Skipped] and
+     * [ReviewerQueueQueryResult.Unauthorized] never write a listing.
+     */
+    private suspend fun queryRepository(
+        workspace: String,
+        repoSlug: String,
+        reviewerUuid: String,
+        apiToken: String,
+        refresh: PullRequestCacheRefresh
+    ): ReviewerQueueQueryResult {
+        val listingId = PullRequestListingIds.workspaceReviewing(workspace = workspace, repoSlug = repoSlug)
+        if (refresh == PullRequestCacheRefresh.IfStale) {
+            val fresh = pullRequestCache.freshListing(listingId = listingId)
+            if (fresh != null) {
+                return ReviewerQueueQueryResult.Listed(pullRequests = fresh.entries.map { entry -> CachedPullRequestMapper.toSummary(entry = entry) })
+            }
+        }
+
+        val result = pullRequestClient.listOpenPullRequestsReviewedBy(
+            workspace = workspace,
+            repoSlug = repoSlug,
+            reviewerUuid = reviewerUuid,
+            pageLen = MAX_LISTED_PULL_REQUESTS,
+            apiToken = apiToken
+        )
+        return when (result) {
+            is ReviewerQueueQueryResult.Listed -> {
+                pullRequestCache.upsertAll(workspace = workspace, repoSlug = repoSlug, summaries = result.pullRequests)
+                pullRequestCache.recordListing(
+                    listingId = listingId,
+                    keys = result.pullRequests.map { summary ->
+                        PullRequestCacheKey.of(workspace = workspace, repoSlug = repoSlug, prNum = summary.id)
+                    },
+                    isTruncated = result.pullRequests.size >= MAX_LISTED_PULL_REQUESTS
+                )
+                result
+            }
+
+            is ReviewerQueueQueryResult.Failed -> {
+                val stale = pullRequestCache.listing(listingId = listingId) ?: return result
+                LOG.info("Could not refresh the pull requests to review in $repoSlug; showing ${stale.entries.size} cached pull request(s)")
+                ReviewerQueueQueryResult.Listed(pullRequests = stale.entries.map { entry -> CachedPullRequestMapper.toSummary(entry = entry) })
+            }
+
+            is ReviewerQueueQueryResult.Skipped, is ReviewerQueueQueryResult.Unauthorized -> {
+                result
+            }
         }
     }
 

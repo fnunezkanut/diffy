@@ -76,9 +76,9 @@ tasks.processResources {
     filesMatching("diffy-build.properties") {
         expand(mapOf("version" to project.version))
     }
-    // Packages the Work Trees help page from docs/ so the plugin and README share one copy of the markdown and images.
+    // Packages the Work Trees and Notifications help pages from docs/ so the plugin and README share one copy of the markdown and images.
     from("docs") {
-        include("worktrees.md", "worktrees*.jpeg")
+        include("worktrees.md", "worktrees*.jpeg", "notifications.md", "notifications*.jpeg")
         into("help")
     }
 }

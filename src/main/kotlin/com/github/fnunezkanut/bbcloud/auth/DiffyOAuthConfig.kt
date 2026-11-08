@@ -19,16 +19,16 @@ internal object DiffyOAuthConfig {
     const val CALLBACK_PORT = 42424
 
     /** Path that receives the OAuth redirect with the authorization code. */
-    const val CALLBACK_PATH = "/bbcloud"
+    const val CALLBACK_PATH = "/diffy"
 
     /** Path of the result page the browser is redirected to, so the code never stays in the address bar. */
-    const val RESULT_PATH = "/bbcloud/done"
+    const val RESULT_PATH = "/diffy/done"
 
     /**
      * Exact redirect URI sent on both the authorize and the token request. The OAuth consumer's callback URL must be
      * configured to this value, otherwise Bitbucket rejects the authorize request on its own page.
      */
-    const val REDIRECT_URI = "http://127.0.0.1:42424/bbcloud"
+    const val REDIRECT_URI = "http://127.0.0.1:42424/diffy"
 
     /** How long the whole login waits for the browser callback before giving up. */
     val LOGIN_TIMEOUT: Duration = 5.minutes

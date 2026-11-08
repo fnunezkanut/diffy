@@ -9,6 +9,9 @@
 // parses workspace, repo, and PR id from the browser URL and injects the same
 // icon beside the PR title in the page header.
 //
+// A floating "Diffy sync" button (bottom left, signed-in users only) runs a capture
+// and delivery now instead of waiting for the 15 minute timer.
+//
 // Clicking the icon asks the background service worker to forward the request
 // to a running IntelliJ IDE's built-in HTTP server.
 
@@ -221,6 +224,179 @@ function addLinks() {
   }
 }
 
+// ---- Sync button ----------------------------------------------------------
+//
+// A floating "Diffy sync" button at the bottom left of every bitbucket.org page,
+// shown only while the user is signed in. Clicking it asks the service worker to
+// capture and deliver now, which also restarts the 15 minute timer.
+
+const SYNC_HOST_SELECTOR = '[data-diffy-sync="1"]';
+const SIGNED_IN_TTL_MS = 5 * 60 * 1000;
+const SYNC_REPLY_TIMEOUT_MS = 60000;
+const SYNC_LABEL = "Diffy sync";
+
+let signedIn = false;
+let signedInCheckedAt = 0;
+let signedInCheck = null;
+
+async function checkSignedIn() {
+  let status = null;
+  try {
+    const response = await fetch("/!api/2.0/user", {
+      credentials: "include",
+      headers: { accept: "application/json", "x-requested-with": "XMLHttpRequest" },
+    });
+    status = response.status;
+    if (!response.ok) {
+      return false;
+    }
+    const body = await response.json();
+    return Boolean(body) && typeof body.uuid === "string";
+  } catch (error) {
+    return false;
+  } finally {
+    console.debug("[diffy] signed-in check", { status });
+  }
+}
+
+// Resolves the cached sign-in state, re-checking at most every SIGNED_IN_TTL_MS.
+async function isSignedIn(force) {
+  if (!force && signedInCheckedAt > 0 && Date.now() - signedInCheckedAt < SIGNED_IN_TTL_MS) {
+    return signedIn;
+  }
+  if (!signedInCheck) {
+    signedInCheck = checkSignedIn()
+      .then((result) => {
+        signedIn = result;
+        signedInCheckedAt = Date.now();
+        return result;
+      })
+      .finally(() => {
+        signedInCheck = null;
+      });
+  }
+  return signedInCheck;
+}
+
+function removeSyncButton() {
+  for (const host of document.querySelectorAll(SYNC_HOST_SELECTOR)) {
+    host.remove();
+  }
+}
+
+function createSyncButton() {
+  const host = document.createElement("div");
+  host.dataset.diffySync = "1";
+  host.style.cssText =
+    "all: initial; position: fixed; left: 12px; bottom: 12px; z-index: 2147483647;";
+  const shadow = host.attachShadow({ mode: "closed" });
+
+  const style = document.createElement("style");
+  style.textContent = `
+    button {
+      display: inline-flex; align-items: center; gap: 6px;
+      font: 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+      padding: 6px 10px; color: #172b4d; background: #f4f5f7;
+      border: 1px solid #c1c7d0; border-radius: 14px; cursor: pointer;
+      box-shadow: 0 1px 4px rgba(9, 30, 66, 0.25);
+    }
+    button:hover { background: #ebecf0; }
+    button:focus-visible { outline: 2px solid #0052cc; outline-offset: 2px; }
+    button[disabled] { opacity: 0.6; cursor: default; }
+    img { display: block; width: 16px; height: 16px; }
+  `;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  const defaultTitle = "Sync Diffy now (otherwise every 15 minutes)";
+  button.title = defaultTitle;
+  button.setAttribute("aria-label", defaultTitle);
+
+  const icon = document.createElement("img");
+  icon.src = ICON_URL;
+  icon.alt = "";
+  const label = document.createElement("span");
+  label.textContent = SYNC_LABEL;
+  button.append(icon, label);
+  shadow.append(style, button);
+
+  let inFlight = false;
+
+  function showResult(text, title) {
+    label.textContent = text;
+    button.title = title;
+    window.setTimeout(() => {
+      inFlight = false;
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      label.textContent = SYNC_LABEL;
+      button.title = defaultTitle;
+    }, RETRY_RESET_MS);
+  }
+
+  button.addEventListener("click", async () => {
+    if (inFlight) {
+      return;
+    }
+    inFlight = true;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    label.textContent = "Syncing…";
+    console.info("[diffy] sync button clicked");
+
+    let result;
+    try {
+      result = await Promise.race([
+        chrome.runtime.sendMessage({ type: "syncNow" }),
+        new Promise((resolve) => window.setTimeout(() => resolve(null), SYNC_REPLY_TIMEOUT_MS)),
+      ]);
+    } catch (error) {
+      console.warn("[diffy] syncNow got no reply", error && error.message);
+      const invalidated = error && /context invalidated/i.test(error.message || "");
+      result = { ok: false, message: invalidated ? "Reload the page" : "Extension is not responding" };
+    }
+    if (!result) {
+      result = { ok: false, message: "Extension is not responding" };
+    }
+
+    if (result.ok) {
+      showResult("Synced", "Synced just now");
+      return;
+    }
+    console.warn("[diffy] sync failed", { state: result.state, message: result.message });
+    showResult("Sync failed", result.message || "Sync failed");
+    if (result.message === "Not signed in to Bitbucket") {
+      signedIn = false;
+      signedInCheckedAt = 0;
+      removeSyncButton();
+    }
+  });
+
+  return host;
+}
+
+async function ensureSyncButton() {
+  if (window.top !== window) {
+    return;
+  }
+  let allowed;
+  try {
+    allowed = await isSignedIn(false);
+  } catch (error) {
+    allowed = false;
+  }
+  const existing = document.querySelector(SYNC_HOST_SELECTOR);
+  if (!allowed) {
+    if (existing) {
+      removeSyncButton();
+    }
+    return;
+  }
+  if (!existing && document.body) {
+    document.body.append(createSyncButton());
+  }
+}
+
 // Bitbucket is a single-page app; rows load after the initial render. Coalesce
 // observer callbacks with requestAnimationFrame so a burst of DOM mutations
 // triggers at most one injection pass per frame.
@@ -235,6 +411,7 @@ function scheduleAddLinks() {
     scheduled = false;
     addPullRequestTitleLink();
     addLinks();
+    ensureSyncButton();
   });
 }
 
@@ -251,7 +428,13 @@ function installNavigationHooks() {
 
 addPullRequestTitleLink();
 addLinks();
+ensureSyncButton();
 installNavigationHooks();
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    isSignedIn(true).then(ensureSyncButton);
+  }
+});
 new MutationObserver(scheduleAddLinks).observe(document.body, {
   childList: true,
   subtree: true,

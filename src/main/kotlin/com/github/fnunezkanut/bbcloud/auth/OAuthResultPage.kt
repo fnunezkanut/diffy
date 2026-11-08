@@ -3,7 +3,7 @@ package com.github.fnunezkanut.bbcloud.auth
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.intellij.openapi.util.text.StringUtil
 
-/** The terminal outcome shown on the `/bbcloud/done` page. [message] is already user-facing text. */
+/** The terminal outcome shown on the `/diffy/done` page. [message] is already user-facing text. */
 data class OAuthResultPage(val success: Boolean, val message: String)
 
 /**

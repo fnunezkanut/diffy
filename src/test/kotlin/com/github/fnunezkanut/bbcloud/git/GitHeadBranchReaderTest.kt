@@ -28,13 +28,13 @@ class GitHeadBranchReaderTest {
         @Test
         fun `branch ref with slashes - should keep the slashes`() {
             // GIVEN
-            val content = "ref: refs/heads/feature/FLEX-663\r\n"
+            val content = "ref: refs/heads/feature/PROJ-482\r\n"
 
             // WHEN
             val result = parseHeadFileContent(content = content)
 
             // THEN
-            result shouldBe HeadFileContent.Branch(name = "feature/FLEX-663")
+            result shouldBe HeadFileContent.Branch(name = "feature/PROJ-482")
         }
 
         @Test

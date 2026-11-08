@@ -6,6 +6,7 @@ import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketPullRequestClient
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
+import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.BitbucketGitRemoteReader
 import com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService
@@ -53,7 +54,8 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
     private val openPullRequestService: DiffyOpenPullRequestService by lazy {
         DiffyOpenPullRequestService(
             accessTokenProvider = ApplicationManager.getApplication().service<DiffyAccessTokenProvider>(),
-            pullRequestClient = OkHttpBitbucketPullRequestClient()
+            pullRequestClient = OkHttpBitbucketPullRequestClient(),
+            pullRequestCache = DiffyPullRequestCache.getInstance()
         )
     }
 
@@ -68,6 +70,32 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
             repoSlug = repoSlug,
             prNumber = prNumber
         )
+    }
+
+    /**
+     * Asks Bitbucket whether a pull request is still open, without opening anything. Returns null when no organization
+     * URL is configured, so the state could not be checked at all. Call this from a coroutine.
+     */
+    suspend fun checkPullRequestOpen(workspace: String, repoSlug: String, prNumber: Long): PullRequestOpenCheckResult? {
+        val organizationUrl = DiffyConfigurationService.getInstance().organizationUrlOrNull()
+        if (organizationUrl == null) {
+            LOG.debug("Cannot check the state of pull request #$prNumber: no organization URL configured")
+            return null
+        }
+        val details = try {
+            openPullRequestService.pullRequestDetailsFor(
+                workspace = workspace,
+                repoSlug = repoSlug,
+                organizationUrl = organizationUrl,
+                pullRequestId = prNumber
+            )
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            LOG.debug("State check failed for pull request #$prNumber", exception)
+            return PullRequestOpenCheckResult.Failed(cause = exception)
+        }
+        return PullRequestOpenCheck.evaluate(details = details)
     }
 
     /** Registers [worktreePath] as being opened. Returns false when another open of that work tree is still running. */

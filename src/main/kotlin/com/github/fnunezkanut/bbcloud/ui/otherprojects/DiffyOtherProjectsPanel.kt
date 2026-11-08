@@ -21,6 +21,8 @@ import com.github.fnunezkanut.bbcloud.bitbucket.DiffyReviewQueueService
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketPullRequestClient
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequest
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequestListResult
+import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.DiffyBranchCheckoutService
 import com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService
@@ -101,7 +103,8 @@ class DiffyOtherProjectsPanel(
     /** Re-checks with Bitbucket whether a pull request is still open at click time, keyed by the row's workspace and slug. */
     private val openPullRequestService = DiffyOpenPullRequestService(
         accessTokenProvider = ApplicationManager.getApplication().service<DiffyAccessTokenProvider>(),
-        pullRequestClient = OkHttpBitbucketPullRequestClient()
+        pullRequestClient = OkHttpBitbucketPullRequestClient(),
+        pullRequestCache = DiffyPullRequestCache.getInstance()
     )
 
     /** Switches the current checkout off a colliding PR branch; used only when the colliding clone is this window's own. */
@@ -259,8 +262,16 @@ class DiffyOtherProjectsPanel(
     }
 
     /** See [WorkspacePullRequestsLoader.loadWorkspacePullRequests]. */
-    fun loadWorkspacePullRequests(excludedRepoSlug: String?, coroutineScope: CoroutineScope) {
-        workspacePullRequestsLoader.loadWorkspacePullRequests(excludedRepoSlug = excludedRepoSlug, coroutineScope = coroutineScope)
+    fun loadWorkspacePullRequests(
+        excludedRepoSlug: String?,
+        coroutineScope: CoroutineScope,
+        refresh: PullRequestCacheRefresh = PullRequestCacheRefresh.IfStale
+    ) {
+        workspacePullRequestsLoader.loadWorkspacePullRequests(
+            excludedRepoSlug = excludedRepoSlug,
+            coroutineScope = coroutineScope,
+            refresh = refresh
+        )
     }
 
     /** The shared open flow. It also guards against duplicate opens of the same worktree path. */
@@ -1114,16 +1125,43 @@ private class ServiceWorkspacePullRequestsDataSource(
         return configurationService.repoAvatarUrlsForCurrentWorkspace()
     }
 
-    override suspend fun listAuthored(organizationUrl: String, excludedRepoSlug: String?): AuthoredPullRequestListResult {
-        return authoredPullRequestService.listAuthoredPullRequests(organizationUrl = organizationUrl, excludedRepoSlug = excludedRepoSlug)
+    override suspend fun listAuthored(organizationUrl: String, excludedRepoSlug: String?, refresh: PullRequestCacheRefresh): AuthoredPullRequestListResult {
+        return authoredPullRequestService.listAuthoredPullRequests(
+            organizationUrl = organizationUrl,
+            excludedRepoSlug = excludedRepoSlug,
+            refresh = refresh
+        )
     }
 
-    override suspend fun listReviewing(organizationUrl: String, excludedRepoSlug: String?, repoSlugs: List<String>): ReviewingPullRequestListResult {
+    override suspend fun listReviewing(
+        organizationUrl: String,
+        excludedRepoSlug: String?,
+        repoSlugs: List<String>,
+        refresh: PullRequestCacheRefresh
+    ): ReviewingPullRequestListResult {
         return reviewQueueService.listReviewingPullRequests(
             organizationUrl = organizationUrl,
             excludedRepoSlug = excludedRepoSlug,
-            repoSlugs = repoSlugs
+            repoSlugs = repoSlugs,
+            refresh = refresh
         )
+    }
+
+    /**
+     * The Workspace Refresh re-scan: carries over the watched choices and only re-checks what the scan finds. Failures are
+     * logged and the stored set stays in use, so the pull request load goes on.
+     */
+    override suspend fun recheckWatchedProjects() {
+        LOG.info("User requested Workspace refresh; re-checking watched projects")
+        val result = configurationService.rescanWatchedProjects(clearFirst = false)
+        LOG.info(
+            "Watched projects re-check finished: ${result::class.simpleName}, " +
+                "${configurationService.watchedRepoSlugsForCurrentWorkspace().size} watched"
+        )
+    }
+
+    private companion object {
+        private val LOG = logger<ServiceWorkspacePullRequestsDataSource>()
     }
 }
 

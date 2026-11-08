@@ -114,6 +114,8 @@ import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 /** Owns the pull-request detail state and requests for one editor tab. */
@@ -372,6 +374,7 @@ class DiffyPullRequestEditorSession(
                         return@invokeOnEdt
                     }
                     val summary = details.summary
+                    rememberRecentDetails(pullRequestId = summary.id, details = details)
                     file.setPullRequestSummary(summary)
                     file.putUserData(DiffyPullRequestVirtualFile.REPOSITORY_WEB_URL_KEY, summary.webUrl)
                     file.putUserData(DiffyPullRequestVirtualFile.BRANCH_NAME_KEY, summary.sourceBranch)
@@ -592,6 +595,7 @@ class DiffyPullRequestEditorSession(
                 repositoryWebUrl = summary.webUrl
                 branchName = summary.sourceBranch
                 organizationUrl = url
+                rememberRecentDetails(pullRequestId = summary.id, details = details)
                 // Apply the reveal asked for by this reload, plus any reveal remembered from a reload that overlapped it.
                 val revealActivity = revealNewestActivity || pendingRevealNewestActivity
                 pendingRevealNewestActivity = false
@@ -789,10 +793,51 @@ class DiffyPullRequestEditorSession(
         }
     }
 
-    private fun pollPullRequestState() {
+    /**
+     * The details most recently read for this editor. A follow-up load of the same pull request within
+     * [DETAILS_REUSE_WINDOW] reuses them instead of asking Bitbucket again. Touched on the EDT only.
+     */
+    private var recentDetails: RecentDetails? = null
+
+    private data class RecentDetails(val pullRequestId: Long, val details: PullRequestDetails, val fetchedAt: TimeSource.Monotonic.ValueTimeMark)
+
+    private fun rememberRecentDetails(pullRequestId: Long, details: PullRequestDetails) {
+        recentDetails = RecentDetails(pullRequestId = pullRequestId, details = details, fetchedAt = TimeSource.Monotonic.markNow())
+    }
+
+    /**
+     * Polls the pull request state, unless another path already read it within [POLL_SKIP_IF_REFRESHED_WITHIN]. Every
+     * poll that runs goes through the service, which also refreshes the cache entry.
+     */
+    private suspend fun pollPullRequestState() {
         val pullRequestId = displayedPullRequestId ?: return
-        if (!loadPullRequestDetails(pullRequestId = pullRequestId, refresh = DetailsRefresh.BackgroundPoll)) {
+        val basePath = project.basePath
+        val url = organizationUrl ?: configurationService.organizationUrlOrNull()
+        if (basePath == null || url == null) {
             LOG.debug("Skipping pull-request state poll for #$pullRequestId; project base path or organization URL is unavailable")
+            return
+        }
+        val age = cachedDetailsAgeOrNull(projectBasePath = basePath, organizationUrl = url, pullRequestId = pullRequestId)
+        if (shouldSkipBackgroundPoll(age = age, window = POLL_SKIP_IF_REFRESHED_WITHIN)) {
+            LOG.debug("Skipping pull-request state poll for #$pullRequestId; its details were read $age ago")
+            return
+        }
+        loadPullRequestDetails(pullRequestId = pullRequestId, refresh = DetailsRefresh.BackgroundPoll)
+    }
+
+    /** A failed age lookup only means the poll runs, so it is logged and treated as unknown. */
+    private suspend fun cachedDetailsAgeOrNull(projectBasePath: String, organizationUrl: String, pullRequestId: Long): Duration? {
+        return try {
+            openPullRequestService.cachedDetailsAge(
+                projectBasePath = projectBasePath,
+                organizationUrl = organizationUrl,
+                pullRequestId = pullRequestId
+            )
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            LOG.debug("Could not read the cached age of pull request #$pullRequestId", exception)
+            null
         }
     }
 
@@ -806,7 +851,7 @@ class DiffyPullRequestEditorSession(
         LOG.debug("Stopped pull-request state poller for #${displayedPullRequestId ?: boundPullRequestId}")
     }
 
-    private enum class DetailsRefresh {
+    internal enum class DetailsRefresh {
         Initial,
         AfterAction,
         ReviewersOnly,
@@ -1197,6 +1242,19 @@ class DiffyPullRequestEditorSession(
     private fun loadPullRequestDetails(pullRequestId: Long, refresh: DetailsRefresh): Boolean {
         val basePath = project.basePath ?: return false
         val url = organizationUrl ?: configurationService.organizationUrlOrNull() ?: return false
+        val recent = recentDetails
+        if (recent != null && canReuseRecentDetails(
+                refresh = refresh,
+                recentPullRequestId = recent.pullRequestId,
+                pullRequestId = pullRequestId,
+                elapsed = recent.fetchedAt.elapsedNow(),
+                window = DETAILS_REUSE_WINDOW
+            )
+        ) {
+            LOG.debug("Reusing the details of pull request #$pullRequestId read moments ago")
+            applyPullRequestDetails(pullRequestId = pullRequestId, details = recent.details, refresh = refresh)
+            return true
+        }
         coroutineScope.launch {
             val details = openPullRequestService.pullRequestDetails(
                 projectBasePath = basePath,
@@ -1216,6 +1274,7 @@ class DiffyPullRequestEditorSession(
             finishDetailUpdate(refresh)
             return
         }
+        rememberRecentDetails(pullRequestId = pullRequestId, details = details)
         displayedSummary = details.summary
         evaluatePullRequestState(details.summary)
         if (isTakenOver) {
@@ -1694,6 +1753,32 @@ class DiffyPullRequestEditorSession(
         private val LOG = logger<DiffyPullRequestEditorSession>()
         private const val NOTIFICATION_GROUP_ID = "Diffy"
         private const val POLL_INTERVAL_MS = 30_000L
+
+        /** A background poll is skipped when another path read the pull request this recently. */
+        private val POLL_SKIP_IF_REFRESHED_WITHIN = 15.seconds
+
+        /** A follow-up load of the same pull request within this window reuses the details already read. */
+        private val DETAILS_REUSE_WINDOW = 2.seconds
+
+        /** Whether a background poll can be skipped, because the cache entry was read less than [window] ago. Unknown or future ages never skip. */
+        internal fun shouldSkipBackgroundPoll(age: Duration?, window: Duration): Boolean {
+            return age != null && !age.isNegative() && age < window
+        }
+
+        /** Only an `Initial` load reuses details, and only for the same pull request read less than [window] ago. */
+        internal fun canReuseRecentDetails(
+            refresh: DetailsRefresh,
+            recentPullRequestId: Long?,
+            pullRequestId: Long,
+            elapsed: Duration?,
+            window: Duration
+        ): Boolean {
+            return refresh == DetailsRefresh.Initial &&
+                recentPullRequestId == pullRequestId &&
+                elapsed != null &&
+                !elapsed.isNegative() &&
+                elapsed < window
+        }
     }
 }
 

@@ -10,17 +10,27 @@ import java.io.IOException
  */
 internal object WorktreesHelpMarkdown {
     const val MARKDOWN_RESOURCE = "/help/worktrees.md"
+    const val NOTIFICATIONS_MARKDOWN_RESOURCE = "/help/notifications.md"
 
     private val LOG = logger<WorktreesHelpMarkdown>()
 
-    /** Returns the help page markdown, or a localized message when the resource is missing or cannot be read. */
+    /** Returns the Work Trees help page markdown, or a localized message when it is missing or cannot be read. */
     fun load(): String {
-        val bytes = readResourceBytes(resourcePath = MARKDOWN_RESOURCE)
+        return load(resourcePath = MARKDOWN_RESOURCE, unavailableKey = "worktreesHelp.unavailable")
+    }
+
+    /** Returns the Notifications help page markdown, or a localized message when it is missing or cannot be read. */
+    fun loadNotifications(): String {
+        return load(resourcePath = NOTIFICATIONS_MARKDOWN_RESOURCE, unavailableKey = "notificationsHelp.unavailable")
+    }
+
+    private fun load(resourcePath: String, unavailableKey: String): String {
+        val bytes = readResourceBytes(resourcePath = resourcePath)
         if (bytes == null) {
-            LOG.warn("The Work Trees help page is missing from the plugin resources: $MARKDOWN_RESOURCE")
-            return DiffyBundle.message("worktreesHelp.unavailable")
+            LOG.warn("The help page is missing from the plugin resources: $resourcePath")
+            return DiffyBundle.message(unavailableKey)
         }
-        LOG.debug("Loaded the Work Trees help page (${bytes.size} bytes)")
+        LOG.debug("Loaded the help page $resourcePath (${bytes.size} bytes)")
         return bytes.toString(Charsets.UTF_8)
     }
 
