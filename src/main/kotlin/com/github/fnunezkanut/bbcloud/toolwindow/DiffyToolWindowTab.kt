@@ -1,7 +1,7 @@
 package com.github.fnunezkanut.bbcloud.toolwindow
 
-/** The five permanent tabs of the Diffy - Bitbucket PR Review tool window, in header order. */
-enum class DiffyToolWindowTab { ProjectPrs, WorkspacePrs, WorkspaceWatchedProjects, RecentProjects, Settings }
+/** The six permanent tabs of the Diffy - Bitbucket PR Review tool window, in header order. */
+enum class DiffyToolWindowTab { ProjectPrs, WorkspacePrs, WorkspaceWatchedProjects, RecentProjects, Notifications, Settings }
 
 object DiffyToolWindowTabResolver {
     /**

@@ -36,7 +36,7 @@ import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.skia.Image as SkiaImage
 
 /**
- * Renders the Work Trees help page. Prose goes through the Jewel Markdown composable with GFM tables enabled, and each
+ * Renders the help page. Prose goes through the Jewel Markdown composable with GFM tables enabled, and each
  * picture is drawn with Compose from the classpath bytes. The page is selectable and scrolls vertically.
  */
 @Composable
@@ -111,7 +111,7 @@ private fun decodeWorktreesHelpPicture(resourcePath: String): ImageBitmap? {
 }
 
 private fun openHelpLink(url: String) {
-    LOG.info("User opened a link on the Work Trees help page in the browser")
+    LOG.info("User opened a link on a help page in the browser")
     BrowserUtil.browse(url)
 }
 

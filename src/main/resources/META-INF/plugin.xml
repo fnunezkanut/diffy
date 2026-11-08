@@ -19,12 +19,16 @@
             <li>✏️ <b>Modified File View</b> and <b>Diff View</b> surface existing comments and let you add line-level feedback from the gutter or context menu, view add/remove counts, and mark files reviewed.</li>
             <li>📝 <b>Rendered Markdown side by side diff view</b> shows the rendered result of changed Markdown files next to each other, so documentation changes can be reviewed as readers will see them.</li>
             <li>🚀 <b>Create Pull Request</b> walks you through title, description, source and destination branches, reviewers (including defaults), remote cleanup after merge, then opens the new PR in a work tree window.</li>
+            <li>* 🔔 **Notifications** lists the Bitbucket notifications captured by the Diffy Chrome extension, newest first, with time, type, pull request, actor, and message</li>
         </ul>
     ]]></description>
 
     <change-notes><![CDATA[
         <ul>
             <li>Changed: renamed plugin to "Diffy - Bitbucket PR Review"</li>
+            <li>Added: the Chrome extension (1.10.0) shows a floating "Diffy sync" button at the bottom left of bitbucket.org pages for signed-in users; it also auto syncs every 15 minute timer</li>
+            <li>Added: a Notifications tab before Settings shows the Bitbucket notifications the Chrome extension captured, newest first</li>
+            <li>Added: the Chrome extension's pull request data refreshes the plugin's pull request cache (comment counts, titles, draft flag, approvals, merged or declined)</li>
         </ul>
     ]]></change-notes>
 
@@ -50,6 +54,10 @@
         <applicationService
                 serviceImplementation="com.github.fnunezkanut.bbcloud.review.DiffyKnownUsersState"/>
         <applicationService
+                serviceImplementation="com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCacheState"/>
+        <applicationService
+                serviceImplementation="com.github.fnunezkanut.bbcloud.external.DiffyNotificationsState"/>
+        <applicationService
                 serviceInterface="com.github.fnunezkanut.bbcloud.credentials.DiffyCredentialStore"
                 serviceImplementation="com.github.fnunezkanut.bbcloud.credentials.PasswordSafeDiffyCredentialStore"/>
         <applicationService
@@ -57,6 +65,10 @@
                 serviceImplementation="com.github.fnunezkanut.bbcloud.auth.DiffyAuthService"/>
         <applicationService
                 serviceImplementation="com.github.fnunezkanut.bbcloud.auth.DiffyOAuthLoginService"/>
+        <applicationService
+                serviceImplementation="com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotStore"/>
+        <applicationService
+                serviceImplementation="com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotCacheService"/>
         <notificationGroup id="Diffy"
                            displayType="BALLOON"
                            key="notification.group.diffy"/>
@@ -79,10 +91,12 @@
         <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.git.DiffyPrBranchSyncService"/>
         <postStartupActivity implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorStartupActivity"/>
         <postStartupActivity implementation="com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContextStartupActivity"/>
+        <postStartupActivity implementation="com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotCacheStartupActivity"/>
         <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.diff.DiffyPullRequestDiffCommentService"/>
         <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorOpener"/>
         <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.create.DiffyNewPullRequestEditorOpener"/>
         <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpEditorOpener"/>
+        <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyNotificationsHelpEditorOpener"/>
         <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.markdowndiff.DiffyMarkdownDiffEditorOpener"/>
         <projectService serviceImplementation="com.github.fnunezkanut.bbcloud.ui.DiffyToolWindowPanel"/>
         <projectConfigurable
@@ -101,6 +115,8 @@
         <fileEditorProvider
                 implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpFileEditorProvider"/>
         <fileEditorProvider
+                implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyNotificationsHelpFileEditorProvider"/>
+        <fileEditorProvider
                 implementationClass="com.github.fnunezkanut.bbcloud.ui.markdowndiff.DiffyMarkdownDiffFileEditorProvider"/>
         <editorTabTitleProvider
                 implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorTabTitleProvider"/>
@@ -112,6 +128,9 @@
                   fieldName="INSTANCE"/>
         <fileType name="Bitbucket Cloud Work Trees Help"
                   implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpFileType"
+                  fieldName="INSTANCE"/>
+        <fileType name="Bitbucket Cloud Notifications Help"
+                  implementationClass="com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyNotificationsHelpFileType"
                   fieldName="INSTANCE"/>
         <fileType name="Bitbucket Cloud Markdown Diff"
                   implementationClass="com.github.fnunezkanut.bbcloud.ui.markdowndiff.DiffyMarkdownDiffFileType"
@@ -128,6 +147,10 @@
                 implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.DiffyPullRequestProjectViewRefreshStartupActivity"/>
         <httpRequestHandler
                 implementation="com.github.fnunezkanut.bbcloud.external.DiffyOpenPullRequestRestService"/>
+        <httpRequestHandler
+                implementation="com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotRestService"/>
+        <httpRequestHandler
+                implementation="com.github.fnunezkanut.bbcloud.external.DiffyWorkspaceRestService"/>
     </extensions>
 
     <actions>

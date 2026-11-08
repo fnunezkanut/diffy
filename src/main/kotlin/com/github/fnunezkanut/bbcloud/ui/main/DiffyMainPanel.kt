@@ -22,9 +22,12 @@ import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyProjectRepositoryLinkService
 import com.github.fnunezkanut.bbcloud.bitbucket.ProjectRepositoryStatus
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestListResult
+import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestListSource
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestOrdering
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequest
+import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.BranchCheckoutResult
 import com.github.fnunezkanut.bbcloud.git.CommitMessageParser
@@ -86,6 +89,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JComponent
+import kotlin.time.TimeSource
 
 /**
  * The cards the single Current Project tab root can show.
@@ -196,6 +200,9 @@ class DiffyMainPanel(
     private var repositoryWebUrl: String? = null
     private var repositoryAvatarUrl: String? = null
     private var currentRepository: ResolvedProjectRepository? = null
+
+    /** The last Found verification of the project's repository; reused by automatic loads for a few minutes. EDT only. */
+    private var lastVerified: VerifiedRepository? = null
     private val worktreeService = DiffyWorktreeService.getInstance()
     private val branchCheckoutService = DiffyBranchCheckoutService()
 
@@ -235,7 +242,7 @@ class DiffyMainPanel(
         }
     )
     private val projectHeaderViewModel = ProjectStatusHeaderViewModel(
-        onRefreshRequested = { triggerLoadPullRequests(source = "refresh button") },
+        onRefreshRequested = { refreshCurrentProject(source = "refresh button") },
         onCreatePullRequestRequested = { openNewPullRequestEditor() }
     )
 
@@ -317,14 +324,70 @@ class DiffyMainPanel(
                 return@launch
             }
             val resolvedRepository = resolveCurrentRepository(project = project)
-            val status = projectRepositoryLinkService.resolveAndVerify(
+            val reusable = lastVerified?.takeIf { verified ->
+                canReuseVerification(
+                    verified = verified,
+                    projectBasePath = project.basePath,
+                    organizationUrl = organizationUrl,
+                    elapsed = verified.verifiedAt.elapsedNow()
+                )
+            }
+            val status = reusable?.status ?: projectRepositoryLinkService.resolveAndVerify(
                 projectBasePath = project.basePath,
                 organizationUrl = organizationUrl
             )
             ApplicationManager.getApplication().invokeLater {
                 currentRepository = resolvedRepository
-                applyProjectStatus(status)
+                if (reusable == null) {
+                    rememberVerification(status = status, projectBasePath = project.basePath, organizationUrl = organizationUrl)
+                }
+                applyProjectStatus(status = status, refresh = PullRequestCacheRefresh.IfStale)
             }
+        }
+    }
+
+    /**
+     * The Refresh button of the Current Project tab. It verifies the repository again, because the remote or the
+     * Bitbucket repository may have changed, then reloads the pull requests from Bitbucket. A repository that no longer
+     * verifies drops its cached listing, so stale rows are not served for it.
+     */
+    private fun refreshCurrentProject(source: String) {
+        LOG.info("User requested pull requests via $source")
+        val project = boundProject ?: return
+        val coroutineScope = boundCoroutineScope ?: return
+        val organizationUrl = configurationService.organizationUrlOrNull() ?: return
+        projectHeaderViewModel.setRefreshEnabled(false)
+        coroutineScope.launch {
+            val resolvedRepository = resolveCurrentRepository(project = project)
+            val status = projectRepositoryLinkService.resolveAndVerify(
+                projectBasePath = project.basePath,
+                organizationUrl = organizationUrl
+            )
+            if (status !is ProjectRepositoryStatus.Found && resolvedRepository != null) {
+                DiffyPullRequestCache.getInstance().dropListingsForRepo(
+                    workspace = resolvedRepository.workspace,
+                    repoSlug = resolvedRepository.repoSlug
+                )
+            }
+            ApplicationManager.getApplication().invokeLater {
+                currentRepository = resolvedRepository
+                rememberVerification(status = status, projectBasePath = project.basePath, organizationUrl = organizationUrl)
+                applyProjectStatus(status = status, refresh = PullRequestCacheRefresh.Force)
+            }
+        }
+    }
+
+    /** Remembers a Found verification for reuse, and forgets any earlier one when the repository no longer verifies. */
+    private fun rememberVerification(status: ProjectRepositoryStatus, projectBasePath: String?, organizationUrl: String) {
+        lastVerified = if (status is ProjectRepositoryStatus.Found) {
+            VerifiedRepository(
+                projectBasePath = projectBasePath,
+                organizationUrl = organizationUrl,
+                status = status,
+                verifiedAt = TimeSource.Monotonic.markNow()
+            )
+        } else {
+            null
         }
     }
 
@@ -341,8 +404,10 @@ class DiffyMainPanel(
         showCard(ViewCard.NotConfigured)
     }
 
-    private fun applyProjectStatus(status: ProjectRepositoryStatus) {
+    private fun applyProjectStatus(status: ProjectRepositoryStatus, refresh: PullRequestCacheRefresh) {
         LOG.debug("Project repository status resolved: $status")
+        // The Refresh button may have disabled itself for the verification; a status other than Found never reloads.
+        projectHeaderViewModel.setRefreshEnabled(true)
         // The only place that leaves the Checking card. The listing is revealed for a verified Bitbucket repository only.
         showCard(viewCardFor(status))
         when (status) {
@@ -359,7 +424,7 @@ class DiffyMainPanel(
                 )
                 projectHeaderViewModel.setRefreshVisible(visible = true)
                 projectHeaderViewModel.setCreatePullRequestVisible(visible = true)
-                loadPullRequests()
+                loadPullRequests(refresh = refresh)
             }
             is ProjectRepositoryStatus.NotFound -> {
                 val message = DiffyBundle.message("main.project.notFound", status.repositoryWebUrl)
@@ -396,9 +461,10 @@ class DiffyMainPanel(
         projectCenteredStatus.value = status
     }
 
+    /** A user-initiated load, such as after a branch switch or a created pull request, always asks Bitbucket. */
     private fun triggerLoadPullRequests(source: String) {
         LOG.info("User requested pull requests via $source")
-        loadPullRequests()
+        loadPullRequests(refresh = PullRequestCacheRefresh.Force)
     }
 
     /**
@@ -416,7 +482,7 @@ class DiffyMainPanel(
         )
     }
 
-    private fun loadPullRequests() {
+    private fun loadPullRequests(refresh: PullRequestCacheRefresh) {
         val project = boundProject ?: return
         val coroutineScope = boundCoroutineScope ?: return
         val organizationUrl = configurationService.organizationUrlOrNull() ?: return
@@ -432,7 +498,8 @@ class DiffyMainPanel(
             )
             val result = openPullRequestService.listRecentPullRequests(
                 projectBasePath = project.basePath,
-                organizationUrl = organizationUrl
+                organizationUrl = organizationUrl,
+                refresh = refresh
             )
             ApplicationManager.getApplication().invokeLater {
                 applyPullRequestListResult(
@@ -484,7 +551,12 @@ class DiffyMainPanel(
                     currentUserUuid = currentUserUuid,
                     coroutineScope = coroutineScope
                 )
-                cleanResolvedWorktrees(resolvedPrNumbers = listing.closed.map { summary -> summary.id }.toSet())
+                // Worktree cleanup needs the live open set. A listing served from the cache is not proof of it.
+                if (result.source == PullRequestListSource.Live) {
+                    cleanResolvedWorktrees(resolvedPrNumbers = listing.closed.map { summary -> summary.id }.toSet())
+                } else {
+                    LOG.debug("Skipping worktree cleanup: the pull request listing came from the cache")
+                }
             }
             is PullRequestListResult.Failed -> {
                 if (result.cause != null) {

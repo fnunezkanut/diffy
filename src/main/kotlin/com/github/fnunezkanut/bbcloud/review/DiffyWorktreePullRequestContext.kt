@@ -18,6 +18,7 @@ import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestInlineCommentIndex
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestPathMatcher
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
+import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.BranchDiffResult
 import com.github.fnunezkanut.bbcloud.git.DiffyPrBranchSyncService
@@ -960,7 +961,8 @@ class DiffyWorktreePullRequestContext(private val project: Project, private val 
         return DiffyOpenPullRequestService(
             accessTokenProvider = application.service<DiffyAccessTokenProvider>(),
             pullRequestClient = OkHttpBitbucketPullRequestClient(),
-            configurationService = configurationService
+            configurationService = configurationService,
+            pullRequestCache = DiffyPullRequestCache.getInstance()
         )
     }
 

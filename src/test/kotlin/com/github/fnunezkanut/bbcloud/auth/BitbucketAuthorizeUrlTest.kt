@@ -25,7 +25,7 @@ class BitbucketAuthorizeUrlTest {
             url.encodedPath shouldBe "/site/oauth2/authorize"
             url.queryParameter(DiffyConsumerMaterial.primaryField()) shouldBe DiffyConsumerMaterial.primary()
             url.queryParameter("response_type") shouldBe "code"
-            url.queryParameter("redirect_uri") shouldBe "http://127.0.0.1:42424/bbcloud"
+            url.queryParameter("redirect_uri") shouldBe "http://127.0.0.1:42424/diffy"
             url.queryParameter("state") shouldBe "state-value"
             url.queryParameter("code_challenge") shouldBe "challenge-value"
             url.queryParameter("code_challenge_method") shouldBe "S256"

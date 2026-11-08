@@ -10,6 +10,9 @@ import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketWorkspaceClient
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketRepositoryClient
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketWorkspaceClient
 import com.github.fnunezkanut.bbcloud.bitbucket.WorkspaceListResult
+import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
+import com.github.fnunezkanut.bbcloud.cache.NoOpPullRequestCacheStore
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheStore
 import com.github.fnunezkanut.bbcloud.credentials.DiffyCredentialStore
 import com.github.fnunezkanut.bbcloud.project.DiffyWatchedProjectsDiscoveryService
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
@@ -34,7 +37,9 @@ class DiffyConfigurationService(
     private val workspaceClient: BitbucketWorkspaceClient,
     private val discoveryService: DiffyWatchedProjectsDiscoveryService,
     private val accessTokenProvider: DiffyAccessTokenProvider,
-    private val credentialValidator: DiffyCredentialValidator
+    private val credentialValidator: DiffyCredentialValidator,
+    /** Cleared on a workspace or account change, and told when a watched project stops being watched. Production passes the real cache. */
+    private val pullRequestCache: PullRequestCacheStore = NoOpPullRequestCacheStore
 ) {
     /**
      * Serializes [rescanWatchedProjects] so the scan triggers (a chosen projects directory, a workspace slug change or
@@ -127,6 +132,9 @@ class DiffyConfigurationService(
         credentialValidator.invalidate()
 
         val slugChanged = oldSlug != normalizedSlug
+        if (slugChanged) {
+            pullRequestCache.clear()
+        }
         thisLogger().info(
             "OAuth setup saved: workspaceSlug=$normalizedSlug, slugChanged=$slugChanged, oauthPreviouslyStored=$oauthPreviouslyStored"
         )
@@ -174,6 +182,9 @@ class DiffyConfigurationService(
         credentialValidator.invalidate()
 
         val slugChanged = oldSlug != normalizedSlug
+        if (slugChanged) {
+            pullRequestCache.clear()
+        }
         thisLogger().info(
             "Setup saved: workspaceSlug=$normalizedSlug, tokenUpdated=$tokenUpdated, tokenChanged=$tokenChanged, slugChanged=$slugChanged"
         )
@@ -293,6 +304,7 @@ class DiffyConfigurationService(
         credentialStore.clearToken()
         credentialValidator.invalidate()
         clearWatchedProjects()
+        pullRequestCache.clear()
         thisLogger().info("Diffy - Bitbucket PR Review API token reset")
     }
 
@@ -314,6 +326,7 @@ class DiffyConfigurationService(
         settings.organizationUrl = ""
         settings.projectsDirectory = ""
         clearWatchedProjects()
+        pullRequestCache.clear()
         // The PR list Exclude: filters are view preferences, not setup, so they are intentionally kept across a reset.
         thisLogger().info("Diffy - Bitbucket PR Review plugin settings fully reset")
     }
@@ -494,13 +507,33 @@ class DiffyConfigurationService(
     }
 
     fun replaceWatchedProjects(mappings: List<WatchedProjectMapping>) {
+        // Read the previous set before the write, so the repositories that stop being watched can be found.
+        val previouslyWatched = watchedSlugsOf(mappings = settings.watchedProjects)
         settings.replaceWatchedProjects(mappings)
+        dropListingsForUnwatched(repoSlugs = previouslyWatched - watchedSlugsOf(mappings = mappings))
         thisLogger().info("Watched projects replaced: ${mappings.size} entries")
     }
 
     fun clearWatchedProjects() {
+        val previouslyWatched = watchedSlugsOf(mappings = settings.watchedProjects)
         settings.clearWatchedProjects()
+        dropListingsForUnwatched(repoSlugs = previouslyWatched)
         thisLogger().info("Watched projects cleared")
+    }
+
+    private fun watchedSlugsOf(mappings: List<WatchedProjectMapping>): Set<String> {
+        return mappings.filter { mapping -> mapping.watched }.map { mapping -> mapping.remoteRepoSlug }.toSet()
+    }
+
+    /** A repository that stops being watched must not show its reviewing listing from the cache. Its entries stay cached. */
+    private fun dropListingsForUnwatched(repoSlugs: Set<String>) {
+        if (repoSlugs.isEmpty()) {
+            return
+        }
+        val workspace = workspaceSlugOrNull() ?: return
+        repoSlugs.forEach { repoSlug ->
+            pullRequestCache.dropListingsForRepo(workspace = workspace, repoSlug = repoSlug)
+        }
     }
 
     /**
@@ -540,6 +573,7 @@ class DiffyConfigurationService(
             }
             if (clearFirst) {
                 clearWatchedProjects()
+                pullRequestCache.clear()
             }
 
             val result = discoveryService.discover(
@@ -633,7 +667,8 @@ class DiffyConfigurationService(
                 workspaceClient = OkHttpBitbucketWorkspaceClient(),
                 discoveryService = discoveryService,
                 accessTokenProvider = authService,
-                credentialValidator = authService.credentialValidator
+                credentialValidator = authService.credentialValidator,
+                pullRequestCache = DiffyPullRequestCache.getInstance()
             )
         }
     }

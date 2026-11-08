@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "capturedAt": "2026-11-07T19:10:00.000Z",
+    "workspaces": ["acme-workspace"],
+    "skippedNonBitbucket": 60
+  },
+  "pullRequests": [
+    {
+      "id": 101,
+      "workspace": "acme-workspace",
+      "repoSlug": "my-repo",
+      "repoFullName": "acme-workspace/my-repo",
+      "title": "PROJ-101 PROJ-102 Add retry to the sync job",
+      "titleTags": ["PROJ-101"],
+      "jiraKeys": ["PROJ-101", "PROJ-102"],
+      "jiraKeySource": "branch",
+      "url": "https://bitbucket.org/acme-workspace/my-repo/pull-requests/101",
+      "state": "OPEN",
+      "draft": false,
+      "author": { "displayName": "Jane Doe" },
+      "sourceBranch": "feature/PROJ-101-PROJ-102",
+      "destinationBranch": "main",
+      "createdOn": "2026-11-05T09:15:00.000000+00:00",
+      "updatedOn": "2026-11-07T19:06:10.612576+00:00",
+      "commentCount": 4,
+      "taskCount": 1,
+      "approvalCount": 1,
+      "changesRequestedCount": 0,
+      "myReviewState": "approved",
+      "reviewers": [
+        {
+          "displayName": "John Smith",
+          "accountId": "000000:11111111-1111-1111-1111-111111111111",
+          "uuid": "{11111111-1111-1111-1111-111111111111}",
+          "state": "approved",
+          "approved": true,
+          "participatedOn": "2026-11-06T10:00:00.000000+00:00"
+        },
+        {
+          "displayName": "Alex Example",
+          "accountId": "000000:22222222-2222-2222-2222-222222222222",
+          "uuid": "{22222222-2222-2222-2222-222222222222}",
+          "state": null,
+          "approved": false,
+          "participatedOn": null
+        }
+      ],
+      "otherParticipants": [
+        {
+          "displayName": "PR Ranger",
+          "accountId": null,
+          "uuid": "{33333333-3333-3333-3333-333333333333}",
+          "state": null,
+          "approved": false,
+          "participatedOn": "2026-11-06T10:05:00.000000+00:00"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "workspace": "acme-workspace",
+      "repoSlug": "my-repo",
+      "repoFullName": "acme-workspace/my-repo",
+      "title": "Draft: Refactor the parser",
+      "titleTags": [],
+      "jiraKeys": [],
+      "jiraKeySource": null,
+      "url": "https://bitbucket.org/acme-workspace/my-repo/pull-requests/102",
+      "state": "OPEN",
+      "draft": true,
+      "author": { "displayName": "Jane Doe" },
+      "sourceBranch": "refactor/parser",
+      "destinationBranch": "main",
+      "createdOn": "2026-11-06T08:00:00.000000+00:00",
+      "updatedOn": "2026-11-06T08:30:00.000000+00:00",
+      "commentCount": 0,
+      "taskCount": 0,
+      "approvalCount": 0,
+      "changesRequestedCount": 0,
+      "myReviewState": null,
+      "reviewers": [],
+      "otherParticipants": []
+    }
+  ],
+  "notificationEvents": [
+    {
+      "id": "event-1",
+      "occurredAt": "2026-11-06T17:30:44.112Z",
+      "category": "approval",
+      "templateId": "pullrequest_approved",
+      "readState": "unread",
+      "message": "John Smith approved your pull request",
+      "actor": { "displayName": "John Smith", "accountId": "000000:11111111-1111-1111-1111-111111111111", "isBot": false },
+      "pullRequest": {
+        "id": 101,
+        "repoSlug": "my-repo",
+        "title": "PROJ-101 PROJ-102 Add retry to the sync job",
+        "url": "https://bitbucket.org/acme-workspace/my-repo/pull-requests/101"
+      },
+      "onDiff": false,
+      "url": "https://bitbucket.org/acme-workspace/my-repo/pull-requests/101",
+      "groupId": "group-1",
+      "groupSize": 1
+    },
+    {
+      "id": "event-2",
+      "occurredAt": "2026-11-06T18:00:00.000Z",
+      "category": "bot_review_comment",
+      "templateId": "pullrequest_comment_created",
+      "readState": "unread",
+      "message": "Review Bot commented on your pull request",
+      "actor": {
+        "displayName": "Review Bot",
+        "accountId": "000000:44444444-4444-4444-4444-444444444444",
+        "isBot": true,
+        "botMatchedOn": "displayName"
+      },
+      "pullRequest": {
+        "id": 101,
+        "repoSlug": "my-repo",
+        "title": "PROJ-101 PROJ-102 Add retry to the sync job",
+        "url": "https://bitbucket.org/acme-workspace/my-repo/pull-requests/101"
+      },
+      "commentId": 897973569,
+      "onDiff": true,
+      "url": "https://bitbucket.org/acme-workspace/my-repo/pull-requests/101/diff#comment-897973569",
+      "groupId": "group-2",
+      "groupSize": 2
+    },
+    {
+      "id": "event-3",
+      "occurredAt": "2026-11-06T19:00:00.000Z",
+      "category": "something_new_from_bitbucket",
+      "templateId": "unknown_template",
+      "readState": "read",
+      "message": "Something happened",
+      "actor": { "displayName": "Jane Doe", "isBot": false },
+      "onDiff": false,
+      "groupSize": 1
+    }
+  ]
+}

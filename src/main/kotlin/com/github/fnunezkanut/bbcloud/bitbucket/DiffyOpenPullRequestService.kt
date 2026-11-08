@@ -2,6 +2,15 @@ package com.github.fnunezkanut.bbcloud.bitbucket
 
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.auth.DiffyAccessTokenProvider
+import com.github.fnunezkanut.bbcloud.cache.CachedListing
+import com.github.fnunezkanut.bbcloud.cache.CachedPullRequest
+import com.github.fnunezkanut.bbcloud.cache.CachedPullRequestMapper
+import com.github.fnunezkanut.bbcloud.cache.CachedReviewer
+import com.github.fnunezkanut.bbcloud.cache.NoOpPullRequestCacheStore
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheKey
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheStore
+import com.github.fnunezkanut.bbcloud.cache.PullRequestListingIds
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.BitbucketGitRemoteReader
 import com.github.fnunezkanut.bbcloud.project.ProjectRepositoryResolver
@@ -18,6 +27,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
+import kotlin.time.Duration
 
 class DiffyOpenPullRequestService(
     private val accessTokenProvider: DiffyAccessTokenProvider,
@@ -25,7 +35,9 @@ class DiffyOpenPullRequestService(
     private val readRemoteUrl: (Path) -> String? = BitbucketGitRemoteReader::readRemoteUrl,
     private val configurationService: DiffyConfigurationService? = null,
     /** Read only when a comment mentions an account, so tests and callers without mentions never touch the IDE application. */
-    private val userNameCache: () -> DiffyUserDisplayNameCache = { DiffyUserDisplayNameCache.getInstance() }
+    private val userNameCache: () -> DiffyUserDisplayNameCache = { DiffyUserDisplayNameCache.getInstance() },
+    /** Production callers pass [DiffyPullRequestCache.getInstance]. The default never stores anything, so tests run without an IDE. */
+    private val pullRequestCache: PullRequestCacheStore = NoOpPullRequestCacheStore
 ) {
     @Volatile
     private var cachedCurrentUser: CachedCurrentUser? = null
@@ -36,23 +48,79 @@ class DiffyOpenPullRequestService(
     /** Serializes the slow mention lookups, so concurrent callers (Activity card and inline cards) fetch each account once. */
     private val mentionLookupMutex = Mutex()
 
-    suspend fun listRecentPullRequests(projectBasePath: String?, organizationUrl: String): PullRequestListResult {
+    /**
+     * Lists the project repository's recent pull requests, newest first. An [PullRequestCacheRefresh.IfStale] load
+     * returns the stored listing with no request while it is fresh. Every fetched listing is stored. When a request
+     * fails, the last stored listing is returned with [PullRequestListSource.StaleFallback], if one exists.
+     */
+    suspend fun listRecentPullRequests(
+        projectBasePath: String?,
+        organizationUrl: String,
+        refresh: PullRequestCacheRefresh = PullRequestCacheRefresh.IfStale
+    ): PullRequestListResult {
         val target = resolveTarget(
             operation = "list pull requests",
             projectBasePath = projectBasePath,
             organizationUrl = organizationUrl
         ) ?: return PullRequestListResult.Failed()
 
+        val listingId = PullRequestListingIds.project(workspace = target.workspace, repoSlug = target.repoSlug)
+        if (refresh == PullRequestCacheRefresh.IfStale) {
+            val fresh = pullRequestCache.freshListing(listingId = listingId)
+            if (fresh != null) {
+                LOG.debug("Serving ${fresh.entries.size} cached pull request(s) for ${target.workspace}/${target.repoSlug}")
+                return PullRequestListResult.Success(pullRequests = summariesOf(listing = fresh), source = PullRequestListSource.Cache)
+            }
+        }
+
         LOG.debug("Listing pull requests for ${target.workspace}/${target.repoSlug}")
         // Bitbucket already answers newest-updated first; grouping and ordering for display belong to the panel.
-        return pullRequestClient.listRecentPullRequests(
+        val result = pullRequestClient.listRecentPullRequests(
             workspace = target.workspace,
             repoSlug = target.repoSlug,
             apiToken = target.apiToken
         )
+        return when (result) {
+            is PullRequestListResult.Failed -> {
+                staleListingOrFailure(listingId = listingId, failure = result)
+            }
+            is PullRequestListResult.Success -> {
+                storeListing(
+                    workspace = target.workspace,
+                    repoSlug = target.repoSlug,
+                    listingId = listingId,
+                    listed = result.pullRequests
+                )
+                result
+            }
+        }
     }
 
-    /** Lists the complete open pull-request set for safe worktree pruning, distinct from the capped display listing. */
+    private fun storeListing(workspace: String, repoSlug: String, listingId: String, listed: List<PullRequestSummary>) {
+        pullRequestCache.upsertAll(workspace = workspace, repoSlug = repoSlug, summaries = listed)
+        pullRequestCache.recordListing(
+            listingId = listingId,
+            keys = listed.map { summary -> PullRequestCacheKey.of(workspace = workspace, repoSlug = repoSlug, prNum = summary.id) },
+            isTruncated = false
+        )
+    }
+
+    /** Serves the last stored listing after a failed request. Without one, the failure goes back unchanged. */
+    private fun staleListingOrFailure(listingId: String, failure: PullRequestListResult.Failed): PullRequestListResult {
+        val stale = pullRequestCache.listing(listingId = listingId) ?: return failure
+        LOG.info("Could not refresh pull requests for $listingId; showing ${stale.entries.size} cached pull request(s)")
+        return PullRequestListResult.Success(pullRequests = summariesOf(listing = stale), source = PullRequestListSource.StaleFallback)
+    }
+
+    private fun summariesOf(listing: CachedListing): List<PullRequestSummary> {
+        return listing.entries.map { entry -> CachedPullRequestMapper.toSummary(entry = entry) }
+    }
+
+    /**
+     * Lists the complete open pull-request set for safe worktree pruning, distinct from the capped display listing.
+     * This is always live: it never reads the cache and never writes to it (R9), because its summaries carry no
+     * participants and pruning decisions must use Bitbucket's current answer.
+     */
     suspend fun listAllOpenPullRequests(projectBasePath: String?, organizationUrl: String): PullRequestListResult {
         val target = resolveTarget(
             operation = "list all open pull requests",
@@ -416,12 +484,21 @@ class DiffyOpenPullRequestService(
         ) ?: return CreatePullRequestResult.Failed()
 
         LOG.debug("Creating a pull request for ${target.workspace}/${target.repoSlug} (draft=${request.isDraft})")
-        return pullRequestClient.createPullRequest(
+        val result = pullRequestClient.createPullRequest(
             workspace = target.workspace,
             repoSlug = target.repoSlug,
             request = request,
             apiToken = target.apiToken
         )
+        if (result is CreatePullRequestResult.Created) {
+            // Show the new pull request on the next automatic load instead of after the listing's freshness window.
+            pullRequestCache.upsert(workspace = target.workspace, repoSlug = target.repoSlug, summary = result.summary)
+            pullRequestCache.invalidateListing(
+                listingId = PullRequestListingIds.project(workspace = target.workspace, repoSlug = target.repoSlug)
+            )
+            pullRequestCache.invalidateListing(listingId = PullRequestListingIds.workspaceAuthored(workspace = target.workspace))
+        }
+        return result
     }
 
     /**
@@ -447,13 +524,14 @@ class DiffyOpenPullRequestService(
             LOG.debug("Could not load the current reviewers of pull request #$pullRequestId before updating them")
             return PullRequestActionResult.Failed()
         }
+        pullRequestCache.upsertDetails(workspace = target.workspace, repoSlug = target.repoSlug, details = details)
         val currentUuids = details.reviewers.map { reviewer -> reviewer.uuid }
         val updatedUuids = change.applyTo(currentUuids)
         if (updatedUuids == currentUuids) {
             LOG.debug("Reviewers of pull request #$pullRequestId already reflect the requested change")
             return PullRequestActionResult.Success
         }
-        return pullRequestClient.updateReviewers(
+        val result = pullRequestClient.updateReviewers(
             workspace = target.workspace,
             repoSlug = target.repoSlug,
             pullRequestId = pullRequestId,
@@ -461,6 +539,13 @@ class DiffyOpenPullRequestService(
             reviewerUuids = updatedUuids,
             apiToken = target.apiToken
         )
+        if (result is PullRequestActionResult.Success) {
+            // The reviewer list changed, so the listings that show it must be fetched again. The next details load fills the entry.
+            pullRequestCache.invalidateListingsContaining(
+                key = PullRequestCacheKey.of(workspace = target.workspace, repoSlug = target.repoSlug, prNum = pullRequestId)
+            )
+        }
+        return result
     }
 
     suspend fun updateDescription(
@@ -477,7 +562,7 @@ class DiffyOpenPullRequestService(
         ) ?: return PullRequestActionResult.Failed()
 
         LOG.debug("Applying description update to pull request #$pullRequestId in ${target.workspace}/${target.repoSlug}")
-        return pullRequestClient.updatePullRequestDescription(
+        val result = pullRequestClient.updatePullRequestDescription(
             workspace = target.workspace,
             repoSlug = target.repoSlug,
             pullRequestId = pullRequestId,
@@ -485,6 +570,13 @@ class DiffyOpenPullRequestService(
             description = description,
             apiToken = target.apiToken
         )
+        if (result is PullRequestActionResult.Success) {
+            // The title is part of the cached listings, so they are fetched again. The description itself is not cached.
+            pullRequestCache.invalidateListingsContaining(
+                key = PullRequestCacheKey.of(workspace = target.workspace, repoSlug = target.repoSlug, prNum = pullRequestId)
+            )
+        }
+        return result
     }
 
     private suspend fun workspaceMembers(workspace: String, apiToken: String): WorkspaceMembers? {
@@ -706,6 +798,25 @@ class DiffyOpenPullRequestService(
         return keys.associateWith { key -> names[key] ?: unknownLabel }
     }
 
+    /**
+     * The time since the cached details of a pull request were last read from Bitbucket. The key comes from the same
+     * repository resolution as [pullRequestDetails], so it matches the entry that read wrote. Null when nothing is cached.
+     */
+    suspend fun cachedDetailsAge(projectBasePath: String?, organizationUrl: String, pullRequestId: Long): Duration? {
+        val target = resolveTarget(
+            operation = "read the cached age of pull request #$pullRequestId",
+            projectBasePath = projectBasePath,
+            organizationUrl = organizationUrl
+        ) ?: return null
+        return pullRequestCache.ageOf(
+            key = PullRequestCacheKey.of(workspace = target.workspace, repoSlug = target.repoSlug, prNum = pullRequestId)
+        )
+    }
+
+    /**
+     * Loads the details of a pull request. This is always a live read, so the worktree safety paths never see stale data.
+     * A successful read is stored in the cache, which resets the entry's fetch time.
+     */
     suspend fun pullRequestDetails(projectBasePath: String?, organizationUrl: String, pullRequestId: Long): PullRequestDetails? {
         val target = resolveTarget(
             operation = "load pull request details",
@@ -718,13 +829,17 @@ class DiffyOpenPullRequestService(
         if (currentUserUuid == null) {
             LOG.debug("Current user uuid is unavailable; approval state of pull request #$pullRequestId is treated as not approved")
         }
-        return pullRequestClient.getPullRequestDetails(
+        val details = pullRequestClient.getPullRequestDetails(
             workspace = target.workspace,
             repoSlug = target.repoSlug,
             pullRequestId = pullRequestId,
             currentUserUuid = currentUserUuid,
             apiToken = target.apiToken
         )
+        if (details != null) {
+            pullRequestCache.upsertDetails(workspace = target.workspace, repoSlug = target.repoSlug, details = details)
+        }
+        return details
     }
 
     /** Returns null when the commits could not be loaded; the pull request id is reported in the logs. */
@@ -764,13 +879,17 @@ class DiffyOpenPullRequestService(
         if (currentUserUuid == null) {
             LOG.debug("Current user uuid is unavailable; approval state of pull request #$pullRequestId is treated as not approved")
         }
-        return pullRequestClient.getPullRequestDetails(
+        val details = pullRequestClient.getPullRequestDetails(
             workspace = workspace,
             repoSlug = repoSlug,
             pullRequestId = pullRequestId,
             currentUserUuid = currentUserUuid,
             apiToken = apiToken
         )
+        if (details != null) {
+            pullRequestCache.upsertDetails(workspace = workspace, repoSlug = repoSlug, details = details)
+        }
+        return details
     }
 
     /**
@@ -809,13 +928,78 @@ class DiffyOpenPullRequestService(
         ) ?: return PullRequestActionResult.Failed()
 
         LOG.debug("Performing $action on pull request #${pullRequest.id} in ${target.workspace}/${target.repoSlug}")
-        return pullRequestClient.performAction(
+        val result = pullRequestClient.performAction(
             workspace = target.workspace,
             repoSlug = target.repoSlug,
             pullRequest = pullRequest,
             action = action,
             apiToken = target.apiToken
         )
+        if (result is PullRequestActionResult.Success) {
+            patchCacheAfterAction(target = target, pullRequest = pullRequest, action = action)
+        }
+        return result
+    }
+
+    /**
+     * Mirrors a successful action into the cached entry, so the Workspace tab shows it without a request. The next
+     * Bitbucket read corrects anything this gets wrong. Merge is accepted even when Bitbucket answered asynchronously.
+     */
+    private suspend fun patchCacheAfterAction(target: RepositoryTarget, pullRequest: PullRequestSummary, action: PullRequestAction) {
+        val key = PullRequestCacheKey.of(workspace = target.workspace, repoSlug = target.repoSlug, prNum = pullRequest.id)
+        // Nothing is cached for this pull request, so there is nothing to patch and no user lookup is needed.
+        if (pullRequestCache.get(key = key) == null) {
+            return
+        }
+        when (action) {
+            PullRequestAction.Merge -> closeCachedEntry(key = key, state = PullRequestState.Merged)
+            PullRequestAction.Decline -> closeCachedEntry(key = key, state = PullRequestState.Declined)
+            PullRequestAction.MarkAsDraft -> pullRequestCache.patch(key = key) { entry -> entry.copy(isDraft = true) }
+            PullRequestAction.MarkAsReady -> pullRequestCache.patch(key = key) { entry -> entry.copy(isDraft = false) }
+            PullRequestAction.Approve,
+            PullRequestAction.Unapprove,
+            PullRequestAction.RequestChanges,
+            PullRequestAction.RemoveChangesRequest -> patchCachedReviewerState(target = target, key = key, action = action)
+        }
+    }
+
+    /** Applies an approval or changes-requested action to the current user's reviewer row. Without the user uuid, the listings are invalidated. */
+    private suspend fun patchCachedReviewerState(target: RepositoryTarget, key: PullRequestCacheKey, action: PullRequestAction) {
+        val userUuid = currentUser(apiToken = target.apiToken)?.uuid
+        if (userUuid == null) {
+            pullRequestCache.invalidateListingsContaining(key = key)
+            return
+        }
+        pullRequestCache.patch(key = key) { entry -> entry.withReviewerAction(userUuid = userUuid, action = action) }
+    }
+
+    /** Moves a closed pull request out of the open listings. Its entry stays, with the closing time left to the next fetch. */
+    private fun closeCachedEntry(key: PullRequestCacheKey, state: PullRequestState) {
+        pullRequestCache.patch(key = key) { entry -> entry.copy(state = state) }
+        pullRequestCache.removeFromOpenListings(key = key)
+    }
+
+    private fun CachedPullRequest.withReviewerAction(userUuid: String, action: PullRequestAction): CachedPullRequest {
+        val isCurrentUser: (String) -> Boolean = { uuid -> BitbucketAccountUuid.matches(first = uuid, second = userUuid) }
+        val approvers = when (action) {
+            PullRequestAction.Approve -> approverUuids + userUuid
+            PullRequestAction.Unapprove, PullRequestAction.RequestChanges -> approverUuids.filterNot(isCurrentUser).toSet()
+            else -> approverUuids
+        }
+        val reviewersAfter = reviewers.map { reviewer ->
+            if (isCurrentUser(reviewer.uuid)) withStatusFor(reviewer = reviewer, action = action) else reviewer
+        }
+        return copy(approverUuids = approvers, reviewers = reviewersAfter)
+    }
+
+    private fun withStatusFor(reviewer: CachedReviewer, action: PullRequestAction): CachedReviewer {
+        return when (action) {
+            PullRequestAction.Approve -> reviewer.copy(approved = true, needsWork = false)
+            PullRequestAction.Unapprove -> reviewer.copy(approved = false)
+            PullRequestAction.RequestChanges -> reviewer.copy(approved = false, needsWork = true)
+            PullRequestAction.RemoveChangesRequest -> reviewer.copy(needsWork = false)
+            else -> reviewer
+        }
     }
 
     /**
@@ -851,6 +1035,8 @@ class DiffyOpenPullRequestService(
         if (declineResult is PullRequestActionResult.Failed) {
             return PullRequestDeclineResult.Failed(failure = declineResult)
         }
+        val key = PullRequestCacheKey.of(workspace = target.workspace, repoSlug = target.repoSlug, prNum = pullRequest.id)
+        closeCachedEntry(key = key, state = PullRequestState.Declined)
 
         if (normalizedReason.isEmpty()) {
             return PullRequestDeclineResult.Success()
@@ -864,6 +1050,9 @@ class DiffyOpenPullRequestService(
             apiToken = target.apiToken,
             parentCommentId = null
         )
+        if (commentResult !is PullRequestActionResult.Failed) {
+            pullRequestCache.patch(key = key) { entry -> entry.copy(commentCount = entry.commentCount + 1) }
+        }
         return if (commentResult is PullRequestActionResult.Failed) {
             LOG.warn(
                 "Declined pull request #${pullRequest.id}, but could not post the decline comment " +
@@ -938,7 +1127,7 @@ class DiffyOpenPullRequestService(
         LOG.debug(
             "Applying ${change::class.simpleName} ${commentChangeTarget(change)} of pull request #$pullRequestId in ${target.workspace}/${target.repoSlug}"
         )
-        return when (change) {
+        val result = when (change) {
             is CommentChange.Create -> createComment(target = target, pullRequestId = pullRequestId, content = change.content, parentCommentId = null)
 
             is CommentChange.CreateFileScoped -> createComment(
@@ -999,6 +1188,21 @@ class DiffyOpenPullRequestService(
                 apiToken = target.apiToken
             )
         }
+        val delta = commentCountDelta(change = change)
+        if (result is PullRequestActionResult.Success && delta != 0) {
+            // Best effort: Bitbucket can count deleted or replied comments differently, and the next read corrects it.
+            val key = PullRequestCacheKey.of(workspace = target.workspace, repoSlug = target.repoSlug, prNum = pullRequestId)
+            pullRequestCache.patch(key = key) { entry -> entry.copy(commentCount = (entry.commentCount + delta).coerceAtLeast(0)) }
+        }
+        return result
+    }
+
+    private fun commentCountDelta(change: CommentChange): Int {
+        return when (change) {
+            is CommentChange.Create, is CommentChange.CreateFileScoped, is CommentChange.CreateInlineLine, is CommentChange.Reply -> 1
+            is CommentChange.Delete -> -1
+            is CommentChange.Edit, is CommentChange.Resolve, is CommentChange.Unresolve -> 0
+        }
     }
 
     private suspend fun createComment(
@@ -1042,11 +1246,21 @@ class DiffyOpenPullRequestService(
         return "to comment $commentId"
     }
 
+    /**
+     * The current user for [apiToken]. Looked up in this instance first, then in the shared cache, and only then from
+     * Bitbucket. A fresh lookup tells the cache which account owns its data.
+     */
     private suspend fun currentUser(apiToken: String): CurrentUser? {
         val tokenHash = apiToken.hashCode()
         cachedCurrentUser?.takeIf { cached -> cached.tokenHash == tokenHash }?.let { cached -> return cached.user }
+        pullRequestCache.cachedCurrentUser(tokenHash = tokenHash)?.let { shared ->
+            cachedCurrentUser = CachedCurrentUser(tokenHash = tokenHash, user = shared)
+            return shared
+        }
         val user = pullRequestClient.getCurrentUser(apiToken = apiToken) ?: return null
         cachedCurrentUser = CachedCurrentUser(tokenHash = tokenHash, user = user)
+        pullRequestCache.rememberCurrentUser(tokenHash = tokenHash, user = user)
+        pullRequestCache.bindUser(userUuid = user.uuid)
         return user
     }
 

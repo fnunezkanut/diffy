@@ -14,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import java.awt.Color
+import java.awt.GradientPaint
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -107,6 +109,14 @@ class AuthorAvatarCache(private val avatarClient: BitbucketAvatarClient = Bitbuc
         const val DEFAULT_AVATAR_SIZE = 16
         private const val MAX_PARALLEL_DOWNLOADS = 4
 
+        private const val HIGHLIGHT_ALPHA = 70
+        private const val SHADE_ALPHA = 60
+
+        /**
+         * Decodes [bytes] into a circular icon. After the image is drawn, a translucent diagonal gradient (light at the
+         * top left, dark at the bottom right) is composited on top so flat, single-color avatars get a slight shading
+         * while keeping their own hue. The effect is baked in once at load time, never at paint time.
+         */
         fun decodeAvatar(bytes: ByteArray, sizePx: Int): BufferedImage? {
             val source = runCatching { ImageIO.read(ByteArrayInputStream(bytes)) }.getOrNull() ?: return null
             val scaled = BufferedImage(sizePx, sizePx, BufferedImage.TYPE_INT_ARGB)
@@ -115,10 +125,18 @@ class AuthorAvatarCache(private val avatarClient: BitbucketAvatarClient = Bitbuc
                 graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
                 graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
                 graphics.drawImage(source, 0, 0, sizePx, sizePx, null)
+                graphics.paint = shadingOverlay(sizePx = sizePx)
+                graphics.fillRect(0, 0, sizePx, sizePx)
             } finally {
                 graphics.dispose()
             }
             return ImageUtil.createCircleImage(scaled)
+        }
+
+        private fun shadingOverlay(sizePx: Int): GradientPaint {
+            val highlight = Color(255, 255, 255, HIGHLIGHT_ALPHA)
+            val shade = Color(0, 0, 0, SHADE_ALPHA)
+            return GradientPaint(0f, 0f, highlight, sizePx.toFloat(), sizePx.toFloat(), shade)
         }
     }
 }

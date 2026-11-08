@@ -37,7 +37,7 @@ class OkHttpBitbucketOAuthTokenClientTest {
                 form["grant_type"] shouldBe "authorization_code"
                 form["code"] shouldBe "the-code"
                 form["code_verifier"] shouldBe "the-verifier"
-                form["redirect_uri"] shouldBe "http://127.0.0.1:42424/bbcloud"
+                form["redirect_uri"] shouldBe "http://127.0.0.1:42424/diffy"
                 form[DiffyConsumerMaterial.primaryField()] shouldBe DiffyConsumerMaterial.primary()
             }
         }

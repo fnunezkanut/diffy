@@ -3,13 +3,17 @@ package com.github.fnunezkanut.bbcloud.ui.otherprojects
 import com.github.fnunezkanut.bbcloud.bitbucket.AuthoredPullRequestListResult
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequestListResult
+import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestListEntry
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestListingSource
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestsViewModel
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The stored configuration and the Bitbucket listings the Workspace tab reads, backed by the configuration,
@@ -24,9 +28,18 @@ interface WorkspacePullRequestsDataSource {
 
     fun repoAvatarUrls(): Map<String, String>
 
-    suspend fun listAuthored(organizationUrl: String, excludedRepoSlug: String?): AuthoredPullRequestListResult
+    suspend fun listAuthored(organizationUrl: String, excludedRepoSlug: String?, refresh: PullRequestCacheRefresh): AuthoredPullRequestListResult
 
-    suspend fun listReviewing(organizationUrl: String, excludedRepoSlug: String?, repoSlugs: List<String>): ReviewingPullRequestListResult
+    suspend fun listReviewing(
+        organizationUrl: String,
+        excludedRepoSlug: String?,
+        repoSlugs: List<String>,
+        refresh: PullRequestCacheRefresh
+    ): ReviewingPullRequestListResult
+
+    /** Re-scans the watched projects before a user-requested refresh. The default does nothing. */
+    suspend fun recheckWatchedProjects() {
+    }
 }
 
 /**
@@ -49,10 +62,14 @@ class WorkspacePullRequestsLoader(
      * Loads both Workspace sources under one refresh generation, so a single Refresh starts one generation and a
      * slow response of one source cannot overwrite a newer load of the other.
      */
-    fun loadWorkspacePullRequests(excludedRepoSlug: String?, coroutineScope: CoroutineScope) {
+    fun loadWorkspacePullRequests(
+        excludedRepoSlug: String?,
+        coroutineScope: CoroutineScope,
+        refresh: PullRequestCacheRefresh = PullRequestCacheRefresh.IfStale
+    ) {
         val generation = pullRequestsViewModel.beginRefresh()
-        loadAuthored(excludedRepoSlug = excludedRepoSlug, generation = generation, coroutineScope = coroutineScope)
-        loadReviewing(excludedRepoSlug = excludedRepoSlug, generation = generation, coroutineScope = coroutineScope)
+        loadAuthored(excludedRepoSlug = excludedRepoSlug, generation = generation, coroutineScope = coroutineScope, refresh = refresh)
+        loadReviewing(excludedRepoSlug = excludedRepoSlug, generation = generation, coroutineScope = coroutineScope, refresh = refresh)
     }
 
     fun showNotConfigured() {
@@ -62,7 +79,7 @@ class WorkspacePullRequestsLoader(
         onShowNotConfiguredCallback()
     }
 
-    private fun loadAuthored(excludedRepoSlug: String?, generation: Long, coroutineScope: CoroutineScope) {
+    private fun loadAuthored(excludedRepoSlug: String?, generation: Long, coroutineScope: CoroutineScope, refresh: PullRequestCacheRefresh) {
         val organizationUrl = dataSource.organizationUrlOrNull()
         if (organizationUrl == null) {
             LOG.info("Cannot load authored PRs: no organization URL")
@@ -78,7 +95,8 @@ class WorkspacePullRequestsLoader(
         coroutineScope.launch {
             val result = dataSource.listAuthored(
                 organizationUrl = organizationUrl,
-                excludedRepoSlug = excludedRepoSlug
+                excludedRepoSlug = excludedRepoSlug,
+                refresh = refresh
             )
             runOnEdt {
                 showAuthoredResult(result = result, generation = generation, coroutineScope = coroutineScope)
@@ -87,7 +105,7 @@ class WorkspacePullRequestsLoader(
         }
     }
 
-    private fun loadReviewing(excludedRepoSlug: String?, generation: Long, coroutineScope: CoroutineScope) {
+    private fun loadReviewing(excludedRepoSlug: String?, generation: Long, coroutineScope: CoroutineScope, refresh: PullRequestCacheRefresh) {
         val organizationUrl = dataSource.organizationUrlOrNull()
         val projectsDirectory = dataSource.projectsDirectoryOrNull()
         val workspaceOverviewUrl = organizationUrl?.let { BitbucketRepositoryUrls.workspaceOverviewUrl(it) }
@@ -115,15 +133,35 @@ class WorkspacePullRequestsLoader(
         onShowContentCallback()
         beginLoad()
         coroutineScope.launch {
+            // A user's Refresh first re-checks the watched projects, so the fan-out uses the rechecked set. A check
+            // that fails or hangs past the timeout leaves the stored set in place.
+            if (refresh == PullRequestCacheRefresh.Force) {
+                recheckWatchedProjectsOrKeepStoredSet()
+            }
             val result = dataSource.listReviewing(
                 organizationUrl = organizationUrl,
                 excludedRepoSlug = excludedRepoSlug,
-                repoSlugs = repoSlugs
+                repoSlugs = dataSource.watchedRepoSlugs(),
+                refresh = refresh
             )
             runOnEdt {
                 showReviewingResult(result = result, generation = generation, coroutineScope = coroutineScope)
                 endLoad()
             }
+        }
+    }
+
+    /** A failed or slow re-check is logged, and the pull request load goes on with the stored watched set. */
+    private suspend fun recheckWatchedProjectsOrKeepStoredSet() {
+        try {
+            val finished = withTimeoutOrNull(WATCHED_RECHECK_TIMEOUT) { dataSource.recheckWatchedProjects() }
+            if (finished == null) {
+                LOG.warn("Watched projects re-check did not finish in time; loading with the stored set")
+            }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            LOG.warn("Watched projects re-check failed; loading with the stored set", exception)
         }
     }
 
@@ -208,5 +246,8 @@ class WorkspacePullRequestsLoader(
 
     companion object {
         private val LOG = logger<WorkspacePullRequestsLoader>()
+
+        /** A Refresh does not wait longer than this for the watched projects re-check, so a hung directory scan cannot keep it disabled. */
+        private val WATCHED_RECHECK_TIMEOUT = 15.seconds
     }
 }
