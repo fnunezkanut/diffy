@@ -110,13 +110,56 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
          * without a migration.
          */
         var watchedProjectsShowOnlyWatched by property(false)
+
+        /**
+         * Default false: when true, the Notifications tab lists only unread notifications. It is a view preference,
+         * so it is kept across a settings reset. The option name is part of the persisted XML; do not rename it
+         * without a migration.
+         */
+        var notificationsShowOnlyUnread by property(false)
+
+        /**
+         * Default false: when true, the diffs of Markdown files in a pull request work tree open with soft-wrapped
+         * lines. It is a view preference, so it is kept across a settings reset. The option name is part of the
+         * persisted XML; do not rename it without a migration. `BaseState` omits the default value, so existing
+         * installs need no migration.
+         */
+        var markdownDiffWrapLines by property(false)
+
+        /**
+         * Default false: set to true once the plugin has turned on "Collapse unchanged fragments" for pull request
+         * diffs, so a later choice of the user is not overwritten. The option name is part of the persisted XML; do not
+         * rename it without a migration.
+         */
+        var collapseUnchangedDefaultApplied by property(false)
     }
+
+    /** Whether the plugin already applied the collapse-unchanged default. See [State.collapseUnchangedDefaultApplied]. */
+    var collapseUnchangedDefaultApplied: Boolean
+        get() = state.collapseUnchangedDefaultApplied
+        set(value) {
+            state.collapseUnchangedDefaultApplied = value
+        }
+
+    /** Whether Markdown diffs open with soft-wrapped lines. See [State.markdownDiffWrapLines]. */
+    var markdownDiffWrapLines: Boolean
+        get() = state.markdownDiffWrapLines
+        set(value) {
+            state.markdownDiffWrapLines = value
+        }
 
     /** Whether the Watched Projects table lists only watched projects. See [State.watchedProjectsShowOnlyWatched]. */
     var watchedProjectsShowOnlyWatched: Boolean
         get() = state.watchedProjectsShowOnlyWatched
         set(value) {
             state.watchedProjectsShowOnlyWatched = value
+        }
+
+    /** Whether the Notifications tab lists only unread notifications. See [State.notificationsShowOnlyUnread]. */
+    var notificationsShowOnlyUnread: Boolean
+        get() = state.notificationsShowOnlyUnread
+        set(value) {
+            state.notificationsShowOnlyUnread = value
         }
 
     /** Legacy value kept only so existing installs can migrate the URL to a slug; see [organizationUrl]. */

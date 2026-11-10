@@ -24,6 +24,14 @@ internal enum class ReviewBarSurface {
 internal class ReviewBarAction(val onClick: () -> Unit)
 
 /**
+ * A toggle action of the review bar, such as "Wrap Lines".
+ *
+ * [isActive] reads the current state from the live diff, because Compose does not observe the editors. [onToggle]
+ * flips the state. Like [ReviewBarAction], the action is absent (null) when the bar shows no button at all.
+ */
+internal class ReviewBarToggleAction(val isActive: () -> Boolean, val onToggle: () -> Unit)
+
+/**
  * The previous and next unviewed-file navigation the review bar offers over a diff chain.
  *
  * [paths] are the relative paths of the files of the chain, in chain order. A null entry is a request that is not a file

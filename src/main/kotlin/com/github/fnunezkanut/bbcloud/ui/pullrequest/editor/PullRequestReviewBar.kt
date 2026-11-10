@@ -82,6 +82,8 @@ internal class PullRequestReviewBar internal constructor(
          *
          * The [renderedDiffAction] opens the rendered Markdown diff; it is null for files that are not Markdown.
          *
+         * The [wrapLinesAction] toggles soft wrapping of the diff lines; it is null for files that are not Markdown.
+         *
          * The [navigator] reads the chain of a diff, so the bar can offer previous and next unviewed-file buttons. It is
          * null on the normal-file surface, and the bar then shows no navigation buttons.
          */
@@ -94,6 +96,7 @@ internal class PullRequestReviewBar internal constructor(
             surface: ReviewBarSurface,
             action: ReviewBarAction?,
             renderedDiffAction: ReviewBarAction? = null,
+            wrapLinesAction: ReviewBarToggleAction? = null,
             onAddComment: () -> Unit,
             project: Project,
             navigator: ReviewBarDiffChainNavigator?
@@ -143,6 +146,7 @@ internal class PullRequestReviewBar internal constructor(
                     surface = surface,
                     action = action,
                     renderedDiffAction = renderedDiffAction,
+                    wrapLinesAction = wrapLinesAction,
                     navigation = navigation,
                     onViewedToggled = { checked ->
                         viewedFiles.setViewed(

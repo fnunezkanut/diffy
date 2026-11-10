@@ -83,6 +83,56 @@ class DiffyNotificationsRepositoryTest {
         }
 
     @Test
+    fun `recordSnapshot - should report zero new notifications for the first sync`() =
+        runTest {
+            // WHEN the first snapshot ever arrives
+            val newCount = repository.recordSnapshot(snapshot = browserSnapshot(events = listOf(browserEvent(id = "a"), browserEvent(id = "b"))))
+
+            // THEN the backlog is not announced
+            newCount shouldBe 0
+        }
+
+    @Test
+    fun `recordSnapshot - should report only the unseen ids of a later snapshot`() =
+        runTest {
+            // GIVEN a first sync, and one notification marked read
+            repository.recordSnapshot(snapshot = browserSnapshot(events = listOf(browserEvent(id = "a"))))
+            repository.setUnread(ids = setOf("a"), unread = false)
+
+            // WHEN a snapshot repeats the read id and adds two new ones
+            val newCount = repository.recordSnapshot(
+                snapshot = browserSnapshot(events = listOf(browserEvent(id = "a"), browserEvent(id = "b"), browserEvent(id = "c")))
+            )
+            val replayed = repository.recordSnapshot(
+                snapshot = browserSnapshot(events = listOf(browserEvent(id = "a"), browserEvent(id = "b"), browserEvent(id = "c")))
+            )
+
+            // THEN
+            assertSoftly {
+                newCount shouldBe 2
+                replayed shouldBe 0
+            }
+        }
+
+    @Test
+    fun `recordSnapshot - should report new notifications after a clear only from the second sync`() =
+        runTest {
+            // GIVEN a cleared store
+            repository.recordSnapshot(snapshot = browserSnapshot(events = listOf(browserEvent(id = "a"))))
+            repository.clear()
+
+            // WHEN
+            val first = repository.recordSnapshot(snapshot = browserSnapshot(events = listOf(browserEvent(id = "a"))))
+            val second = repository.recordSnapshot(snapshot = browserSnapshot(events = listOf(browserEvent(id = "b"))))
+
+            // THEN
+            assertSoftly {
+                first shouldBe 0
+                second shouldBe 1
+            }
+        }
+
+    @Test
     fun `setUnread - should persist the flag and ignore unknown ids`() =
         runTest {
             // GIVEN a stored notification

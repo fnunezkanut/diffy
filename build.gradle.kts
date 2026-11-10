@@ -9,12 +9,12 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
     // Compose MP 1.12.1 matches Jewel 0.42, the first Jewel release whose min IJP is 2026.3.
     id("org.jetbrains.compose") version "1.12.1"
-    id("org.jetbrains.intellij.platform") version "2.20.0"
+    id("org.jetbrains.intellij.platform") version "2.20.1"
     id("org.jmailen.kotlinter") version "5.7.0"
 }
 
 group = "com.github.fnunezkanut"
-version = "1.10.0"
+version = "1.11.0"
 
 val isLocalBuild = providers.environmentVariable("CI").orNull.isNullOrEmpty()
 
@@ -49,13 +49,13 @@ dependencies {
     testCompileOnly("org.jetbrains.compose.runtime:runtime:1.12.1")
     // The test compiler also applies the Compose compiler plugin, so it needs the API on its compile classpath.
 
-    implementation("com.squareup.okhttp3:okhttp:5.4.0") {
+    implementation("com.squareup.okhttp3:okhttp:5.5.1") {
         exclude(group = "org.jetbrains.kotlin")
     }
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
 
-    testImplementation("io.kotest:kotest-assertions-core-jvm:6.2.5")
+    testImplementation("io.kotest:kotest-assertions-core-jvm:6.2.6")
     testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
@@ -111,6 +111,11 @@ tasks.test {
         includeTags("unit")
         excludeTags("integration")
     }
+    maxParallelForks = (Runtime.getRuntime().availableProcessors() - 1).takeIf { it > 0 } ?: 1
+    systemProperties = mapOf(
+        "junit.jupiter.execution.parallel.enabled" to true,
+        "junit.jupiter.execution.parallel.mode.default" to "concurrent"
+    )
     testLogging {
         events = setOf(
             org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED

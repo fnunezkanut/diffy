@@ -44,9 +44,12 @@ class NotificationsViewModel internal constructor(
     private val prefetchAvatars: (urls: Collection<String>, onLoaded: () -> Unit) -> Unit = { _, _ -> },
     private val labels: () -> NotificationLabels = { NotificationLabels() },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
-    private val openMessage: (NotificationRow) -> Unit = {}
+    private val openMessage: (NotificationRow) -> Unit = {},
+    initialShowOnlyUnread: Boolean = false,
+    private val saveShowOnlyUnread: (Boolean) -> Unit = {}
 ) {
-    val state: MutableState<NotificationsUiState> = mutableStateOf(NotificationsUiState.INITIAL)
+    val state: MutableState<NotificationsUiState> =
+        mutableStateOf(NotificationsUiState.INITIAL.copy(showOnlyUnread = initialShowOnlyUnread))
 
     private val started = AtomicBoolean(false)
     private val buildGeneration = AtomicInteger(0)
@@ -140,6 +143,7 @@ class NotificationsViewModel internal constructor(
     fun onShowOnlyUnreadChanged(showOnlyUnread: Boolean) {
         LOG.info("User turned the Show only Unread filter ${if (showOnlyUnread) "on" else "off"}")
         state.value = state.value.copy(showOnlyUnread = showOnlyUnread)
+        saveShowOnlyUnread(showOnlyUnread)
     }
 
     fun onTitleClicked(row: NotificationRow) {

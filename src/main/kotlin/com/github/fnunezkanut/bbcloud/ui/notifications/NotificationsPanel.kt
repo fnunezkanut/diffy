@@ -9,6 +9,7 @@ import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotStore
 import com.github.fnunezkanut.bbcloud.external.DiffyNotificationsStore
 import com.github.fnunezkanut.bbcloud.project.LocalRepositoryProjectOpener
+import com.github.fnunezkanut.bbcloud.settings.DiffySettings
 import com.github.fnunezkanut.bbcloud.ui.components.NotConfiguredContent
 import com.github.fnunezkanut.bbcloud.ui.main.AuthorAvatarCache
 import com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyNotificationsHelpEditorOpener
@@ -64,6 +65,8 @@ internal class NotificationsPanel(project: Project, coroutineScope: CoroutineSco
         prefetchAvatars = { urls, onLoaded ->
             avatarCache.prefetch(urls = urls, coroutineScope = coroutineScope, onLoaded = onLoaded)
         },
+        initialShowOnlyUnread = DiffySettings.getInstance().notificationsShowOnlyUnread,
+        saveShowOnlyUnread = { value -> DiffySettings.getInstance().notificationsShowOnlyUnread = value },
         openMessage = { row ->
             val url = row.url
             if (url != null && url.startsWith("https://")) {

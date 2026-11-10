@@ -15,6 +15,9 @@ import com.github.fnunezkanut.bbcloud.bitbucket.TaskEdits
 import com.intellij.collaboration.ui.codereview.comment.CommentInputActionsComponentFactory
 import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.CoroutineScope
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * Drives the Jewel Overview tab. The editor session pushes data through the imperative `showOverview`/`showReviewers`/
@@ -30,12 +33,18 @@ class PullRequestOverviewViewModel(
     private val descriptionEditor: DescriptionEditor,
     private val reviewerAvatarCache: AuthorAvatarCache = AuthorAvatarCache(avatarSize = REVIEWER_AVATAR_SIZE),
     private val popupAvatarCache: AuthorAvatarCache = AuthorAvatarCache(),
-    private val openSearchPopup: (ReviewerSearchRequest) -> Unit
+    private val workspaceSlug: () -> String,
+    private val openSearchPopup: (ReviewerSearchRequest) -> Unit,
+    private val isAirAvailable: () -> Boolean = { false },
+    private val onExplainWithAi: (ExplainPullRequestRequest) -> Unit = {},
+    private val clock: () -> Instant = { Clock.System.now() }
 ) {
     val state: MutableState<PullRequestOverviewUiState> = mutableStateOf(initialState())
 
     private var displayedPullRequestId: Long? = null
     private var coroutineScope: CoroutineScope? = null
+    private var explainRequest: ExplainPullRequestRequest? = null
+    private var lastExplainClick: Pair<Long, Instant>? = null
 
     // Reviewer backing data.
     private var reviewers: List<PullRequestReviewer> = emptyList()
@@ -53,6 +62,8 @@ class PullRequestOverviewViewModel(
 
     fun reset() {
         displayedPullRequestId = null
+        explainRequest = null
+        lastExplainClick = null
         reviewers = emptyList()
         authorUuid = null
         tasks = emptyList()
@@ -80,7 +91,24 @@ class PullRequestOverviewViewModel(
         state.value = state.value.copy(tasks = state.value.tasks.copy(isEditable = editable))
         renderTasks()
         renderDescription(details.description)
-        state.value = state.value.copy(description = state.value.description.copy(isEditable = editable))
+        renderTickets(title = details.summary.title, sourceBranch = details.summary.sourceBranch)
+        explainRequest = ExplainPullRequestRequest(
+            pullRequestId = details.summary.id,
+            title = details.summary.title,
+            webUrl = details.summary.webUrl,
+            sourceBranch = details.summary.sourceBranch,
+            destinationBranch = details.summary.destinationBranch,
+            authorDisplayName = details.summary.authorDisplayName,
+            state = details.summary.state,
+            isDraft = details.summary.isDraft,
+            description = details.description
+        )
+        state.value = state.value.copy(
+            description = state.value.description.copy(
+                isEditable = editable,
+                isExplainWithAiVisible = editable && isAirAvailable()
+            )
+        )
         reviewerAvatarCache.prefetch(
             urls = reviewers.mapNotNull { reviewer -> reviewer.avatarUrl },
             coroutineScope = coroutineScope,
@@ -104,6 +132,24 @@ class PullRequestOverviewViewModel(
     fun onEditDescription() {
         LOG.info("User opened the description editor for pull request #$displayedPullRequestId")
         state.value = state.value.copy(description = state.value.description.copy(isEditing = true))
+    }
+
+    /** Hands the pull request to the Air explain flow. A repeated click within [EXPLAIN_DEBOUNCE] is ignored. */
+    fun onExplainWithAi() {
+        val request = explainRequest
+        if (request == null) {
+            LOG.info("Explain this PR with AI ignored: pull request details not loaded")
+            return
+        }
+        val now = clock()
+        val last = lastExplainClick
+        if (last != null && last.first == request.pullRequestId && now - last.second < EXPLAIN_DEBOUNCE) {
+            LOG.info("Explain this PR with AI ignored for pull request #${request.pullRequestId}: repeated click")
+            return
+        }
+        lastExplainClick = request.pullRequestId to now
+        LOG.info("User clicked Explain this PR with AI for pull request #${request.pullRequestId}")
+        onExplainWithAi(request)
     }
 
     fun onCancelDescriptionEdit() {
@@ -151,6 +197,34 @@ class PullRequestOverviewViewModel(
         )
         LOG.debug("Rendered description for pull request #$displayedPullRequestId: present=${markdown != null}")
     }
+
+    // region Tickets
+
+    private fun renderTickets(title: String, sourceBranch: String) {
+        val current = state.value.tickets
+        val workspace = workspaceSlug()
+        if (workspace.isBlank()) {
+            LOG.info("Tickets section hidden: no workspace slug")
+            state.value = state.value.copy(tickets = current.copy(rows = emptyList()))
+            return
+        }
+        val rows = JiraTicketIds.parse(title = title, branch = sourceBranch).map { id ->
+            TicketRowState(id = id, url = JiraTicketLinks.browseUrl(workspace = workspace, ticketId = id))
+        }
+        LOG.debug("Parsed ${rows.size} ticket ids for pull request #$displayedPullRequestId")
+        state.value = state.value.copy(tickets = current.copy(rows = rows))
+    }
+
+    fun onTicketOpened(id: String) {
+        LOG.info("User opened ticket $id for pull request #$displayedPullRequestId in browser")
+    }
+
+    fun onToggleTickets() {
+        logToggle(sectionName = "tickets", expanding = !state.value.tickets.isExpanded)
+        state.value = state.value.copy(tickets = state.value.tickets.copy(isExpanded = !state.value.tickets.isExpanded))
+    }
+
+    // endregion
 
     // region Builds
 
@@ -586,6 +660,7 @@ class PullRequestOverviewViewModel(
                 title = DiffyBundle.message("main.branch.overview.card.description"),
                 emptyMessage = DiffyBundle.message("main.branch.overview.description.empty")
             ),
+            tickets = TicketsSectionState(title = DiffyBundle.message("main.branch.tickets.title")),
             builds = BuildsSectionState(title = DiffyBundle.message("main.branch.builds.title")),
             checks = ChecksSectionState(title = DiffyBundle.message("main.branch.checks.title")),
             reviewers = ReviewersSectionState(title = DiffyBundle.message("main.branch.reviewers.title")),
@@ -600,6 +675,7 @@ class PullRequestOverviewViewModel(
         private val LOG = logger<PullRequestOverviewViewModel>()
 
         private const val REVIEWER_AVATAR_SIZE = 20
+        private val EXPLAIN_DEBOUNCE = 2.seconds
         private const val DETAILS_SEPARATOR = " \u00b7 "
 
         /** The platform shortcut of the collaboration comment editor; the Jewel composer wires the same key itself. */
