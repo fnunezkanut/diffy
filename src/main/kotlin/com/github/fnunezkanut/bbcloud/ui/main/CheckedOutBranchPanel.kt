@@ -6,6 +6,9 @@ import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestOverview
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.settings.DiffySettings
+import com.github.fnunezkanut.bbcloud.ui.air.AirChatBridge
+import com.github.fnunezkanut.bbcloud.ui.air.AirPullRequestExplainer
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
@@ -47,7 +50,17 @@ class CheckedOutBranchPanel(
         reviewerEditor = reviewerEditor,
         taskEditor = taskEditor,
         descriptionEditor = descriptionEditor,
-        openSearchPopup = { request -> openReviewerSearchPopup(request) }
+        workspaceSlug = { DiffySettings.getInstance().workspaceSlug },
+        openSearchPopup = { request -> openReviewerSearchPopup(request) },
+        isAirAvailable = { AirChatBridge.isAvailable() },
+        onExplainWithAi = { request ->
+            AirPullRequestExplainer.explain(
+                project = attachedProject,
+                request = request,
+                workspace = infoWorkspace.ifBlank { DiffySettings.getInstance().workspaceSlug },
+                repositorySlug = infoRepositorySlug
+            )
+        }
     )
     private val headerViewModel = PullRequestHeaderViewModel()
     private val infoViewModel = PullRequestInfoViewModel()

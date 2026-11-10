@@ -3,6 +3,7 @@ package com.github.fnunezkanut.bbcloud.ui.pullrequest.editor
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestPathMatcher
 import com.github.fnunezkanut.bbcloud.git.FileLineCount
 import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
+import com.github.fnunezkanut.bbcloud.settings.DiffySettings
 import com.github.fnunezkanut.bbcloud.ui.diff.DiffyPullRequestDiffCommentService
 import com.github.fnunezkanut.bbcloud.ui.diff.PullRequestReviewCommentTarget
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestCommentFileOpener
@@ -12,7 +13,9 @@ import com.intellij.diff.DiffExtension
 import com.intellij.diff.FrameDiffTool
 import com.intellij.diff.requests.ContentDiffRequest
 import com.intellij.diff.requests.DiffRequest
+import com.intellij.diff.tools.util.base.TextDiffSettingsHolder
 import com.intellij.diff.util.DiffNotificationProvider
+import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.diff.util.DiffUtil
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
@@ -37,6 +40,10 @@ import javax.swing.JComponent
  * The diff review bar also offers previous and next unviewed-file navigation within the diff chain, in chain order.
  * Checking "Viewed" in the diff review bar moves the chain to the next unviewed file.
  *
+ * For Markdown files the review bar also offers a "Wrap Lines" toggle that soft-wraps the lines of the diff editors, so
+ * long lines need no horizontal scrolling. The choice is saved in [DiffySettings.markdownDiffWrapLines] and applied again
+ * to every Markdown diff of the work tree when its review bar is created.
+ *
  * "Add Comment" opens a comment composer in the diff editor. For a file the pull request deletes (whose path no longer
  * exists on the source branch) it opens a pull-request-level composer; for an added file and in the unified diff view
  * it opens the file comment composer.
@@ -44,6 +51,7 @@ import javax.swing.JComponent
 class PullRequestDiffBarsDiffExtension : DiffExtension() {
     override fun onViewerCreated(viewer: FrameDiffTool.DiffViewer, context: DiffContext, request: DiffRequest) {
         val project = context.project ?: return
+        collapseUnchangedFragments(project = project, context = context)
         if (request.getUserData(BLUE_BAR_ATTACHED_KEY) != true) {
             request.putUserData(BLUE_BAR_ATTACHED_KEY, true)
             DiffUtil.addNotification(
@@ -55,6 +63,27 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
             val provider = reviewBarProviderFor(project = project, request = request, diffContext = context) ?: return
             request.putUserData(REVIEW_BAR_ATTACHED_KEY, true)
             DiffUtil.addNotification(provider, request)
+        }
+    }
+
+    /**
+     * Turns on "Collapse unchanged fragments" for the diffs of a pull-request work tree. The viewer reads the setting when
+     * it first compares the contents, which happens after this extension has run.
+     */
+    private fun collapseUnchangedFragments(project: Project, context: DiffContext) {
+        val projectBasePath = project.basePath ?: return
+        if (!DiffyPullRequestReviewBarRefresh.isPullRequestWorkTree(projectBasePath = projectBasePath)) {
+            return
+        }
+        val diffySettings = DiffySettings.getInstance()
+        if (diffySettings.collapseUnchangedDefaultApplied) {
+            return
+        }
+        diffySettings.collapseUnchangedDefaultApplied = true
+        val settings = TextDiffSettingsHolder.TextDiffSettings.getSettings(context.getUserData(DiffUserDataKeys.PLACE))
+        if (settings.isExpandByDefault) {
+            settings.isExpandByDefault = false
+            LOG.debug("Enabled collapse unchanged fragments for the pull request diff")
         }
     }
 
@@ -125,6 +154,11 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
             changeType = changeType,
             onesideSide = ReviewBarDiffEditors.onesideSideOf(viewer = viewer)
         )
+        val wrapLinesAction = wrapLinesAction(request = request, viewer = viewer)
+        if (wrapLinesAction != null && DiffySettings.getInstance().markdownDiffWrapLines) {
+            // Apply the saved choice before the bar reads the state, so the button label matches the editors.
+            ReviewBarSoftWrap.setWrapped(viewer = viewer, wrapped = true)
+        }
         val bar = PullRequestReviewBar.create(
             relativePath = relativePath,
             pullRequestId = pullRequestId,
@@ -133,6 +167,7 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
             surface = ReviewBarSurface.Diff,
             action = openFileAction(project = project, relativePath = relativePath),
             renderedDiffAction = renderedDiffAction(project = project, request = request),
+            wrapLinesAction = wrapLinesAction,
             onAddComment = addCommentAction(
                 project = project,
                 viewer = viewer,
@@ -151,13 +186,45 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
 
     /** The action that opens the rendered Markdown diff of [request], or null when the request does not compare Markdown. */
     private fun renderedDiffAction(project: Project, request: DiffRequest): ReviewBarAction? {
-        if (request !is ContentDiffRequest || MarkdownDiffFromDiffRequest.markdownContentsOf(request = request) == null) {
+        if (request !is ContentDiffRequest || !isMarkdownRequest(request = request)) {
             return null
         }
         return ReviewBarAction {
             LOG.info("User clicked 'View Rendered Diff' in the review bar of the diff")
             MarkdownDiffFromDiffRequest.open(project = project, request = request)
         }
+    }
+
+    private fun isMarkdownRequest(request: DiffRequest): Boolean {
+        return request is ContentDiffRequest && MarkdownDiffFromDiffRequest.markdownContentsOf(request = request) != null
+    }
+
+    /**
+     * The toggle that wraps long lines in the diff editors, or null when the request does not compare Markdown or the
+     * viewer has no text editor (for example an image diff).
+     *
+     * The state is read from the live editors on every call, because the active viewer of a processor can change.
+     */
+    private fun wrapLinesAction(request: DiffRequest, viewer: FrameDiffTool.DiffViewer?): ReviewBarToggleAction? {
+        if (!isMarkdownRequest(request = request)) {
+            return null
+        }
+        if (ReviewBarSoftWrap.editorsOf(viewer = viewer).isEmpty()) {
+            return null
+        }
+        return ReviewBarToggleAction(
+            isActive = { ReviewBarSoftWrap.isWrapped(viewer = viewer) },
+            onToggle = {
+                val next = !ReviewBarSoftWrap.isWrapped(viewer = viewer)
+                LOG.info("User clicked 'Wrap Lines' in the review bar of the diff (wrap=$next)")
+                if (ReviewBarSoftWrap.editorsOf(viewer = viewer).isEmpty()) {
+                    LOG.info("Wrap Lines skipped: the diff has no text editor")
+                } else {
+                    ReviewBarSoftWrap.setWrapped(viewer = viewer, wrapped = next)
+                    DiffySettings.getInstance().markdownDiffWrapLines = next
+                }
+            }
+        )
     }
 
     private fun addCommentAction(

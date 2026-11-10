@@ -176,6 +176,14 @@ class DiffyToolWindowPanel(private val project: Project) {
         return true
     }
 
+    /** Selects the Notifications tab. Returns false if the tab or its content is unavailable. */
+    fun showNotificationsTab(): Boolean {
+        contentManager ?: return false
+        contentByTab[DiffyToolWindowTab.Notifications] ?: return false
+        selectTab(tab = DiffyToolWindowTab.Notifications)
+        return true
+    }
+
     /** Selects the Workspace PRs tab. Returns false if the tab or its content is unavailable. */
     fun showWorkspacePrsTab(): Boolean {
         contentManager ?: return false

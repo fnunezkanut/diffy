@@ -5,9 +5,10 @@ import com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestReviewer
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerStatus
 
-/** Compose state for the Jewel Overview tab: the description plus four collapsible cards (Builds, Checks, Reviewers, Tasks). */
+/** Compose state for the Jewel Overview tab: the description plus collapsible cards (Tickets, Builds, Checks, Reviewers, Tasks). */
 data class PullRequestOverviewUiState(
     val description: DescriptionSectionState = DescriptionSectionState(),
+    val tickets: TicketsSectionState = TicketsSectionState(),
     val builds: BuildsSectionState = BuildsSectionState(),
     val checks: ChecksSectionState = ChecksSectionState(),
     val reviewers: ReviewersSectionState = ReviewersSectionState(),
@@ -25,7 +26,9 @@ data class DescriptionSectionState(
     /** True when the PR is Open and the current user may edit the description. */
     val isEditable: Boolean = false,
     /** True while the inline description editor is open. */
-    val isEditing: Boolean = false
+    val isEditing: Boolean = false,
+    /** True when the PR is Open, the details are loaded, and the JetBrains Air plugin is available. */
+    val isExplainWithAiVisible: Boolean = false
 )
 
 /** The status affordance shown on the right of a collapsible section header. */
@@ -38,6 +41,10 @@ enum class SectionStatusIcon {
     /** Reviewers are assigned but none have approved or requested changes yet (the old EmptyCircleIcon state). */
     NoVote
 }
+
+data class TicketsSectionState(val title: String = "", val isExpanded: Boolean = true, val rows: List<TicketRowState> = emptyList())
+
+data class TicketRowState(val id: String, val url: String)
 
 data class BuildsSectionState(val title: String = "", val isExpanded: Boolean = true, val message: String? = null, val rows: List<BuildRowState> = emptyList())
 

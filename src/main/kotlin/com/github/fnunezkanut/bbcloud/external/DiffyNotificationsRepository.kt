@@ -55,15 +55,25 @@ class DiffyNotificationsRepository(
         withContext(ioDispatcher) { loadIfNeeded() }
     }
 
-    /** Merges the events of [snapshot] in, caps the list, and records the sync time. */
-    suspend fun recordSnapshot(snapshot: DiffyBrowserSnapshot) {
-        withContext(ioDispatcher) {
+    /**
+     * Merges the events of [snapshot] in, caps the list, and records the sync time. Returns how many notifications the
+     * snapshot added that were never stored before. Returns 0 for the first sync (nothing was ever synced, which is
+     * also the state after [clear]), so a backlog is not announced as new.
+     */
+    suspend fun recordSnapshot(snapshot: DiffyBrowserSnapshot): Int {
+        return withContext(ioDispatcher) {
             synchronized(lock) {
                 val current = loadIfNeeded()
                 val merged = applyCap(notifications = mergeSnapshot(existing = current.notifications, incoming = snapshot.notificationEvents))
                 val syncedAt = DiffyBrowserTimestamps.parseOrNull(value = snapshot.meta.capturedAt) ?: clock()
                 commit(lastSyncedAt = syncedAt, notifications = merged)
-                LOG.debug("Recorded a snapshot: events=${snapshot.notificationEvents.size}, stored=${merged.size}")
+                val newCount = if (current.lastSyncedAt == null) {
+                    0
+                } else {
+                    countNewNotifications(before = current.notifications, after = merged, incoming = snapshot.notificationEvents)
+                }
+                LOG.debug("Recorded a snapshot: events=${snapshot.notificationEvents.size}, stored=${merged.size}, new=$newCount")
+                newCount
             }
         }
     }

@@ -31,6 +31,19 @@ fun mergeSnapshot(existing: List<DiffyStoredNotification>, incoming: List<DiffyB
 }
 
 /**
+ * Counts the notifications a snapshot really added: ids of [incoming] that were not in [before] and are still in
+ * [after], so an event the cap evicted right away is not counted. A repeated incoming id counts once.
+ */
+fun countNewNotifications(before: List<DiffyStoredNotification>, after: List<DiffyStoredNotification>, incoming: List<DiffyBrowserNotificationEvent>): Int {
+    val knownBefore = before.map { notification -> notification.event.id }.toSet()
+    val keptAfter = after.map { notification -> notification.event.id }.toSet()
+    return incoming
+        .map { event -> event.id }
+        .toSet()
+        .count { id -> id !in knownBefore && id in keptAfter }
+}
+
+/**
  * Keeps the newest [max] notifications by `occurredAt` and evicts the oldest. A notification whose timestamp does not
  * parse counts as the oldest. The result is sorted newest first; equal timestamps keep their order.
  */

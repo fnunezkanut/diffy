@@ -2,6 +2,7 @@ package com.github.fnunezkanut.bbcloud.external
 
 import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.ui.notifications.DiffyNewEventsBalloon
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
@@ -65,21 +66,13 @@ class DiffyBrowserSnapshotCacheService(coroutineScope: CoroutineScope) {
         )
         LOG.debug("Started collecting browser snapshots for the pull request cache")
         coroutineScope.launch { collector.collect() }
-        coroutineScope.launch { recordNotifications(snapshots = DiffyBrowserSnapshotStore.getInstance().snapshot) }
-    }
-
-    /** Persists the notification events of every snapshot. A failure is logged and the next snapshot is still processed. */
-    private suspend fun recordNotifications(snapshots: Flow<DiffyBrowserSnapshot?>) {
         val notificationsStore = DiffyNotificationsStore.getInstance()
-        snapshots.filterNotNull().collect { snapshot ->
-            try {
-                notificationsStore.recordSnapshot(snapshot = snapshot)
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                LOG.warn("Could not persist the notifications of the browser snapshot", exception)
-            }
-        }
+        val recorder = DiffyNotificationsRecorder(
+            snapshots = DiffyBrowserSnapshotStore.getInstance().snapshot,
+            record = { snapshot -> notificationsStore.recordSnapshot(snapshot = snapshot) },
+            announce = { count -> service<DiffyNewEventsBalloon>().show(count = count) }
+        )
+        coroutineScope.launch { recorder.collect() }
     }
 
     companion object {

@@ -72,6 +72,41 @@ class DiffyNotificationsMergeTest {
     }
 
     @Test
+    fun `countNewNotifications - should count only unseen ids once`() {
+        // GIVEN one known notification and an incoming list with a known, two repeated, and one new id
+        val before = listOf(stored(id = "known"))
+        val incoming = listOf(browserEvent(id = "known"), browserEvent(id = "new"), browserEvent(id = "new"))
+        val after = mergeSnapshot(existing = before, incoming = incoming)
+
+        // WHEN
+        val count = countNewNotifications(before = before, after = after, incoming = incoming)
+
+        // THEN
+        count shouldBe 1
+    }
+
+    @Test
+    fun `countNewNotifications - should not count an event the cap evicted`() {
+        // GIVEN a new event that is not in the capped result
+        val incoming = listOf(browserEvent(id = "evicted"))
+
+        // WHEN
+        val count = countNewNotifications(before = emptyList(), after = emptyList(), incoming = incoming)
+
+        // THEN
+        count shouldBe 0
+    }
+
+    @Test
+    fun `countNewNotifications - should be zero without incoming events`() {
+        // GIVEN / WHEN
+        val count = countNewNotifications(before = listOf(stored(id = "a")), after = listOf(stored(id = "a")), incoming = emptyList())
+
+        // THEN
+        count shouldBe 0
+    }
+
+    @Test
     fun `applyCap - should evict the oldest notifications beyond the maximum`() {
         // GIVEN 2001 notifications, one minute apart
         val base = Instant.parse("2026-11-01T00:00:00Z")

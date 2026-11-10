@@ -33,8 +33,9 @@ class DiffyNotificationsStore(private val coroutineScope: CoroutineScope) {
         launchGuarded(action = "load the persisted notifications") { repository.ensureLoaded() }
     }
 
-    suspend fun recordSnapshot(snapshot: DiffyBrowserSnapshot) {
-        repository.recordSnapshot(snapshot = snapshot)
+    /** Persists the events of [snapshot] and returns how many notifications are new, see [DiffyNotificationsRepository.recordSnapshot]. */
+    suspend fun recordSnapshot(snapshot: DiffyBrowserSnapshot): Int {
+        return repository.recordSnapshot(snapshot = snapshot)
     }
 
     suspend fun setUnread(ids: Set<String>, unread: Boolean) {

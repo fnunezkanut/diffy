@@ -1,7 +1,13 @@
 # CHANGELOG
 
+## *1.11.0* - 2026-11-10
+* Added: an "Explain this PR with AI" button next to Edit Description, shown when the JetBrains Air plugin is installed; it puts a prompt in a new Air chat that asks the agent for a structured explanation of the open pull request with Mermaid diagrams
+* Added: Wrap and Unwrap lines button on diff view
+* Added: Jira ticket id parsing from PR title and/or branch title, in a new Tickets panel that links to Jira
+* Changed: Collapse Unchanged Fragments setting is the default (can be changed)
+
 ## *1.10.0* - 2026-11-08
-* Added: the Chrome extension (1.4.0) shows a floating "Diffy sync" button at the bottom left of bitbucket.org pages for signed-in users; it also auto syncs every 15 minute timer
+* Added: the Chrome extension (1.4.0) shows a floating "Diffy sync" button at the bottom left of bitbucket.org pages for signed-in users; it also auto syncs every 15 minutes on timer
 * Added: a Notifications tab before Settings shows the Bitbucket notifications the Chrome extension captured, newest first
 * Added: the Chrome extension's pull request data refreshes the plugin's pull request cache (comment counts, titles, draft flag, approvals, merged or declined)
 

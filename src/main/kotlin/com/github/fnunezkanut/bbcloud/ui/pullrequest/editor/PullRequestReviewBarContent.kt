@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -43,6 +47,7 @@ private val REVIEW_BAR_PADDING = 4.dp
  * The content of the review bar. Comment threads and composers render in editor inlays, not in this bar.
  *
  * The [renderedDiffAction] adds a "View Rendered Diff" button right after the surface action; it is null for files that are not Markdown.
+ * The [wrapLinesAction] adds a "Wrap Lines" toggle after it, with a gray border; it is null for files that are not Markdown.
  *
  * The previous and next unviewed-file buttons show only on the [ReviewBarSurface.Diff] surface and only when a
  * [navigation] is given. [navigation] is null when the chain of the diff cannot be found, or when the chain has one file.
@@ -54,6 +59,7 @@ internal fun PullRequestReviewBarContent(
     surface: ReviewBarSurface,
     action: ReviewBarAction?,
     renderedDiffAction: ReviewBarAction?,
+    wrapLinesAction: ReviewBarToggleAction?,
     navigation: ReviewBarFileNavigationState?,
     onViewedToggled: (Boolean) -> Unit,
     onAddComment: () -> Unit,
@@ -88,6 +94,9 @@ internal fun PullRequestReviewBarContent(
                     modifier = Modifier.padding(start = REVIEW_BAR_CONTROL_GAP)
                 )
             }
+            if (wrapLinesAction != null) {
+                WrapLinesButton(action = wrapLinesAction)
+            }
             if (lineCount != null && !lineCount.isBinary) {
                 LinesChangedBadge(
                     linesAdded = lineCount.linesAdded,
@@ -111,6 +120,30 @@ internal fun PullRequestReviewBarContent(
             )
         }
     }
+}
+
+/**
+ * The "Wrap Lines" toggle. Compose does not observe the editors, so the label state is kept here and re-read from the
+ * action after each click.
+ */
+@Composable
+private fun WrapLinesButton(action: ReviewBarToggleAction) {
+    var wrapped by remember(action) { mutableStateOf(action.isActive()) }
+    DiffyOutlinedActionButton(
+        text = if (wrapped) {
+            DiffyBundle.message("editor.reviewBar.unwrapLines")
+        } else {
+            DiffyBundle.message("editor.reviewBar.wrapLines")
+        },
+        icon = AllIconsKeys.Actions.ToggleSoftWrap,
+        outlineColor = ActionButtonOutlines.neutral(),
+        enabled = true,
+        onClick = {
+            action.onToggle()
+            wrapped = action.isActive()
+        },
+        modifier = Modifier.padding(start = REVIEW_BAR_CONTROL_GAP)
+    )
 }
 
 /** The "Add Comment" button. */

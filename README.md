@@ -23,9 +23,10 @@ Helps you review Bitbucket Cloud pull requests without leaving your Jetbrains ID
 * 📋 Each PR gets a dedicated **`<prNum>.pr`** tab plus a blue header stripe with line-change stats, refresh, file changes, and merge, approve, draft, or decline actions.
 * 🕐 The PR **Activity** timeline mixes commits, approvals, tasks, builds, and file or inline comment threads in time order, with a box to add PR-scoped comments and reply in threads.
 * 🤖 Every comment box has a **Send this comment to Air** button (needs the JetBrains Air plugin). It puts the file location and the comment into the Air chat input, ready to send.
+* 🤖 Open pull requests have an **Explain this PR with AI** button next to Edit Description (needs the JetBrains Air plugin). It puts a prompt in a new Air chat that asks the agent to explain the pull request with Mermaid diagrams. Press Enter to run it.
 * 📁 The **PR Changes** tool window lists every file in the diff; picking a file opens it in the editor or diff view driven from the stripe’s **Show pull request file changes** button.
 * ✏️ **Modified File View** and **Diff View** surface existing comments and let you add line-level feedback from the gutter or context menu, view add/remove counts, and mark files reviewed.
-* 📝 **Rendered Markdown side by side diff view** shows the rendered result of changed Markdown files next to each other, so documentation changes can be reviewed as readers will see them.
+* 📝 **Rendered Markdown side by side diff view** shows the rendered result of changed Markdown files next to each other, so documentation changes can be reviewed as readers will see them. The **Wrap Lines** button in the review bar of a Markdown diff wraps long lines so there is no horizontal scrolling, and remembers your choice.
 * 🚀 **Create Pull Request** walks you through title, description, source and destination branches, reviewers (including defaults), remote cleanup after merge, then opens the new PR in a work tree window.
 * 🔔 **Notifications** lists the Bitbucket notifications captured by the [Diffy Chrome extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-chrome-ext), newest first, with time, type, pull request, actor, and message
 

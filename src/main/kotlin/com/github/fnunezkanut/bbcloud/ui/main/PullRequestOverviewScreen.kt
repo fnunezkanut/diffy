@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
@@ -31,6 +32,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.DiffyBundle
@@ -40,6 +42,7 @@ import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestReviewer
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerStatus
 import com.github.fnunezkanut.bbcloud.settings.DiffySettings
 import com.github.fnunezkanut.bbcloud.ui.components.DiffyOutlinedActionButton
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyPluginIcons
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.toComposeImageBitmap
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.diagnostic.logger
@@ -116,7 +119,15 @@ fun PullRequestOverviewScreen(
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.weight(1f)
                                 )
-                                if (state.description.isEditable && !state.description.isEditing) {
+                                val showExplain = state.description.isExplainWithAiVisible && !state.description.isEditing
+                                val showEdit = state.description.isEditable && !state.description.isEditing
+                                if (showExplain) {
+                                    ExplainWithAiButton(onClick = viewModel::onExplainWithAi)
+                                }
+                                if (showExplain && showEdit) {
+                                    Spacer(modifier = Modifier.width(CARD_GAP))
+                                }
+                                if (showEdit) {
                                     EditDescriptionButton(onClick = viewModel::onEditDescription)
                                 }
                             }
@@ -143,6 +154,11 @@ fun PullRequestOverviewScreen(
                         .padding(start = CARD_GAP / 2),
                     verticalArrangement = Arrangement.spacedBy(CARD_GAP)
                 ) {
+                    if (state.tickets.rows.isNotEmpty()) {
+                        TitledCardBox {
+                            TicketsCard(viewModel = viewModel)
+                        }
+                    }
                     TitledCardBox {
                         BuildsCard(viewModel = viewModel)
                     }
@@ -195,6 +211,21 @@ internal fun ActivityScrollEffect(conversationViewModel: PullRequestConversation
         if (scrollRequest.force || ConversationThreadRules.shouldSnapToTop(offsetPx = scrollState.value)) {
             scrollState.scrollTo(0)
         }
+    }
+}
+
+@Composable
+private fun ExplainWithAiButton(onClick: () -> Unit) {
+    val label = DiffyBundle.message("main.branch.overview.description.explainWithAi")
+    val tooltip = DiffyBundle.message("main.branch.overview.description.explainWithAi.tooltip")
+    Tooltip(tooltip = { Text(text = tooltip) }) {
+        DiffyOutlinedActionButton(
+            text = label,
+            icon = DiffyPluginIcons.sendToAir,
+            outlineColor = ActionButtonOutlines.green(),
+            enabled = true,
+            onClick = onClick
+        )
     }
 }
 
@@ -336,6 +367,38 @@ private fun ClickableIcon(icon: IconKey, description: String, enabled: Boolean, 
 private fun MessageText(text: String) {
     Text(text = text, color = JewelTheme.globalColors.text.info)
 }
+
+// region Tickets
+
+@Composable
+private fun TicketsCard(viewModel: PullRequestOverviewViewModel) {
+    val state by viewModel.state
+    val tickets = state.tickets
+    CollapsibleSection(
+        title = tickets.title,
+        isExpanded = tickets.isExpanded,
+        onToggle = viewModel::onToggleTickets
+    ) {
+        tickets.rows.forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
+                Text(text = "\u2022")
+                Text(
+                    text = row.id,
+                    color = ActionButtonOutlines.green(),
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier
+                        .clickable {
+                            viewModel.onTicketOpened(row.id)
+                            BrowserUtil.browse(row.url)
+                        }
+                        .pointerHoverIcon(PointerIcon.Hand)
+                )
+            }
+        }
+    }
+}
+
+// endregion
 
 // region Builds
 
