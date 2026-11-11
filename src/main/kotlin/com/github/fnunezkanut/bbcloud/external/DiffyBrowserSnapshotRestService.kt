@@ -29,9 +29,9 @@ class DiffyBrowserSnapshotRestService : RestService() {
         return method == HttpMethod.POST
     }
 
-    /** Same rule as the open endpoint: let any Chrome extension reach [execute], which holds the real origin gate. */
+    /** Same rule as the open endpoint: let any browser extension reach [execute], which holds the real origin gate. */
     override fun isOriginAllowed(request: HttpRequest): OriginCheckResult {
-        if (isChromeExtensionOrigin(request = request)) {
+        if (isBrowserExtensionOrigin(request = request)) {
             return OriginCheckResult.ALLOW
         }
         val result = super.isOriginAllowed(request)
@@ -48,7 +48,7 @@ class DiffyBrowserSnapshotRestService : RestService() {
             "Received ${request.method()} $SERVICE_PATH: origin=${request.origin}, bytes=$bytes, " +
                 "contentType=${request.headers().get("Content-Type")}"
         )
-        if (request.origin != DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN) {
+        if (!isDiffyExtensionOrigin(origin = request.origin)) {
             LOG.info(
                 "Rejected a snapshot from origin ${request.origin}; expected ${DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN}"
             )

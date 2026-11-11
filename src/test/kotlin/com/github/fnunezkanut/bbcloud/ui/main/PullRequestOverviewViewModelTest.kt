@@ -266,9 +266,6 @@ class PullRequestOverviewViewModelTest {
                     webUrl = "https://bitbucket.org/workspace/repository/pull-requests/273",
                     sourceBranch = "feature",
                     destinationBranch = "main",
-                    authorDisplayName = "Author",
-                    state = PullRequestState.Open,
-                    isDraft = false,
                     description = "## Raw"
                 )
             } finally {

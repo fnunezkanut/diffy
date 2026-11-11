@@ -40,11 +40,33 @@ class DiffyPingBodyTest {
     }
 
     @Test
-    fun `isChromeExtensionOrigin - should accept only chrome extension origins`() {
+    fun `build - should include the workspace for a firefox extension origin`() {
+        // GIVEN / WHEN
+        val firefox = ping(origin = "moz-extension://0a1b2c3d-1111-2222-3333-444455556666", workspace = "acme-workspace")
+
+        // THEN
+        firefox.get("workspace").asString shouldBe "acme-workspace"
+    }
+
+    @Test
+    fun `isBrowserExtensionOrigin - should accept chrome and firefox extension origins only`() {
         assertSoftly {
-            isChromeExtensionOrigin(origin = "chrome-extension://abc") shouldBe true
-            isChromeExtensionOrigin(origin = "https://bitbucket.org") shouldBe false
-            isChromeExtensionOrigin(origin = null) shouldBe false
+            isBrowserExtensionOrigin(origin = "chrome-extension://abc") shouldBe true
+            isBrowserExtensionOrigin(origin = "moz-extension://abc") shouldBe true
+            isBrowserExtensionOrigin(origin = "https://bitbucket.org") shouldBe false
+            isBrowserExtensionOrigin(origin = null) shouldBe false
+        }
+    }
+
+    @Test
+    fun `isDiffyExtensionOrigin - should accept the diffy chrome id and any firefox extension`() {
+        assertSoftly {
+            isDiffyExtensionOrigin(origin = DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN) shouldBe true
+            isDiffyExtensionOrigin(origin = "moz-extension://abc") shouldBe true
+            isDiffyExtensionOrigin(origin = "moz-extension://") shouldBe false
+            isDiffyExtensionOrigin(origin = "chrome-extension://someoneelse") shouldBe false
+            isDiffyExtensionOrigin(origin = "https://bitbucket.org") shouldBe false
+            isDiffyExtensionOrigin(origin = null) shouldBe false
         }
     }
 }

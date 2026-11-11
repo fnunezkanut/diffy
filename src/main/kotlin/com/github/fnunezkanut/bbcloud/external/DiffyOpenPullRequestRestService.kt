@@ -39,13 +39,13 @@ class DiffyOpenPullRequestRestService : RestService() {
     }
 
     /**
-     * Lets requests from any Chrome extension reach [execute]. Without this, the platform's accessibility check drops a
+     * Lets requests from any Chrome or Firefox extension reach [execute]. Without this, the platform's accessibility check drops a
      * request from an unknown extension and answers 404, and the extension cannot tell why it failed. [execute] keeps the
      * real gate: it answers the ping for any extension, and it accepts a POST only from
      * [DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN]. Other origins keep the platform's default handling.
      */
     override fun isOriginAllowed(request: HttpRequest): OriginCheckResult {
-        if (isChromeExtensionOrigin(request = request)) {
+        if (isBrowserExtensionOrigin(request = request)) {
             return OriginCheckResult.ALLOW
         }
         val result = super.isOriginAllowed(request)
@@ -78,14 +78,14 @@ class DiffyOpenPullRequestRestService : RestService() {
     private fun handlePing(request: FullHttpRequest, context: ChannelHandlerContext) {
         val origin = request.origin
         val workspaceConfigured = DiffyConfigurationService.getInstance().workspaceSlugOrNull() != null
-        if (origin == DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN) {
+        if (isDiffyExtensionOrigin(origin = origin)) {
             LOG.info(
                 "Answering the diffy ping from the diffy extension: origin=$origin, " +
                     "workspaceConfigured=$workspaceConfigured, version=${DiffyBuildInfo.version()}"
             )
-        } else if (isChromeExtensionOrigin(origin = origin)) {
+        } else if (isBrowserExtensionOrigin(origin = origin)) {
             LOG.info(
-                "Ping from a Chrome extension that is not the diffy extension: origin=$origin, expected " +
+                "Ping from a browser extension that is not the diffy extension: origin=$origin, expected " +
                     "${DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN}; the workspace is not disclosed"
             )
         } else {
@@ -95,7 +95,7 @@ class DiffyOpenPullRequestRestService : RestService() {
     }
 
     private fun handleOpen(request: FullHttpRequest, context: ChannelHandlerContext) {
-        if (request.origin != DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN) {
+        if (!isDiffyExtensionOrigin(origin = request.origin)) {
             LOG.info(
                 "Rejected an open request from origin ${request.origin}; expected ${DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN}"
             )

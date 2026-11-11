@@ -6,6 +6,7 @@
 
 * [Install **Diffy - Bitbucket PR Review** from the JetBrains Marketplace](https://plugins.jetbrains.com/plugin/35502-diffy--bitbucket-pr-review)
 * [Chrome Extension](diffy-chrome-ext/README.md) Easily launch PR reviews with Diffy in IntelliJ straight from Bitbucket.org.
+* [Firefox Extension](diffy-firefox-ext/README.md) The same, for Firefox.
 
 
 ## Main features
@@ -28,7 +29,7 @@ Helps you review Bitbucket Cloud pull requests without leaving your Jetbrains ID
 * ✏️ **Modified File View** and **Diff View** surface existing comments and let you add line-level feedback from the gutter or context menu, view add/remove counts, and mark files reviewed.
 * 📝 **Rendered Markdown side by side diff view** shows the rendered result of changed Markdown files next to each other, so documentation changes can be reviewed as readers will see them. The **Wrap Lines** button in the review bar of a Markdown diff wraps long lines so there is no horizontal scrolling, and remembers your choice.
 * 🚀 **Create Pull Request** walks you through title, description, source and destination branches, reviewers (including defaults), remote cleanup after merge, then opens the new PR in a work tree window.
-* 🔔 **Notifications** lists the Bitbucket notifications captured by the [Diffy Chrome extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-chrome-ext), newest first, with time, type, pull request, actor, and message
+* 🔔 **Notifications** lists the Bitbucket notifications captured by the [Diffy Chrome extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-chrome-ext) or [Firefox extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-firefox-ext), newest first, with time, type, pull request, actor, and message
 
 
 ## Notice

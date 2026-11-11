@@ -5,6 +5,9 @@ object DiffyExternalOrigins {
     /** The scheme prefix of every Chrome extension origin. */
     const val CHROME_EXTENSION_PREFIX = "chrome-extension://"
 
+    /** The scheme prefix of every Firefox extension origin; the part after it is a random UUID per browser profile. */
+    const val FIREFOX_EXTENSION_PREFIX = "moz-extension://"
+
     /**
      * The exact origin of the Diffy Chrome extension, which the extension sends as its `Origin` header.
      *

@@ -56,9 +56,7 @@ class CheckedOutBranchPanel(
         onExplainWithAi = { request ->
             AirPullRequestExplainer.explain(
                 project = attachedProject,
-                request = request,
-                workspace = infoWorkspace.ifBlank { DiffySettings.getInstance().workspaceSlug },
-                repositorySlug = infoRepositorySlug
+                request = request
             )
         }
     )
