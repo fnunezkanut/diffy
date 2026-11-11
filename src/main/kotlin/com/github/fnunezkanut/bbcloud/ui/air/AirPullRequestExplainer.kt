@@ -15,16 +15,14 @@ internal object AirPullRequestExplainer {
     private val LOG = logger<AirPullRequestExplainer>()
 
     /** Call it on the EDT from the button click. */
-    fun explain(project: Project?, request: ExplainPullRequestRequest, workspace: String, repositorySlug: String) {
+    fun explain(project: Project?, request: ExplainPullRequestRequest) {
         if (project == null) {
             LOG.info("Explain this PR with AI ignored for pull request #${request.pullRequestId}: no project")
             return
         }
         val text = AirExplainPullRequestPrompt.build(
             request = request,
-            repositoryPath = project.basePath,
-            workspace = workspace,
-            repositorySlug = repositorySlug
+            repositoryPath = project.basePath
         )
         LOG.debug("Sending the explain prompt for pull request #${request.pullRequestId} to a new Air chat")
         AirChatBridge.sendToNewChatInput(project = project, text = text) { outcome ->

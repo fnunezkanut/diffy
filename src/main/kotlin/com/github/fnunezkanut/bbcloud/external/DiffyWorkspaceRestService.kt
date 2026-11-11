@@ -30,9 +30,9 @@ class DiffyWorkspaceRestService : RestService() {
         return method == HttpMethod.POST
     }
 
-    /** Same rule as the open endpoint: let any Chrome extension reach [execute], which holds the real origin gate. */
+    /** Same rule as the open endpoint: let any browser extension reach [execute], which holds the real origin gate. */
     override fun isOriginAllowed(request: HttpRequest): OriginCheckResult {
-        if (isChromeExtensionOrigin(request = request)) {
+        if (isBrowserExtensionOrigin(request = request)) {
             return OriginCheckResult.ALLOW
         }
         val result = super.isOriginAllowed(request)
@@ -46,7 +46,7 @@ class DiffyWorkspaceRestService : RestService() {
     override fun execute(urlDecoder: QueryStringDecoder, request: FullHttpRequest, context: ChannelHandlerContext): String? {
         val origin = request.origin
         val workspace = DiffyConfigurationService.getInstance().workspaceSlugOrNull()
-        if (origin == DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN) {
+        if (isDiffyExtensionOrigin(origin = origin)) {
             LOG.info("Answering the workspace request from the diffy extension: workspaceConfigured=${workspace != null}")
         } else {
             LOG.info(

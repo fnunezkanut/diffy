@@ -98,9 +98,6 @@ class PullRequestOverviewViewModel(
             webUrl = details.summary.webUrl,
             sourceBranch = details.summary.sourceBranch,
             destinationBranch = details.summary.destinationBranch,
-            authorDisplayName = details.summary.authorDisplayName,
-            state = details.summary.state,
-            isDraft = details.summary.isDraft,
             description = details.description
         )
         state.value = state.value.copy(

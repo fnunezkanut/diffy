@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Diffy - Bitbucket PR Review",
+  "version": "1.12.0",
+  "description": "Adds an Open in IntelliJ icon next to pull requests on bitbucket.org list and detail pages; opens them in a git worktree in a running IntelliJ IDE.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "diffy@fnunezkanut.github.io",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["websiteContent"]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  },
+  "background": {
+    "scripts": ["lib/log.js", "lib/snapshot.js", "capture.js", "background.js"]
+  },
+  "permissions": ["storage", "alarms", "scripting"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*", "https://bitbucket.org/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://bitbucket.org/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/icon48.png"],
+      "matches": ["https://bitbucket.org/*"]
+    }
+  ]
+}

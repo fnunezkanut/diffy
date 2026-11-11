@@ -20,4 +20,16 @@ and forwards it to Diffy IntelliJ plugin listening on localhost
 2. Turn on **Developer mode** (top-right).
 3. Click **Load unpacked** and select this `diffy-chrome-ext/` directory.
 
-This plugin will be published on Chrome Marketplace soon
+This plugin will be published on Chrome Extensions page soon
+
+### Firefox
+
+A Firefox extension with the same features lives in `diffy-firefox-ext/` (requires Firefox 140 or newer and the Diffy plugin 1.12.0 or newer):
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on...** and select `diffy-firefox-ext/manifest.json`.
+3. In `about:addons` > the extension > **Permissions**, allow access to `bitbucket.org` and `127.0.0.1`.
+
+See [diffy-firefox-ext/README.md](../diffy-firefox-ext/README.md) for details.
+
+This plugin will be published on Mozilla Addons page soon

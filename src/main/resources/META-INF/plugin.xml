@@ -27,12 +27,9 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Added: an "Explain this PR with AI" button next to Edit Description, shown when the JetBrains Air plugin is installed; it puts a prompt in a new Air chat that asks the agent for a structured explanation of the open pull request with Mermaid diagrams</li>
-            <li>Added: a balloon "X new event notifications from Diffy browser extension" with an "Open Notifications" link when a Chrome extension sync brings in new events (not shown on the first sync)</li>
-            <li>Added: the Notifications tab remembers the "Show only Unread" filter</li>
-            <li>Added: Wrap and Unwrap lines button on diff view</li>
-            <li>Added: Jira ticket id parsing from PR title and/or branch title, in a new Tickets panel that links to Jira</li>
-            <li>Changed: Collapse Unchanged Fragments setting is the default (can be changed)</li>
+            <li>Added: Firefox extension "Diffy - Bitbucket PR Review" in <code>diffy-firefox-ext</code> with the same features as the Chrome extension</li>
+            <li>Changed: the plugin accepts requests from Firefox extension origins as well as the Diffy Chrome extension</li>
+            <li>Changed: Slight update to the "Explain this PR with AI" prompt</li>
         </ul>
     ]]></change-notes>
 

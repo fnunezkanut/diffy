@@ -8,14 +8,14 @@ object DiffyPingBody {
 
     /**
      * Always carries `plugin` and `version`. The configured [workspace] is added only for
-     * [DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN], and then as JSON null when none is configured, so another
+     * the Diffy Chrome extension or a Firefox extension (see [isDiffyExtensionOrigin]), and then as JSON null when none is configured, so another
      * extension learns nothing about the user.
      */
     fun build(origin: String?, version: String, workspace: String?): String {
         val body = JsonObject()
         body.addProperty("plugin", PLUGIN_NAME)
         body.addProperty("version", version)
-        if (origin == DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN) {
+        if (isDiffyExtensionOrigin(origin = origin)) {
             body.addProperty("workspace", workspace)
         }
         return body.toString()

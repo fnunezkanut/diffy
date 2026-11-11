@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## *1.12.0* - 2026-11-11
+* Added: Firefox extension "Diffy - Bitbucket PR Review" in `diffy-firefox-ext` with the same features as the Chrome extension
+* Changed: the plugin accepts requests from Firefox extension origins as well as the Diffy Chrome extension
+* Changed: Slight update to the "Explain this PR with AI" prompt
+
 ## *1.11.0* - 2026-11-10
 * Added: an "Explain this PR with AI" button next to Edit Description, shown when the JetBrains Air plugin is installed; it puts a prompt in a new Air chat that asks the agent for a structured explanation of the open pull request with Mermaid diagrams
 * Added: Wrap and Unwrap lines button on diff view
