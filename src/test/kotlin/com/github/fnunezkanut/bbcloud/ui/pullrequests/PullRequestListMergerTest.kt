@@ -14,8 +14,8 @@ class PullRequestListMergerTest {
             PullRequestListingSource.WorkspaceAuthored to listOf(
                 listEntry(id = 1, source = PullRequestListingSource.WorkspaceAuthored, repoSlug = "repo-a", updatedOn = "2026-09-01T12:00:00Z")
             ),
-            PullRequestListingSource.WorkspaceAssigned to listOf(
-                listEntry(id = 2, source = PullRequestListingSource.WorkspaceAssigned, repoSlug = "repo-b", updatedOn = "2026-10-01T12:00:00Z")
+            PullRequestListingSource.WatchedOpen to listOf(
+                listEntry(id = 2, source = PullRequestListingSource.WatchedOpen, repoSlug = "repo-b", updatedOn = "2026-10-01T12:00:00Z")
             )
         )
 
@@ -65,22 +65,44 @@ class PullRequestListMergerTest {
     }
 
     @Test
-    fun `merge - should de-duplicate by key with WorkspaceAuthored taking precedence over WorkspaceAssigned`() {
+    fun `merge - should keep the watched row over the authored row for the same pull request`() {
         // GIVEN the same pull request appearing in both sources, with different slug casing
         val entriesBySource = mapOf(
             PullRequestListingSource.WorkspaceAuthored to listOf(
                 listEntry(id = 7, source = PullRequestListingSource.WorkspaceAuthored, repoSlug = "Repo")
             ),
-            PullRequestListingSource.WorkspaceAssigned to listOf(
-                listEntry(id = 7, source = PullRequestListingSource.WorkspaceAssigned, repoSlug = "repo")
+            PullRequestListingSource.WatchedOpen to listOf(
+                listEntry(id = 7, source = PullRequestListingSource.WatchedOpen, repoSlug = "repo")
             )
         )
 
         // WHEN
-        val merged = PullRequestListMerger.merge(entriesBySource = entriesBySource, openFirst = false)
+        val merged = PullRequestListMerger.merge(entriesBySource = entriesBySource, openFirst = true)
 
-        // THEN only one row remains, and it is the authored one (declaration order wins); slug match is case-insensitive
-        merged.map { it.source } shouldContainExactly listOf(PullRequestListingSource.WorkspaceAuthored)
+        // THEN only one row remains, and it is the watched one (declaration order wins); slug match is case-insensitive
+        merged.map { it.source } shouldContainExactly listOf(PullRequestListingSource.WatchedOpen)
+    }
+
+    @Test
+    fun `merge - should keep the current project row over the watched and authored copies`() {
+        // GIVEN the same pull request in the project, watched, and authored sources
+        val entriesBySource = mapOf(
+            PullRequestListingSource.WorkspaceAuthored to listOf(
+                listEntry(id = 7, source = PullRequestListingSource.WorkspaceAuthored)
+            ),
+            PullRequestListingSource.WatchedOpen to listOf(
+                listEntry(id = 7, source = PullRequestListingSource.WatchedOpen)
+            ),
+            PullRequestListingSource.ProjectOpen to listOf(
+                listEntry(id = 7, source = PullRequestListingSource.ProjectOpen)
+            )
+        )
+
+        // WHEN
+        val merged = PullRequestListMerger.merge(entriesBySource = entriesBySource, openFirst = true)
+
+        // THEN
+        merged.map { it.source } shouldContainExactly listOf(PullRequestListingSource.ProjectOpen)
     }
 
     @Test

@@ -25,6 +25,11 @@ object MainPanelStatusSupport {
         ).toComposeColor()
     }
 
+    /** A light gray for de-emphasized notes. */
+    fun mutedForeground(): Color {
+        return JBColor(0xA0A0A0, 0x8C8C8C).toComposeColor()
+    }
+
     fun errorForeground(): Color {
         return JBColor.namedColor(
             "Label.errorForeground",

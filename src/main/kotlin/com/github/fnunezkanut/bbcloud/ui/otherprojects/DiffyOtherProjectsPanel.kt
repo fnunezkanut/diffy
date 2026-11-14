@@ -17,10 +17,11 @@ import com.github.fnunezkanut.bbcloud.bitbucket.AuthoredPullRequestListResult
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyAuthoredPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
-import com.github.fnunezkanut.bbcloud.bitbucket.DiffyReviewQueueService
+import com.github.fnunezkanut.bbcloud.bitbucket.DiffyWatchedProjectsPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketPullRequestClient
+import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequest
-import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequestListResult
+import com.github.fnunezkanut.bbcloud.bitbucket.WatchedPullRequestListResult
 import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
 import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
@@ -40,16 +41,19 @@ import com.github.fnunezkanut.bbcloud.project.WorktreePruneAction
 import com.github.fnunezkanut.bbcloud.project.WorktreePruneDecision
 import com.github.fnunezkanut.bbcloud.project.WorktreePruneSummary
 import com.github.fnunezkanut.bbcloud.review.DiffyKnownUsersCache
-import com.github.fnunezkanut.bbcloud.settings.PullRequestListScope
 import com.github.fnunezkanut.bbcloud.ui.components.NotConfiguredContent
+import com.github.fnunezkanut.bbcloud.ui.main.DiffyCurrentProjectCoordinator
 import com.github.fnunezkanut.bbcloud.ui.pullrequest.help.DiffyWorktreesHelpEditorOpener
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestExcludeCheckboxes
+import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestListEntry
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestListingSource
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestsListingBody
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.PullRequestsViewModel
 import com.github.fnunezkanut.bbcloud.ui.pullrequests.mentionPeopleByWorkspace
 import com.github.fnunezkanut.bbcloud.ui.worktree.PullRequestWorktreeOpener
 import com.github.fnunezkanut.bbcloud.ui.worktree.PullRequestWorktreeRemovalLauncher
+import com.github.fnunezkanut.bbcloud.ui.worktree.PullRequestWorktreeRemovalRegistry
+import com.github.fnunezkanut.bbcloud.ui.worktree.ResolvedWorktreeAutoCleanup
 import com.github.fnunezkanut.bbcloud.ui.worktree.WorktreeBranchCollisionDialog
 import com.github.fnunezkanut.bbcloud.ui.worktree.WorktreeBranchCollisionResolver
 import com.github.fnunezkanut.bbcloud.ui.worktree.WorktreeOpenOutcome
@@ -80,23 +84,31 @@ import kotlinx.coroutines.coroutineScope as coroutineScopeBlock
 
 /**
  * Coordinator for the Workspace scope that owns the shared data and UI for:
- *   - The Workspace tab: one merged listing of the pull requests the user opened and the pull requests assigned
- *     to the user for review, driven by the reusable PullRequestsViewModel (sources WorkspaceAuthored and
- *     WorkspaceAssigned).
+ *   - The Pull Requests tab: one merged, de-duplicated listing of the recent pull requests of the current project, the
+ *     open pull requests the user opened in the workspace, and the recent pull requests of the watched projects,
+ *     driven by the reusable PullRequestsViewModel (all [PullRequestListingSource] entries).
  *   - The Workspace - Watched Projects tab: projects directory selection and the discovered project list.
+ *
+ * [onOpenCountChanged] receives the open pull request count the header pill shows, or null while the pill is hidden.
  */
 
 class DiffyOtherProjectsPanel(
     private val project: Project,
     private val configurationService: DiffyConfigurationService,
     private val authoredPullRequestService: DiffyAuthoredPullRequestService,
-    private val reviewQueueService: DiffyReviewQueueService,
+    private val watchedPullRequestService: DiffyWatchedProjectsPullRequestService,
+    private val currentProjectCoordinator: DiffyCurrentProjectCoordinator,
     private val coroutineScope: CoroutineScope,
     private val onGoToSettings: () -> Unit,
     private val onGoToWatchedProjects: () -> Unit,
     private val onGoToWorkspace: () -> Unit,
-    private val onRefreshRequested: () -> Unit
+    private val onRefreshRequested: () -> Unit,
+    private val onOpenCountChanged: (Int?) -> Unit = {}
 ) {
+    /** The last count passed to [onOpenCountChanged]; volatile because the counts callback is not guaranteed to run on the EDT. */
+    @Volatile
+    private var lastTabOpenCount: Int? = null
+
     /** Prepares the per-pull-request git worktree the pull request is opened into, without mutating the shared clone. */
     private val worktreeService = DiffyWorktreeService.getInstance()
 
@@ -119,20 +131,25 @@ class DiffyOtherProjectsPanel(
     /** Prevents repeated prune requests for all watched projects while the first request is running. */
     private val pruneAllInProgress = AtomicBoolean(false)
 
-    // The one merged Workspace view model (sources WorkspaceAuthored and WorkspaceAssigned).
-    private val workspacePullRequestsViewModel = PullRequestsViewModel(
-        logName = "Workspace",
-        sourcesOfTab = setOf(PullRequestListingSource.WorkspaceAuthored, PullRequestListingSource.WorkspaceAssigned),
-        scope = PullRequestListScope.Workspace,
-        initialFilter = configurationService.pullRequestListFilter(scope = PullRequestListScope.Workspace),
+    /** The current project of the Pull Requests, as the footer shows it; null while it is being checked. */
+    private val currentProjectStatus: MutableState<CurrentProjectLookup?> = mutableStateOf(null)
+
+    // The one merged Pull Requests view model (all five sources).
+    private val overviewPullRequestsViewModel = PullRequestsViewModel(
+        logName = "Pull Requests",
+        sourcesOfTab = PullRequestListingSource.entries.toSet(),
+        initialFilter = configurationService.pullRequestsListFilter(),
         organizationUrl = { configurationService.organizationUrlOrNull() },
-        onFilterChangedCallback = { filter ->
-            configurationService.savePullRequestListFilter(scope = PullRequestListScope.Workspace, filter = filter)
-        },
-        onOpenTitleCallback = { entry -> startOpenPullRequestInWorktree(pullRequest = entry.pullRequest) },
+        onFilterChangedCallback = { filter -> configurationService.savePullRequestsListFilter(filter = filter) },
+        onOpenTitleCallback = ::openOverviewTitle,
         onOpenPrOnWebCallback = { entry -> openPrOnWebForPullRequest(entry.pullRequest) },
         onOpenRepositoryCallback = { entry -> openRepositoryForPullRequest(entry.pullRequest) },
-        onCountsChanged = { openCount, card -> workspaceHeaderViewModel.setOpenCount(openCount = openCount, card = card) },
+        onCountsChanged = { openCount, card ->
+            workspaceHeaderViewModel.setOpenCount(openCount = openCount, card = card)
+            val tabCount = tabOpenCount(openCount = openCount, card = card, previous = lastTabOpenCount)
+            lastTabOpenCount = tabCount
+            onOpenCountChanged(tabCount)
+        },
         seedKnownUsers = { entries ->
             mentionPeopleByWorkspace(entries = entries).forEach { (workspace, people) ->
                 DiffyKnownUsersCache.getInstance().record(workspace = workspace, candidates = people)
@@ -169,45 +186,75 @@ class DiffyOtherProjectsPanel(
         onGoToWorkspaceCallback = onGoToWorkspace
     )
 
-    // One workspace header for the merged Workspace tab root.
-    private val workspaceHeaderViewModel = WorkspaceHeaderViewModel(onRefreshRequested = onRefreshRequested)
-
-    /** The two cards of each Workspace tab root, driven by Compose state instead of a Swing CardLayout. */
-    private val workspacePrsCard: MutableState<ViewCard> = mutableStateOf(ViewCard.Content)
-    private val watchedProjectsCard: MutableState<ViewCard> = mutableStateOf(ViewCard.Content)
-
-    private val workspacePullRequestsLoader = WorkspacePullRequestsLoader(
-        pullRequestsViewModel = workspacePullRequestsViewModel,
-        headerViewModel = workspaceHeaderViewModel,
-        dataSource = ServiceWorkspacePullRequestsDataSource(
-            configurationService = configurationService,
-            authoredPullRequestService = authoredPullRequestService,
-            reviewQueueService = reviewQueueService
-        ),
-        onShowContentCallback = { workspacePrsCard.value = ViewCard.Content },
-        onShowNotConfiguredCallback = { workspacePrsCard.value = ViewCard.NotConfigured }
+    // One workspace header for the Pull Requests root.
+    private val workspaceHeaderViewModel = WorkspaceHeaderViewModel(
+        onRefreshRequested = onRefreshRequested,
+        onCreatePullRequestRequested = { currentProjectCoordinator.openNewPullRequestEditor() }
     )
 
-    val workspacePrsTabComponent: JComponent = compose {
+    /** The two cards of each Workspace scope tab root, driven by Compose state instead of a Swing CardLayout. */
+    private val overviewCard: MutableState<ViewCard> = mutableStateOf(ViewCard.Content)
+    private val watchedProjectsCard: MutableState<ViewCard> = mutableStateOf(ViewCard.Content)
+
+    /** The shared open flow. It also guards against duplicate opens of the same worktree path. */
+    private val worktreeOpener = PullRequestWorktreeOpener.getInstance()
+
+    /** Removes the work trees of merged or declined pull requests of the current and the watched projects. */
+    private val resolvedWorktreeAutoCleanup = ResolvedWorktreeAutoCleanup(
+        configurationService = configurationService,
+        openPullRequestService = openPullRequestService,
+        worktreeService = worktreeService,
+        worktreeOpener = worktreeOpener,
+        coroutineScope = coroutineScope,
+        isPruneAllInProgress = { pruneAllInProgress.get() }
+    )
+
+    private val overviewLoader = PullRequestsLoader(
+        pullRequestsViewModel = overviewPullRequestsViewModel,
+        headerViewModel = workspaceHeaderViewModel,
+        dataSource = ServicePullRequestsDataSource(
+            configurationService = configurationService,
+            authoredPullRequestService = authoredPullRequestService,
+            watchedPullRequestService = watchedPullRequestService,
+            currentProjectCoordinator = currentProjectCoordinator
+        ),
+        onShowContentCallback = { overviewCard.value = ViewCard.Content },
+        onShowNotConfiguredCallback = { overviewCard.value = ViewCard.NotConfigured },
+        onCurrentProjectStatusChanged = { lookup ->
+            currentProjectStatus.value = lookup
+            workspaceHeaderViewModel.showCurrentProject(lookup = lookup)
+        },
+        onRepositoryListedLive = { workspace, repoSlug, resolvedPrNumbers ->
+            resolvedWorktreeAutoCleanup.clean(workspace = workspace, repoSlug = repoSlug, resolvedPrNumbers = resolvedPrNumbers)
+        }
+    )
+
+    val pullRequestsTabComponent: JComponent = compose {
         WorkspaceRootContent(
-            card = workspacePrsCard.value,
+            card = overviewCard.value,
             headerState = workspaceHeaderViewModel.state.value,
             onRefreshRequested = workspaceHeaderViewModel::onRefreshClicked,
             onGoToSettings = onGoToSettings,
             excludeContent = {
                 PullRequestExcludeCheckboxes(
-                    filter = workspacePullRequestsViewModel.state.value.filter,
-                    viewModel = workspacePullRequestsViewModel,
-                    isCurrentUserKnown = workspacePullRequestsViewModel.state.value.isCurrentUserKnown
+                    filter = overviewPullRequestsViewModel.state.value.filter,
+                    viewModel = overviewPullRequestsViewModel,
+                    isProjectScopeOffered = overviewPullRequestsViewModel.state.value.isProjectScopeOffered
                 )
             },
             content = {
                 PullRequestsListingBody(
-                    viewModel = workspacePullRequestsViewModel,
-                    emptyMessageKey = "pullRequests.workspace.none",
-                    errorMessageKey = "pullRequests.workspace.loadFailed",
+                    viewModel = overviewPullRequestsViewModel,
+                    emptyMessageKey = "pullRequests.overview.none",
+                    errorMessageKey = "pullRequests.overview.loadFailed",
                     footer = { state ->
-                        WorkspacePullRequestsFooter(state = state, onGoToWatchedProjects = onGoToWatchedProjects)
+                        PullRequestsFooter(
+                            state = state,
+                            currentProject = currentProjectStatus.value,
+                            isCreatePullRequestVisible = workspaceHeaderViewModel.state.value.isCreatePullRequestVisible,
+                            onCreatePullRequest = workspaceHeaderViewModel::onCreatePullRequestClicked,
+                            onGoToWatchedProjects = onGoToWatchedProjects
+                        )
                     }
                 )
             }
@@ -231,7 +278,7 @@ class DiffyOtherProjectsPanel(
 
     /** True while "prune all work trees" runs; the Recent Projects tab refuses work tree removals meanwhile. */
     fun isPruneInProgress(): Boolean {
-        return pruneAllInProgress.get()
+        return pruneAllInProgress.get() || resolvedWorktreeAutoCleanup.isRunning()
     }
 
     /**
@@ -258,24 +305,41 @@ class DiffyOtherProjectsPanel(
     }
 
     fun showNotConfigured() {
-        workspacePullRequestsLoader.showNotConfigured()
+        overviewLoader.showNotConfigured()
     }
 
-    /** See [WorkspacePullRequestsLoader.loadWorkspacePullRequests]. */
-    fun loadWorkspacePullRequests(
-        excludedRepoSlug: String?,
-        coroutineScope: CoroutineScope,
-        refresh: PullRequestCacheRefresh = PullRequestCacheRefresh.IfStale
-    ) {
-        workspacePullRequestsLoader.loadWorkspacePullRequests(
-            excludedRepoSlug = excludedRepoSlug,
-            coroutineScope = coroutineScope,
-            refresh = refresh
-        )
+    /** See [PullRequestsLoader.loadOverview]. */
+    fun loadOverview(coroutineScope: CoroutineScope, refresh: PullRequestCacheRefresh = PullRequestCacheRefresh.IfStale) {
+        overviewLoader.loadOverview(coroutineScope = coroutineScope, refresh = refresh)
     }
 
-    /** The shared open flow. It also guards against duplicate opens of the same worktree path. */
-    private val worktreeOpener = PullRequestWorktreeOpener.getInstance()
+    /** See [PullRequestsLoader.reloadCurrentProject]. */
+    fun reloadCurrentProject(reason: String) {
+        overviewLoader.reloadCurrentProject(coroutineScope = coroutineScope, reason = reason)
+    }
+
+    /** Re-applies the last computed card of the Pull Requests without a reload. Used by the editor navigation. */
+    fun showOverviewListing() {
+        overviewCard.value = ViewCard.Content
+        overviewPullRequestsViewModel.showListingCard()
+    }
+
+    /**
+     * Routes a title click on a Pull Requests row: an open row opens its own work tree, a resolved row opens the browser.
+     */
+    private fun openOverviewTitle(entry: PullRequestListEntry) {
+        val summary = entry.pullRequest.summary
+        if (summary.state == PullRequestState.Open) {
+            startOpenPullRequestInWorktree(pullRequest = entry.pullRequest)
+            return
+        }
+        if (summary.webUrl.isBlank()) {
+            LOG.info("Cannot open resolved pull request #${summary.id} in the browser: URL is blank")
+            return
+        }
+        LOG.info("User opened resolved pull request #${summary.id} in the browser from the Pull Requests")
+        BrowserUtil.browse(summary.webUrl)
+    }
 
     /** The removal flow shared with the Recent Projects tab, including the application-wide in-progress guard. */
     private val worktreeRemovalLauncher = PullRequestWorktreeRemovalLauncher(
@@ -292,12 +356,12 @@ class DiffyOtherProjectsPanel(
             LOG.info("Cannot open pull request #${pullRequest.summary.id} in the browser: URL is blank")
             return
         }
-        LOG.info("User opened pull request #${pullRequest.summary.id} in the browser from a Workspace PR table")
+        LOG.info("User opened pull request #${pullRequest.summary.id} in the browser from the Pull Requests")
         BrowserUtil.browse(url)
     }
 
     /**
-     * Handles a click on the Repository cell of the Workspace PR tables: when a local checkout of the row's repository
+     * Handles a click on the Repository cell of the the Pull Requests: when a local checkout of the row's repository
      * exists under the configured projects directory, that project is opened in a new IDE window (or refocused if it is
      * already open); otherwise the repository's Bitbucket web page is opened in a browser. Resolution and URL building
      * run no Bitbucket API call; the project open runs on [coroutineScope] because it is a suspend operation.
@@ -309,14 +373,14 @@ class DiffyOtherProjectsPanel(
         }
         val localPath = configurationService.localCheckoutPathForRepo(repoSlug)
         if (localPath.isBlank()) {
-            LOG.info("Opened Bitbucket repository $repoSlug from a Workspace PR table (no local checkout)")
+            LOG.info("Opened Bitbucket repository $repoSlug from the Pull Requests (no local checkout)")
             webUrl?.let { url -> BrowserUtil.browse(url) }
             return
         }
         coroutineScope.launch {
             val opened = LocalRepositoryProjectOpener.openOrFocus(repoSlug = repoSlug, checkoutPath = Path.of(localPath))
             if (opened != null) {
-                LOG.info("Opened local project $repoSlug from a Workspace PR table")
+                LOG.info("Opened local project $repoSlug from the Pull Requests")
             } else {
                 LOG.warn("Could not open local project $repoSlug; falling back to the Bitbucket web page")
                 ApplicationManager.getApplication().invokeLater {
@@ -840,6 +904,14 @@ class DiffyOtherProjectsPanel(
             LOG.info("Cannot prune PR worktrees: no projects directory")
             return
         }
+        if (PullRequestWorktreeRemovalRegistry.isBulkRemovalInProgress()) {
+            LOG.info("Cannot prune PR worktrees: removing all PR work trees is running")
+            showPruneNotification(
+                contentKey = "recentProjects.removeAllWorktrees.busy",
+                type = NotificationType.WARNING
+            )
+            return
+        }
         if (!pruneAllInProgress.compareAndSet(false, true)) {
             LOG.info("Ignoring duplicate PR worktree prune for all watched projects")
             return
@@ -1103,12 +1175,13 @@ private class ConfigurationWatchedProjectsDataSource(private val configurationSe
     }
 }
 
-/** Reads the Workspace configuration and listings from the configuration, authored-PR, and review-queue services. */
-private class ServiceWorkspacePullRequestsDataSource(
+/** Reads the Pull Requests configuration and listings from the configuration, current project, authored-PR, and watched-projects services. */
+private class ServicePullRequestsDataSource(
     private val configurationService: DiffyConfigurationService,
     private val authoredPullRequestService: DiffyAuthoredPullRequestService,
-    private val reviewQueueService: DiffyReviewQueueService
-) : WorkspacePullRequestsDataSource {
+    private val watchedPullRequestService: DiffyWatchedProjectsPullRequestService,
+    private val currentProjectCoordinator: DiffyCurrentProjectCoordinator
+) : PullRequestsDataSource {
     override fun organizationUrlOrNull(): String? {
         return configurationService.organizationUrlOrNull()
     }
@@ -1125,34 +1198,43 @@ private class ServiceWorkspacePullRequestsDataSource(
         return configurationService.repoAvatarUrlsForCurrentWorkspace()
     }
 
-    override suspend fun listAuthored(organizationUrl: String, excludedRepoSlug: String?, refresh: PullRequestCacheRefresh): AuthoredPullRequestListResult {
+    override suspend fun lookupCurrentProject(refresh: PullRequestCacheRefresh): CurrentProjectLookup {
+        return currentProjectCoordinator.lookupCurrentProject(refresh = refresh)
+    }
+
+    override suspend fun listCurrentProject(refresh: PullRequestCacheRefresh): CurrentProjectListing {
+        return currentProjectCoordinator.listCurrentProject(refresh = refresh)
+    }
+
+    override suspend fun listAuthored(organizationUrl: String, refresh: PullRequestCacheRefresh): AuthoredPullRequestListResult {
+        // The Pull Requests de-duplicates against the repository listings, so no repository is excluded here.
         return authoredPullRequestService.listAuthoredPullRequests(
             organizationUrl = organizationUrl,
-            excludedRepoSlug = excludedRepoSlug,
+            excludedRepoSlug = null,
             refresh = refresh
         )
     }
 
-    override suspend fun listReviewing(
+    override suspend fun listWatched(
         organizationUrl: String,
-        excludedRepoSlug: String?,
         repoSlugs: List<String>,
+        excludedRepoSlug: String?,
         refresh: PullRequestCacheRefresh
-    ): ReviewingPullRequestListResult {
-        return reviewQueueService.listReviewingPullRequests(
+    ): WatchedPullRequestListResult {
+        return watchedPullRequestService.listWatchedPullRequests(
             organizationUrl = organizationUrl,
-            excludedRepoSlug = excludedRepoSlug,
             repoSlugs = repoSlugs,
+            excludedRepoSlug = excludedRepoSlug,
             refresh = refresh
         )
     }
 
     /**
-     * The Workspace Refresh re-scan: carries over the watched choices and only re-checks what the scan finds. Failures are
+     * The Pull Requests Refresh re-scan: carries over the watched choices and only re-checks what the scan finds. Failures are
      * logged and the stored set stays in use, so the pull request load goes on.
      */
     override suspend fun recheckWatchedProjects() {
-        LOG.info("User requested Workspace refresh; re-checking watched projects")
+        LOG.info("User requested Pull Requests refresh; re-checking watched projects")
         val result = configurationService.rescanWatchedProjects(clearFirst = false)
         LOG.info(
             "Watched projects re-check finished: ${result::class.simpleName}, " +
@@ -1161,21 +1243,21 @@ private class ServiceWorkspacePullRequestsDataSource(
     }
 
     private companion object {
-        private val LOG = logger<ServiceWorkspacePullRequestsDataSource>()
+        private val LOG = logger<ServicePullRequestsDataSource>()
     }
 }
 
-/** The two cards a Workspace tab root can show. */
+/** The two cards a Workspace scope tab root can show. */
 private enum class ViewCard {
     Content,
     NotConfigured
 }
 
 /**
- * The Compose body of one Workspace tab root.
+ * The Compose body of one Workspace scope tab root (the Pull Requests or Watched Projects).
  *
- * It switches between the not-configured card and the content card, which carries the [WorkspaceHeader] of the merged
- * Workspace root, driven by Compose state instead of the Swing CardLayout the panel used before. The optional
+ * It switches between the not-configured card and the content card, which carries the [WorkspaceHeader] of the PR
+ * Overview root, driven by Compose state instead of the Swing CardLayout the panel used before. The optional
  * [excludeContent] slot carries the Exclude: checkboxes inline into the header row; the Watched Projects tab passes
  * nothing, so it shows no header and no checkboxes.
  */

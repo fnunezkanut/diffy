@@ -31,6 +31,7 @@ class NotificationsViewModelTest {
     private val openedRepositories = mutableListOf<String>()
     private var zone: TimeZone = TimeZone.UTC
     private val labelRequests = AtomicInteger(0)
+    private val publishedUnreadCounts = mutableListOf<Int>()
 
     private val viewModel = NotificationsViewModel(
         stored = stored,
@@ -53,7 +54,8 @@ class NotificationsViewModelTest {
                 lastUpdatedText = { instant, zone -> formatTime(instant = instant, timeZone = zone) }
             )
         },
-        ioDispatcher = Dispatchers.Unconfined
+        ioDispatcher = Dispatchers.Unconfined,
+        onUnreadCountChanged = { count -> publishedUnreadCounts.add(count) }
     )
 
     private fun content(
@@ -321,5 +323,48 @@ class NotificationsViewModelTest {
 
         // THEN
         helpOpened shouldBe 1
+    }
+
+    @Test
+    fun `unread count - publishes the unread count of the stored content once`() {
+        // GIVEN
+        viewModel.start()
+        val twoUnreadOneRead = DiffyNotificationsContent(
+            lastSyncedAt = Instant.parse("2026-11-08T10:00:00.000Z"),
+            notifications = listOf(
+                DiffyStoredNotification(event = browserEvent(id = "a"), unread = true),
+                DiffyStoredNotification(event = browserEvent(id = "b"), unread = true),
+                DiffyStoredNotification(event = browserEvent(id = "c"), unread = false)
+            ),
+            loaded = true
+        )
+
+        // WHEN
+        stored.value = twoUnreadOneRead
+        stored.value = twoUnreadOneRead.copy(lastSyncedAt = Instant.parse("2026-11-08T11:00:00.000Z"))
+
+        // THEN
+        publishedUnreadCounts shouldBe listOf(2)
+    }
+
+    @Test
+    fun `unread count - follows mark read and mark unread and ignores selection and filter changes`() {
+        // GIVEN
+        viewModel.start()
+        stored.value = content("a", "b")
+        publishedUnreadCounts.clear()
+
+        // WHEN
+        viewModel.onRowSelectionChanged(rowId = "a", selected = true)
+        val afterNeutralChanges = publishedUnreadCounts.toList()
+        viewModel.onMarkReadClicked()
+        viewModel.onMarkUnreadClicked()
+        viewModel.onShowOnlyUnreadChanged(showOnlyUnread = true)
+
+        // THEN
+        assertSoftly {
+            afterNeutralChanges shouldBe emptyList()
+            publishedUnreadCounts shouldBe listOf(1, 2)
+        }
     }
 }

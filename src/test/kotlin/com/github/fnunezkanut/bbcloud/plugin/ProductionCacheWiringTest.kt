@@ -15,7 +15,7 @@ class ProductionCacheWiringTest {
     private val cacheAwareServices = listOf(
         "DiffyOpenPullRequestService",
         "DiffyAuthoredPullRequestService",
-        "DiffyReviewQueueService",
+        "DiffyWatchedProjectsPullRequestService",
         "DiffyConfigurationService"
     )
 

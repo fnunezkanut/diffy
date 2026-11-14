@@ -1,6 +1,7 @@
 package com.github.fnunezkanut.bbcloud.settings
 
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
+import com.github.fnunezkanut.bbcloud.toolwindow.DiffyToolWindowTab
 import com.intellij.openapi.util.JDOMUtil
 import com.intellij.util.xmlb.XmlSerializer
 import io.kotest.assertions.assertSoftly
@@ -193,191 +194,162 @@ class DiffySettingsTest {
     }
 
     @Test
-    fun `pullRequestListFilter - should default to exclude resolved and drafts only for the current project scope`() {
-        // GIVEN a fresh settings instance
+    fun `pullRequestsListFilter - should round-trip through XmlSerializer`() {
+        // GIVEN a settings instance with non-default filter values saved
         val settings = DiffySettings()
+        val saved = PullRequestListFilter(
+            excludeResolved = false,
+            excludeApprovedByMe = true,
+            excludeDrafts = false,
+            userScope = PullRequestUserScope.Me,
+            projectScope = PullRequestProjectScope.CurrentProject
+        )
+        settings.savePullRequestsListFilter(filter = saved)
 
-        // WHEN
-        val filter = settings.pullRequestListFilter(scope = PullRequestListScope.CurrentProject)
+        // WHEN the state is serialized to XML and deserialized back
+        val serialized = XmlSerializer.serialize(settings.state)
+        val roundTripped = XmlSerializer.deserialize(serialized, DiffySettings.State::class.java)
+        val reloaded = DiffySettings()
+        reloaded.loadState(roundTripped)
 
-        // THEN Resolved and Drafts default on, Approved by me defaults off, and Created by any user is selected
+        // THEN the filter comes back with the saved values
+        reloaded.pullRequestsListFilter() shouldBe saved
+    }
+
+    @Test
+    fun `pullRequestsListFilter - should fall back to AssignedToMe for an unknown stored user scope`() {
+        // GIVEN a stored scope name that this build does not know, as a newer or hand-edited settings file might hold
+        val settings = DiffySettings()
+        settings.state.pullRequestsAuthorScope = "SomethingNew"
+
+        // WHEN the filter is read
+        val filter = settings.pullRequestsListFilter()
+
+        // THEN the unknown name falls back to AssignedToMe
+        filter.userScope shouldBe PullRequestUserScope.AssignedToMe
+    }
+
+    @Test
+    fun `pullRequestsListFilter - should ignore options stored under the legacy inbox names`() {
+        // GIVEN persisted XML that only holds the former inbox option names
+        val legacyXml =
+            """
+            <State>
+              <option name="inboxExcludeResolvedPullRequests" value="false" />
+              <option name="inboxExcludeApprovedByMePullRequests" value="true" />
+              <option name="inboxExcludeDraftPullRequests" value="false" />
+              <option name="inboxPullRequestAuthorScope" value="Me" />
+              <option name="inboxPullRequestProjectScope" value="CurrentProject" />
+            </State>
+            """.trimIndent()
+        val state = XmlSerializer.deserialize(JDOMUtil.load(legacyXml), DiffySettings.State::class.java)
+        val settings = DiffySettings()
+        settings.loadState(state)
+
+        // WHEN the filter is read
+        val filter = settings.pullRequestsListFilter()
+
+        // THEN the legacy values are not picked up and the defaults apply
         filter shouldBe PullRequestListFilter(
             excludeResolved = true,
             excludeApprovedByMe = false,
             excludeDrafts = true,
-            userScope = PullRequestUserScope.AnyUser
+            userScope = PullRequestUserScope.AssignedToMe,
+            projectScope = PullRequestProjectScope.AnyProject
         )
     }
 
     @Test
-    fun `pullRequestListFilter - should default to exclude drafts only and never resolved for the workspace scope`() {
-        // GIVEN a fresh settings instance
-        val settings = DiffySettings()
-
-        // WHEN
-        val filter = settings.pullRequestListFilter(scope = PullRequestListScope.Workspace)
-
-        // THEN the workspace scope offers no Resolved checkbox, so it always carries excludeResolved = false
-        filter shouldBe PullRequestListFilter(
-            excludeResolved = false,
-            excludeApprovedByMe = false,
-            excludeDrafts = true,
-            userScope = PullRequestUserScope.AnyUser
-        )
-    }
-
-    @Test
-    fun `savePullRequestListFilter - should ignore excludeResolved for the workspace scope`() {
-        // GIVEN a filter with excludeResolved mistakenly true for the workspace scope
-        val settings = DiffySettings()
-
-        // WHEN saved and read back
-        settings.savePullRequestListFilter(
-            scope = PullRequestListScope.Workspace,
-            filter = PullRequestListFilter(
-                excludeResolved = true,
-                excludeApprovedByMe = true,
-                excludeDrafts = false,
-                userScope = PullRequestUserScope.Me
-            )
-        )
-        val reread = settings.pullRequestListFilter(scope = PullRequestListScope.Workspace)
-
-        // THEN excludeResolved is not persisted for the workspace scope, but the other flags are
-        reread shouldBe PullRequestListFilter(
-            excludeResolved = false,
-            excludeApprovedByMe = true,
-            excludeDrafts = false,
-            userScope = PullRequestUserScope.Me
-        )
-    }
-
-    @Test
-    fun `savePullRequestListFilter - should keep the two scopes independent`() {
+    fun `pullRequestsListFilter - should default on a fresh state`() {
         // GIVEN
         val settings = DiffySettings()
 
-        // WHEN each scope saves a distinct filter
-        settings.savePullRequestListFilter(
-            scope = PullRequestListScope.CurrentProject,
-            filter = PullRequestListFilter(
-                excludeResolved = false,
-                excludeApprovedByMe = false,
-                excludeDrafts = false,
-                userScope = PullRequestUserScope.Me
-            )
+        // WHEN
+        val filter = settings.pullRequestsListFilter()
+
+        // THEN
+        filter shouldBe PullRequestListFilter(
+            excludeResolved = true,
+            excludeApprovedByMe = false,
+            excludeDrafts = true,
+            userScope = PullRequestUserScope.AssignedToMe,
+            projectScope = PullRequestProjectScope.AnyProject
         )
-        settings.savePullRequestListFilter(
-            scope = PullRequestListScope.Workspace,
-            filter = PullRequestListFilter(
-                excludeResolved = false,
-                excludeApprovedByMe = true,
-                excludeDrafts = true,
-                userScope = PullRequestUserScope.AnyUser
-            )
+    }
+
+    @Test
+    fun `savePullRequestsListFilter - should round-trip all five values`() {
+        // GIVEN
+        val settings = DiffySettings()
+        val saved = PullRequestListFilter(
+            excludeResolved = false,
+            excludeApprovedByMe = true,
+            excludeDrafts = false,
+            userScope = PullRequestUserScope.AssignedToMe,
+            projectScope = PullRequestProjectScope.CurrentProject
         )
 
-        // THEN each scope reads back its own values without interference
-        assertSoftly {
-            settings.pullRequestListFilter(scope = PullRequestListScope.CurrentProject) shouldBe PullRequestListFilter(
-                excludeResolved = false,
-                excludeApprovedByMe = false,
-                excludeDrafts = false,
-                userScope = PullRequestUserScope.Me
-            )
-            settings.pullRequestListFilter(scope = PullRequestListScope.Workspace) shouldBe PullRequestListFilter(
-                excludeResolved = false,
-                excludeApprovedByMe = true,
-                excludeDrafts = true,
-                userScope = PullRequestUserScope.AnyUser
-            )
+        // WHEN
+        settings.savePullRequestsListFilter(filter = saved)
+
+        // THEN
+        settings.pullRequestsListFilter() shouldBe saved
+    }
+
+    @Test
+    fun `pullRequestsListFilter - should fall back to AnyProject for an unknown stored project scope`() {
+        // GIVEN
+        val settings = DiffySettings()
+        settings.state.pullRequestsProjectScope = "SomethingElse"
+
+        // WHEN
+        val filter = settings.pullRequestsListFilter()
+
+        // THEN
+        filter.projectScope shouldBe PullRequestProjectScope.AnyProject
+    }
+
+    @Test
+    fun `lastSelectedTab - should default to Pull Requests`() {
+        // GIVEN
+        val settings = DiffySettings()
+
+        // WHEN
+        val result = settings.lastSelectedTab
+
+        // THEN
+        result shouldBe DiffyToolWindowTab.PullRequests
+    }
+
+    @Test
+    fun `lastSelectedTab - should round-trip every tab`() {
+        // GIVEN
+        val settings = DiffySettings()
+
+        for (tab in DiffyToolWindowTab.entries) {
+            // WHEN
+            settings.lastSelectedTab = tab
+
+            // THEN
+            settings.lastSelectedTab shouldBe tab
         }
     }
 
     @Test
-    fun `pullRequestListFilter - should persist and reload the Assigned to me scope for both tabs`() {
-        // GIVEN Assigned to me saved on both tabs
+    fun `lastSelectedTab - should fall back to Pull Requests when the stored name is unknown or null`() {
+        // GIVEN
         val settings = DiffySettings()
-        settings.savePullRequestListFilter(
-            scope = PullRequestListScope.CurrentProject,
-            filter = PullRequestListFilter(userScope = PullRequestUserScope.AssignedToMe)
-        )
-        settings.savePullRequestListFilter(
-            scope = PullRequestListScope.Workspace,
-            filter = PullRequestListFilter(userScope = PullRequestUserScope.AssignedToMe)
-        )
 
-        // WHEN the state is serialized to XML and deserialized back
-        val serialized = XmlSerializer.serialize(settings.state)
-        val roundTripped = XmlSerializer.deserialize(serialized, DiffySettings.State::class.java)
-        val reloaded = DiffySettings()
-        reloaded.loadState(roundTripped)
+        // WHEN
+        settings.state.lastSelectedTab = "Bogus"
+        val unknown = settings.lastSelectedTab
+        settings.state.lastSelectedTab = null
+        val missing = settings.lastSelectedTab
 
-        // THEN both tabs read back Assigned to me
+        // THEN
         assertSoftly {
-            reloaded.pullRequestListFilter(scope = PullRequestListScope.CurrentProject).userScope shouldBe PullRequestUserScope.AssignedToMe
-            reloaded.pullRequestListFilter(scope = PullRequestListScope.Workspace).userScope shouldBe PullRequestUserScope.AssignedToMe
-        }
-    }
-
-    @Test
-    fun `pullRequestListFilter - should fall back to AnyUser when the stored scope name is unknown`() {
-        // GIVEN a stored scope name that this build does not know, as a newer or hand-edited settings file might hold
-        val settings = DiffySettings()
-        settings.state.projectPullRequestAuthorScope = "SomethingNew"
-        settings.state.workspacePullRequestAuthorScope = "SomethingNew"
-
-        // WHEN both tabs read their filter
-        // THEN the unknown name falls back to AnyUser on both tabs
-        assertSoftly {
-            settings.pullRequestListFilter(scope = PullRequestListScope.CurrentProject).userScope shouldBe PullRequestUserScope.AnyUser
-            settings.pullRequestListFilter(scope = PullRequestListScope.Workspace).userScope shouldBe PullRequestUserScope.AnyUser
-        }
-    }
-
-    @Test
-    fun `pullRequestListFilter - should round-trip through XmlSerializer`() {
-        // GIVEN a settings instance with non-default filter flags saved
-        val settings = DiffySettings()
-        settings.savePullRequestListFilter(
-            scope = PullRequestListScope.CurrentProject,
-            filter = PullRequestListFilter(
-                excludeResolved = false,
-                excludeApprovedByMe = true,
-                excludeDrafts = false,
-                userScope = PullRequestUserScope.Me
-            )
-        )
-        settings.savePullRequestListFilter(
-            scope = PullRequestListScope.Workspace,
-            filter = PullRequestListFilter(
-                excludeResolved = false,
-                excludeApprovedByMe = false,
-                excludeDrafts = false,
-                userScope = PullRequestUserScope.Me
-            )
-        )
-
-        // WHEN the state is serialized to XML and deserialized back
-        val serialized = XmlSerializer.serialize(settings.state)
-        val roundTripped = XmlSerializer.deserialize(serialized, DiffySettings.State::class.java)
-        val reloaded = DiffySettings()
-        reloaded.loadState(roundTripped)
-
-        // THEN both scopes come back with the saved values
-        assertSoftly {
-            reloaded.pullRequestListFilter(scope = PullRequestListScope.CurrentProject) shouldBe PullRequestListFilter(
-                excludeResolved = false,
-                excludeApprovedByMe = true,
-                excludeDrafts = false,
-                userScope = PullRequestUserScope.Me
-            )
-            reloaded.pullRequestListFilter(scope = PullRequestListScope.Workspace) shouldBe PullRequestListFilter(
-                excludeResolved = false,
-                excludeApprovedByMe = false,
-                excludeDrafts = false,
-                userScope = PullRequestUserScope.Me
-            )
+            unknown shouldBe DiffyToolWindowTab.PullRequests
+            missing shouldBe DiffyToolWindowTab.PullRequests
         }
     }
 }

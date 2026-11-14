@@ -18,7 +18,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -51,6 +50,15 @@ class PullRequestWorktreeRemovalLauncher(
             )
             return
         }
+        if (PullRequestWorktreeRemovalRegistry.isBulkRemovalInProgress()) {
+            LOG.info("Cannot remove the work tree of PR #$prNumber: the removal of all PR work trees is running")
+            notify(
+                contentKey = "recentProjects.removeAllWorktrees.busy",
+                contentArgs = emptyArray(),
+                type = NotificationType.WARNING
+            )
+            return
+        }
         if (normalizedWorktree in worktreeOpener.worktreesBeingOpened() || worktreePath in worktreeOpener.worktreesBeingOpened()) {
             LOG.info("Cannot remove the work tree of PR #$prNumber: it is being opened")
             notify(
@@ -70,7 +78,7 @@ class PullRequestWorktreeRemovalLauncher(
             )
             return
         }
-        if (!worktreesBeingRemoved.add(normalizedWorktree)) {
+        if (!PullRequestWorktreeRemovalRegistry.tryMarkRemoving(normalizedWorktree)) {
             LOG.info("Ignoring a repeated remove request for the work tree of PR #$prNumber")
             return
         }
@@ -92,7 +100,7 @@ class PullRequestWorktreeRemovalLauncher(
                 )
             } finally {
                 if (!removalStarted) {
-                    worktreesBeingRemoved.remove(normalizedWorktree)
+                    PullRequestWorktreeRemovalRegistry.unmarkRemoving(normalizedWorktree)
                 }
             }
         }
@@ -143,14 +151,14 @@ class PullRequestWorktreeRemovalLauncher(
                 worktreePath = worktreePath,
                 workTreeDirectory = workTreeDirectory,
                 onCompleted = { outcome ->
-                    worktreesBeingRemoved.remove(worktreePath)
+                    PullRequestWorktreeRemovalRegistry.unmarkRemoving(worktreePath)
                     ApplicationManager.getApplication().invokeLater {
                         finish(prNumber = prNumber, outcome = outcome, onFinished = onFinished)
                     }
                 }
             )
         } catch (exception: Exception) {
-            worktreesBeingRemoved.remove(worktreePath)
+            PullRequestWorktreeRemovalRegistry.unmarkRemoving(worktreePath)
             throw exception
         }
     }
@@ -203,8 +211,5 @@ class PullRequestWorktreeRemovalLauncher(
     companion object {
         private val LOG = logger<PullRequestWorktreeRemovalLauncher>()
         private const val NOTIFICATION_GROUP_ID = "Diffy"
-
-        /** Work tree paths with a removal in progress. Application wide, so two tabs or windows cannot remove the same work tree twice. */
-        private val worktreesBeingRemoved: MutableSet<Path> = ConcurrentHashMap.newKeySet()
     }
 }

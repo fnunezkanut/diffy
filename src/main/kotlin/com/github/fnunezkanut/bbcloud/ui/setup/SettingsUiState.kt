@@ -17,7 +17,7 @@ data class SettingsUiState(
     // "Save succeeded" affordance shown next to the Save button; null hides it.
     val successMessage: String? = null,
     val isBusy: Boolean = false,
-    // Whether an OAuth login is currently running (possibly started from another project's Settings tab).
+    // Whether an OAuth login is currently running (possibly started from another project's settings page).
     val isOAuthLoginInProgress: Boolean = false,
     // When the browser could not be opened, the authorize URL to show for manual paste; null otherwise.
     val oauthBrowserFallbackUrl: String? = null,

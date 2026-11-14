@@ -146,24 +146,6 @@ class OkHttpBitbucketPullRequestClient(private val httpClient: OkHttpClient = sh
         }
     }
 
-    override suspend fun listOpenPullRequestsReviewedBy(
-        workspace: String,
-        repoSlug: String,
-        reviewerUuid: String,
-        pageLen: Int,
-        apiToken: String
-    ): ReviewerQueueQueryResult {
-        return withContext(Dispatchers.IO) {
-            val url = BitbucketReviewQueueResponseParser.buildReviewingPullRequestsUrl(
-                workspace = workspace,
-                repoSlug = repoSlug,
-                reviewerUuid = reviewerUuid,
-                pageLen = pageLen
-            )
-            fetchReviewerQueue(url = url, apiToken = apiToken)
-        }
-    }
-
     override suspend fun listOpenAuthoredPullRequestsInWorkspace(workspace: String, selectedUserUuid: String, apiToken: String): AuthoredPullRequestPage? {
         return withContext(Dispatchers.IO) {
             val url = BitbucketWorkspacePullRequestResponseParser.buildListAuthoredPullRequestsUrl(
@@ -741,44 +723,6 @@ class OkHttpBitbucketPullRequestClient(private val httpClient: OkHttpClient = sh
 
     private fun fetchBody(url: String, apiToken: String): String? {
         return fetchParsed(url = url, apiToken = apiToken, emptyValue = null) { body -> body }
-    }
-
-    private fun fetchReviewerQueue(url: String, apiToken: String): ReviewerQueueQueryResult {
-        return executeGet(
-            url = url,
-            apiToken = apiToken,
-            onFailure = { exception -> ReviewerQueueQueryResult.Failed(exception) }
-        ) { response ->
-            when (response.code) {
-                in 200..299 -> {
-                    val body = response.body.string()
-                    if (body.isBlank()) {
-                        LOG.debug("GET $url returned an empty body")
-                        return@executeGet ReviewerQueueQueryResult.Listed(emptyList())
-                    }
-                    val pullRequests = runCatching { BitbucketPullRequestResponseParser.parsePullRequests(body) }
-                        .onFailure { exception -> LOG.debug("Could not parse the review queue of $url", exception) }
-                        .getOrNull()
-                    if (pullRequests == null) {
-                        return@executeGet ReviewerQueueQueryResult.Failed()
-                    }
-                    LOG.debug("Parsed ${pullRequests.size} reviewing pull requests for $url")
-                    ReviewerQueueQueryResult.Listed(pullRequests)
-                }
-                401 -> {
-                    LOG.warn("Unexpected HTTP status 401 for GET $url${BitbucketHttpErrors.describe(response)}")
-                    ReviewerQueueQueryResult.Unauthorized
-                }
-                in 400..499 -> {
-                    LOG.debug("GET $url -> ${response.code} (skipped)")
-                    ReviewerQueueQueryResult.Skipped
-                }
-                else -> {
-                    LOG.warn("Unexpected HTTP status ${response.code} for GET $url${BitbucketHttpErrors.describe(response)}")
-                    ReviewerQueueQueryResult.Failed()
-                }
-            }
-        }
     }
 
     private fun fetchBuildStatusPage(url: String, apiToken: String): BuildStatusPage? {

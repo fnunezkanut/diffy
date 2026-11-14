@@ -318,7 +318,7 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
             LOG.info("The project was disposed before the pull request editor could be opened")
             return
         }
-        // The Workspace tabs and the REST path both pass the workspace of the pull request, so the URL follows it.
+        // The Pull Requests and the REST path both pass the workspace of the pull request, so the URL follows it.
         val webUrl = BitbucketRepositoryUrls.repositoryWebUrlForWorkspace(workspace = workspace, repoSlug = repoSlug)
             ?: organizationUrl?.let { url -> BitbucketRepositoryUrls.repositoryWebUrl(organizationUrl = url, repoSlug = repoSlug) }
         if (webUrl == null) {

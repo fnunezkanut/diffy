@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.auth.DiffyAuthenticationMethod
+import com.github.fnunezkanut.bbcloud.ui.otherprojects.WatchedProjectsViewModel
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
@@ -53,6 +54,7 @@ import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
+import java.awt.Component
 import java.awt.datatransfer.StringSelection
 import javax.swing.SwingUtilities
 
@@ -60,9 +62,12 @@ private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(
     "com.github.fnunezkanut.bbcloud.ui.setup.DiffySettingsScreen"
 )
 
-/** Compose/Jewel implementation of the Settings tab embedded in the Diffy - Bitbucket PR Review tool window. */
+/**
+ * Compose/Jewel implementation of the settings screen hosted by the Settings > Tools > Diffy - Bitbucket PR Review page.
+ * [onOpenWatchedProjects] receives the host component and opens the Watched Projects tab of the tool window.
+ */
 @Composable
-fun DiffySettingsScreen(viewModel: DiffySettingsViewModel) {
+fun DiffySettingsScreen(viewModel: DiffySettingsViewModel, onOpenWatchedProjects: (Component) -> Unit) {
     val state by viewModel.state
     val hostComponent = LocalComponent.current
 
@@ -97,6 +102,7 @@ fun DiffySettingsScreen(viewModel: DiffySettingsViewModel) {
                     DiffyApiTokenDialog(parent = hostComponent, viewModel = viewModel).show()
                 }
             )
+            WatchedProjectsSection(onOpenWatchedProjects = { onOpenWatchedProjects(hostComponent) })
             ResetSection(
                 isBusy = state.isBusy,
                 onReset = viewModel::onResetClicked
@@ -108,32 +114,52 @@ fun DiffySettingsScreen(viewModel: DiffySettingsViewModel) {
 }
 
 /**
- * Renders the Settings footer with the plugin-name label as a clickable link to the project on GitHub, followed by the
- * version and disclaimer remainder as plain text. The stored [footer] is "<label><suffix>", so the known label prefix
- * is split off to keep a single source of truth for the footer text in [SetupFooterText].
+ * Renders the Settings footer on two lines. The first has the plugin-name label as a clickable link to the project on
+ * GitHub followed by the version as plain text; the stored [footer] is "<label><version suffix>", so the known label
+ * prefix is split off to keep a single source of truth in [SetupFooterText]. The second line is the disclaimer.
  */
 @Composable
 private fun FooterContent(footer: String) {
     val label = SetupFooterText.label()
     val suffix = footer.removePrefix(label)
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Link(
-            text = label,
-            onClick = {
-                LOG.info("User opened the plugin project link ${SetupFooterText.PROJECT_URL}")
-                BrowserUtil.browse(SetupFooterText.PROJECT_URL)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Link(
+                text = label,
+                onClick = {
+                    LOG.info("User opened the plugin project link ${SetupFooterText.PROJECT_URL}")
+                    BrowserUtil.browse(SetupFooterText.PROJECT_URL)
+                }
+            )
+            if (suffix.isNotEmpty()) {
+                Text(text = suffix, color = JewelTheme.globalColors.text.info)
             }
-        )
+        }
         Text(
-            text = suffix,
-            color = JewelTheme.globalColors.text.info,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            text = SetupFooterText.disclaimer(),
+            modifier = Modifier.fillMaxWidth(),
+            color = JewelTheme.globalColors.text.info
         )
     }
+}
+
+/** The "3. Select Watched Projects" section: a link that opens the Watched Projects tab of the tool window. */
+@Composable
+private fun WatchedProjectsSection(onOpenWatchedProjects: () -> Unit) {
+    GroupHeader(text = DiffyBundle.message("setup.section.watchedProjects.title"))
+    Link(
+        text = DiffyBundle.message("setup.watchedProjects.link", WatchedProjectsViewModel.MAX_WATCHED_PROJECTS),
+        onClick = {
+            LOG.info("User clicked the Select Watched Projects link on Settings")
+            onOpenWatchedProjects()
+        }
+    )
 }
 
 @Composable
@@ -177,11 +203,10 @@ private fun ProjectsDirectorySection(state: SettingsUiState, onSelectDirectory: 
 @Composable
 private fun AuthenticationSection(state: SettingsUiState, onOAuthLogin: () -> Unit, onOAuthCancel: () -> Unit, onApiToken: () -> Unit) {
     GroupHeader(text = DiffyBundle.message("setup.section.authentication.title"))
-    Text(text = DiffyBundle.message("setup.authentication.intro"))
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // OAuth login runs in the application login service; the button is disabled while a login or save is active.
         DefaultButton(
@@ -195,6 +220,7 @@ private fun AuthenticationSection(state: SettingsUiState, onOAuthLogin: () -> Un
                 text = DiffyBundle.message("setup.authentication.oauth.button")
             )
         }
+        Text(text = DiffyBundle.message("setup.authentication.or"))
         OutlinedButton(onClick = onApiToken, enabled = !state.isBusy, modifier = handModifier()) {
             ButtonContent(
                 icon = AllIconsKeys.Actions.MenuSaveall,
@@ -304,7 +330,7 @@ private fun AuthenticationStatus(state: SettingsUiState) {
 
 /**
  * The API token component: the token field, the Save button, the inline error/success status, and the token-creation
- * instructions. Kept as a shared composable so the Settings tab's API token dialog and any future host render exactly
+ * instructions. Kept as a shared composable so the settings page's API token dialog and any future host render exactly
  * the same control.
  */
 @Composable

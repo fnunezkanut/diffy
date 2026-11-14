@@ -6,6 +6,7 @@ import com.github.fnunezkanut.bbcloud.git.GitHeadBranchReader
 import com.github.fnunezkanut.bbcloud.project.LocalRepositoryProjectOpener
 import com.github.fnunezkanut.bbcloud.project.PlatformRecentProjectsSource
 import com.github.fnunezkanut.bbcloud.project.WorktreeSourceCheckoutResolver
+import com.github.fnunezkanut.bbcloud.ui.worktree.AllPullRequestWorktreesRemovalLauncher
 import com.github.fnunezkanut.bbcloud.ui.worktree.PullRequestWorktreeOpener
 import com.github.fnunezkanut.bbcloud.ui.worktree.PullRequestWorktreeRemovalLauncher
 import com.intellij.notification.NotificationGroupManager
@@ -25,8 +26,8 @@ import kotlin.io.path.invariantSeparatorsPathString
 
 /**
  * Hosts the Recent Projects tab: builds the Compose screen and view model, forwards platform change notifications to the
- * view model, and opens projects. The platform message bus connection is released by [dispose], which the tool window
- * panel calls when it is disposed.
+ * view model, and opens projects. The platform message bus
+ * connection is released by [dispose], which the tool window panel calls when it is disposed.
  */
 internal class RecentProjectsPanel(private val project: Project, private val coroutineScope: CoroutineScope, isPruneInProgress: () -> Boolean) : Disposable {
     private val configurationService = DiffyConfigurationService.getInstance()
@@ -40,6 +41,14 @@ internal class RecentProjectsPanel(private val project: Project, private val cor
         coroutineScope = coroutineScope,
         worktreeOpener = PullRequestWorktreeOpener.getInstance(),
         isPruneInProgress = isPruneInProgress
+    )
+    private val bulkRemovalLauncher = AllPullRequestWorktreesRemovalLauncher(
+        project = project,
+        configurationService = configurationService,
+        coroutineScope = coroutineScope,
+        worktreeOpener = PullRequestWorktreeOpener.getInstance(),
+        isPruneInProgress = isPruneInProgress,
+        sourceRootResolverFactory = ::snapshotSourceRootResolver
     )
     private val viewModel = RecentProjectsViewModel(
         source = PlatformRecentProjectsSource,
@@ -55,7 +64,9 @@ internal class RecentProjectsPanel(private val project: Project, private val cor
         currentProjectBasePath = { project.basePath },
         resolveSourceRoot = ::resolveSourceRoot,
         removeWorktree = ::removeWorktree,
-        onWorktreeRemovalUnavailable = ::notifyWorktreeRemovalUnavailable
+        onWorktreeRemovalUnavailable = ::notifyWorktreeRemovalUnavailable,
+        onClearFailed = ::notifyClearFailed,
+        removeAllWorktrees = { onFinished -> bulkRemovalLauncher.start(onFinished = onFinished) }
     )
 
     val component: JComponent = compose { RecentProjectsScreen(viewModel = viewModel) }
@@ -66,6 +77,7 @@ internal class RecentProjectsPanel(private val project: Project, private val cor
 
     /** Reloads the list. Called each time the tab is selected, so branches changed elsewhere show up. */
     fun reload() {
+        LOG.debug("Reloading the Recent Projects list")
         viewModel.reload()
     }
 
@@ -114,6 +126,31 @@ internal class RecentProjectsPanel(private val project: Project, private val cor
             mappingsBySlug = mappingsBySlug,
             projectsDirectory = configurationService.projectsDirectoryOrNull()
         )
+    }
+
+    /**
+     * Captures the watched mappings and the projects directory now, so the returned resolver still works when this
+     * panel is disposed while the bulk removal runs.
+     */
+    private fun snapshotSourceRootResolver(): (Path, String) -> Path? {
+        val mappingsBySlug = avatars.slugsByLocalFolder().entries.associate { (folder, slug) -> slug to folder }
+        val projectsDirectory = configurationService.projectsDirectoryOrNull()
+        return { worktreePath, repoSlug ->
+            WorktreeSourceCheckoutResolver.resolve(
+                worktreePath = worktreePath,
+                repoSlug = repoSlug,
+                mappingsBySlug = mappingsBySlug,
+                projectsDirectory = projectsDirectory
+            )
+        }
+    }
+
+    private fun notifyClearFailed(throwable: Throwable) {
+        LOG.warn("Could not clear the recent projects", throwable)
+        NotificationGroupManager.getInstance()
+            .getNotificationGroup(NOTIFICATION_GROUP_ID)
+            .createNotification(DiffyBundle.message("recentProjects.clearAll.failed"), NotificationType.ERROR)
+            .notify(project)
     }
 
     private fun removeWorktree(sourceCheckoutRoot: Path, worktreePath: Path, prNumber: Long) {

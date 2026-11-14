@@ -28,10 +28,9 @@ private object WorkspaceHeaderLogCategory
 private val LOG = logger<WorkspaceHeaderLogCategory>()
 
 /**
- * The workspace header of the Workspace tab: a green tick icon, the workspace-name link to the Bitbucket
- * workspace overview, and the open-PR count pill (mirroring the Current Project header), then the inline
- * [excludeContent] slot (the Exclude: checkboxes), then a flexible spacer and the refresh action. The Watched Projects
- * tab passes no [excludeContent], so it shows no checkboxes.
+ * The workspace header of the Pull Requests: a green tick icon, the workspace-name link to the Bitbucket workspace
+ * overview, and the open-PR count pill, then the inline [excludeContent] slot (the Exclude: checkboxes and the two
+ * dropdowns), then a flexible spacer and the refresh action. The Create Pull Request button lives in [PullRequestsFooter]. The Watched Projects tab passes no [excludeContent], so it shows no checkboxes.
  */
 @Composable
 internal fun WorkspaceHeader(

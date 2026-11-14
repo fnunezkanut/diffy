@@ -10,6 +10,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
@@ -19,10 +20,20 @@ class RecentProjectsViewModelTest {
     private class FakeSource(var snapshot: RecentProjectsSnapshot, var failure: Exception? = null) : RecentProjectsSource {
         val expandedCalls = mutableListOf<Pair<String, Boolean>>()
         val removed = mutableListOf<String>()
+        var clearCalls = 0
+        var clearFailure: Exception? = null
+        var snapshotAfterClear: RecentProjectsSnapshot? = null
 
         override fun snapshot(): RecentProjectsSnapshot {
             failure?.let { throw it }
             return snapshot
+        }
+
+        override fun clearAll(): Int {
+            clearCalls++
+            clearFailure?.let { throw it }
+            snapshotAfterClear?.let { after -> snapshot = after }
+            return 0
         }
 
         override fun displayName(path: String): String {
@@ -49,7 +60,8 @@ class RecentProjectsViewModelTest {
         source: FakeSource,
         readBranch: suspend (Path) -> String? = { path -> "br-${path.fileName}" },
         opened: MutableList<RecentProjectRow> = mutableListOf(),
-        failures: MutableList<Throwable> = mutableListOf()
+        failures: MutableList<Throwable> = mutableListOf(),
+        clearFailures: MutableList<Throwable> = mutableListOf()
     ): RecentProjectsViewModel {
         return RecentProjectsViewModel(
             source = source,
@@ -60,8 +72,63 @@ class RecentProjectsViewModelTest {
             openProject = { row -> opened += row },
             onLoadFailed = { throwable -> failures += throwable },
             runOnEdt = { block -> block() },
+            onClearFailed = { throwable -> clearFailures += throwable },
             ioDispatcher = Dispatchers.Unconfined
         )
+    }
+
+    @Nested
+    inner class ClearAll {
+        @Test
+        fun `onClearAllRequested - should clear the source and reload without asking`() {
+            // GIVEN
+            val source = FakeSource(snapshot = snapshot)
+            source.snapshotAfterClear = RecentProjectsSnapshot(recentPaths = emptyList(), groups = emptyList())
+            val viewModel = viewModel(source = source)
+            viewModel.reload()
+
+            // WHEN
+            viewModel.onClearAllRequested()
+
+            // THEN
+            assertSoftly {
+                source.clearCalls shouldBe 1
+                viewModel.state.value.isEmpty shouldBe true
+            }
+        }
+
+        @Test
+        fun `onClearAllRequested - should report a failure and keep the rows`() {
+            // GIVEN
+            val source = FakeSource(snapshot = snapshot)
+            source.clearFailure = IllegalStateException("boom")
+            val clearFailures = mutableListOf<Throwable>()
+            val viewModel = viewModel(source = source, clearFailures = clearFailures)
+            viewModel.reload()
+
+            // WHEN
+            viewModel.onClearAllRequested()
+
+            // THEN
+            assertSoftly {
+                clearFailures.size shouldBe 1
+                viewModel.state.value.ungrouped.size shouldBe 2
+            }
+        }
+
+        @Test
+        fun `onClearAllRequested - should reset the search query`() {
+            // GIVEN
+            val viewModel = viewModel(source = FakeSource(snapshot = snapshot))
+            viewModel.reload()
+            viewModel.onSearchQueryChanged(query = "zzz")
+
+            // WHEN
+            viewModel.onClearAllRequested()
+
+            // THEN
+            viewModel.state.value.searchQuery shouldBe ""
+        }
     }
 
     @Test

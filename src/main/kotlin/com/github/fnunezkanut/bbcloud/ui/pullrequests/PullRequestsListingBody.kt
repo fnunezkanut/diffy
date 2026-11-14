@@ -21,7 +21,7 @@ import com.github.fnunezkanut.bbcloud.ui.main.PullRequestCardListing
 import org.jetbrains.jewel.ui.component.Text
 
 /**
- * The scrollable body of a merged pull request tab, below the tab header that holds the Exclude: checkboxes. Shows the
+ * The scrollable body of a Pull Requests, below the tab header that holds the Exclude: checkboxes. Shows the
  * listing, the loading/empty/filtered-empty/error cards, then the tab-specific [footer] and the shared
  * user-filter-unavailable note.
  */
@@ -47,6 +47,10 @@ internal fun PullRequestsListingBody(
 
                 PullRequestsCard.FilteredEmpty -> CenteredMessage(
                     message = DiffyBundle.message("pullRequests.noneMatchFilters")
+                )
+
+                PullRequestsCard.CurrentProjectUnavailable -> CenteredMessage(
+                    message = DiffyBundle.message("pullRequests.overview.currentProjectUnavailable")
                 )
 
                 PullRequestsCard.Error -> CenteredError(

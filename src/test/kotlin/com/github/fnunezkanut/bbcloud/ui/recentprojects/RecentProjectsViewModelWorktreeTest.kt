@@ -32,6 +32,10 @@ class RecentProjectsViewModelWorktreeTest {
             removed += path
         }
 
+        override fun clearAll(): Int {
+            return 0
+        }
+
         override fun subscribe(parentDisposable: Disposable, onChange: () -> Unit) = Unit
     }
 
@@ -78,7 +82,9 @@ class RecentProjectsViewModelWorktreeTest {
         source: FakeSource,
         avatars: FakeAvatars = FakeAvatars(),
         calls: Calls = Calls(),
-        sourceRoot: Path? = Path.of("/home/me/projects/repo")
+        sourceRoot: Path? = Path.of("/home/me/projects/repo"),
+        workTreeDirectory: String? = root,
+        removeAll: (() -> Unit) -> Unit = { onFinished -> onFinished() }
     ): RecentProjectsViewModel {
         return RecentProjectsViewModel(
             source = source,
@@ -90,11 +96,12 @@ class RecentProjectsViewModelWorktreeTest {
             onLoadFailed = { _ -> },
             runOnEdt = { block -> block() },
             avatars = avatars,
-            workTreeDirectory = { root },
+            workTreeDirectory = { workTreeDirectory },
             currentProjectBasePath = { current },
             resolveSourceRoot = { _, _ -> sourceRoot },
             removeWorktree = { sourceCheckoutRoot, worktreePath, prNumber -> calls.removals += Triple(sourceCheckoutRoot, worktreePath, prNumber) },
             onWorktreeRemovalUnavailable = { row -> calls.unavailable += row },
+            removeAllWorktrees = removeAll,
             ioDispatcher = Dispatchers.Unconfined
         )
     }
@@ -239,6 +246,56 @@ class RecentProjectsViewModelWorktreeTest {
         assertSoftly {
             calls.removals shouldBe emptyList()
             calls.unavailable shouldBe listOf(row)
+        }
+    }
+
+    @Test
+    fun `onRemoveAllWorktreesRequested - should set the in-progress flag and reset it and reload when finished`() {
+        // GIVEN
+        var finish: () -> Unit = {}
+        val viewModel = viewModel(source = FakeSource(snapshot = snapshot), removeAll = { onFinished -> finish = onFinished })
+
+        // WHEN
+        viewModel.onRemoveAllWorktreesRequested()
+        val whileRunning = viewModel.state.value.isRemovingAllWorktrees
+        finish()
+
+        // THEN
+        assertSoftly {
+            whileRunning shouldBe true
+            viewModel.state.value.isRemovingAllWorktrees shouldBe false
+            viewModel.state.value.ungrouped.size shouldBe 3
+        }
+    }
+
+    @Test
+    fun `onRemoveAllWorktreesRequested - should ignore a second click while running`() {
+        // GIVEN
+        var starts = 0
+        val viewModel = viewModel(source = FakeSource(snapshot = snapshot), removeAll = { starts++ })
+
+        // WHEN
+        viewModel.onRemoveAllWorktreesRequested()
+        viewModel.onRemoveAllWorktreesRequested()
+
+        // THEN
+        starts shouldBe 1
+    }
+
+    @Test
+    fun `reload - canRemoveAllWorktrees should follow the work tree directory`() {
+        // GIVEN
+        val with = viewModel(source = FakeSource(snapshot = snapshot))
+        val without = viewModel(source = FakeSource(snapshot = snapshot), workTreeDirectory = null)
+
+        // WHEN
+        with.reload()
+        without.reload()
+
+        // THEN
+        assertSoftly {
+            with.state.value.canRemoveAllWorktrees shouldBe true
+            without.state.value.canRemoveAllWorktrees shouldBe false
         }
     }
 }

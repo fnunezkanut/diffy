@@ -4,8 +4,9 @@ import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestReviewer
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerStatus
 import com.github.fnunezkanut.bbcloud.settings.PullRequestListFilter
-import com.github.fnunezkanut.bbcloud.settings.PullRequestListScope
+import com.github.fnunezkanut.bbcloud.settings.PullRequestProjectScope
 import com.github.fnunezkanut.bbcloud.settings.PullRequestUserScope
+import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -15,8 +16,11 @@ import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 
 private const val CURRENT_USER = "{5b10ac8d}"
 
@@ -27,7 +31,10 @@ class PullRequestsViewModelTest {
         // GIVEN a project view model with one open and one draft row loaded
         val onFilterChanged = mockk<(PullRequestListFilter) -> Unit>(relaxed = true)
         val viewModel =
-            projectViewModel(onFilterChanged = onFilterChanged, initialFilter = PullRequestListFilter(excludeResolved = false, excludeDrafts = false))
+            projectViewModel(
+                onFilterChanged = onFilterChanged,
+                initialFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others, excludeResolved = false, excludeDrafts = false)
+            )
         val scope = CoroutineScope(SupervisorJob())
         try {
             val generation = viewModel.beginRefresh()
@@ -45,7 +52,11 @@ class PullRequestsViewModelTest {
             viewModel.onExcludeDraftsChanged(checked = true)
 
             // THEN the callback is given the updated filter, and the draft row is filtered out without a reload
-            verify { onFilterChanged(PullRequestListFilter(excludeResolved = false, excludeApprovedByMe = false, excludeDrafts = true)) }
+            verify {
+                onFilterChanged(
+                    PullRequestListFilter(userScope = PullRequestUserScope.Others, excludeResolved = false, excludeApprovedByMe = false, excludeDrafts = true)
+                )
+            }
             viewModel.state.value.rows.map { it.pullRequest.summary.id } shouldContainExactly listOf(1L)
         } finally {
             scope.cancel()
@@ -58,7 +69,7 @@ class PullRequestsViewModelTest {
         val opened = mutableListOf<PullRequestListEntry>()
         val viewModel = projectViewModel(
             onOpenTitle = { entry -> opened.add(entry) },
-            initialFilter = PullRequestListFilter(excludeResolved = false, excludeDrafts = false)
+            initialFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others, excludeResolved = false, excludeDrafts = false)
         )
         val scope = CoroutineScope(SupervisorJob())
         try {
@@ -91,8 +102,8 @@ class PullRequestsViewModelTest {
             val generation = viewModel.beginRefresh()
             viewModel.applySource(
                 generation = generation,
-                source = PullRequestListingSource.WorkspaceAssigned,
-                entries = listOf(listEntry(id = 1, source = PullRequestListingSource.WorkspaceAssigned)),
+                source = PullRequestListingSource.WatchedOpen,
+                entries = listOf(listEntry(id = 1, source = PullRequestListingSource.WatchedOpen)),
                 isTruncated = false,
                 currentUserUuid = CURRENT_USER,
                 coroutineScope = scope
@@ -139,7 +150,7 @@ class PullRequestsViewModelTest {
         val counts = mutableListOf<Int>()
         val viewModel = projectViewModel(
             onCountsChanged = { openCount, _ -> counts.add(openCount) },
-            initialFilter = PullRequestListFilter(excludeResolved = false, excludeDrafts = false)
+            initialFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others, excludeResolved = false, excludeDrafts = false)
         )
         val scope = CoroutineScope(SupervisorJob())
         try {
@@ -167,37 +178,255 @@ class PullRequestsViewModelTest {
     }
 
     @Test
-    fun `workspace scope - should normalize a mistaken excludeResolved to false`() {
-        // GIVEN a workspace view model handed a filter with excludeResolved = true
-        val viewModel = workspaceViewModel(initialFilter = PullRequestListFilter(excludeResolved = true, excludeDrafts = false))
+    fun `merged rows - should list open rows before resolved rows, newest first within each group`() {
+        // GIVEN a resolved row that is newer than two open rows
+        val viewModel =
+            workspaceViewModel(initialFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others, excludeResolved = false, excludeDrafts = false))
         val scope = CoroutineScope(SupervisorJob())
         try {
             val generation = viewModel.beginRefresh()
             viewModel.applySource(
                 generation = generation,
-                source = PullRequestListingSource.WorkspaceAssigned,
+                source = PullRequestListingSource.WatchedOpen,
                 entries = listOf(
-                    listEntry(id = 1, source = PullRequestListingSource.WorkspaceAssigned, state = PullRequestState.Open),
-                    listEntry(id = 2, source = PullRequestListingSource.WorkspaceAssigned, state = PullRequestState.Merged)
+                    listEntry(id = 1, source = PullRequestListingSource.WatchedOpen, updatedOn = recent(hoursAgo = 3)),
+                    listEntry(id = 2, source = PullRequestListingSource.WatchedOpen, updatedOn = recent(hoursAgo = 2))
+                ),
+                isTruncated = false,
+                currentUserUuid = CURRENT_USER,
+                coroutineScope = scope
+            )
+            viewModel.applySource(
+                generation = generation,
+                source = PullRequestListingSource.WatchedResolved,
+                entries = listOf(
+                    listEntry(
+                        id = 3,
+                        source = PullRequestListingSource.WatchedResolved,
+                        state = PullRequestState.Merged,
+                        updatedOn = recent(hoursAgo = 1)
+                    )
                 ),
                 isTruncated = false,
                 currentUserUuid = CURRENT_USER,
                 coroutineScope = scope
             )
 
-            // THEN the filter carries excludeResolved = false, so the resolved row is not hidden (both rows stay;
-            // the workspace scope sorts newest-first with equal timestamps tie-broken by id descending).
-            viewModel.state.value.filter.excludeResolved shouldBe false
-            viewModel.state.value.rows.map { it.pullRequest.summary.id } shouldContainExactly listOf(2L, 1L)
+            // THEN open rows come first (newest first), then the resolved row
+            viewModel.state.value.rows.map { it.pullRequest.summary.id } shouldContainExactly listOf(2L, 1L, 3L)
         } finally {
             scope.cancel()
+        }
+    }
+
+    @Nested
+    inner class ProjectScope {
+        @Test
+        fun `setCurrentProject - should keep only the rows of the found repository when In current project is selected`() {
+            // GIVEN rows of two repositories and a saved In current project choice
+            val viewModel = workspaceViewModel(
+                initialFilter = PullRequestListFilter(
+                    userScope = PullRequestUserScope.Others,
+                    excludeResolved = false,
+                    excludeDrafts = false,
+                    projectScope = PullRequestProjectScope.CurrentProject
+                )
+            )
+            val scope = CoroutineScope(SupervisorJob())
+            try {
+                val generation = viewModel.beginRefresh()
+                loadWatched(
+                    viewModel = viewModel,
+                    generation = generation,
+                    scope = scope,
+                    entries = listOf(
+                        listEntry(id = 1, source = PullRequestListingSource.WatchedOpen, repoSlug = "current"),
+                        listEntry(id = 2, source = PullRequestListingSource.WatchedOpen, repoSlug = "other")
+                    )
+                )
+
+                // WHEN the current project is found
+                viewModel.setCurrentProject(
+                    state = CurrentProjectRepositoryState.Found(repository = PullRequestRepositoryKey.of(workspace = "acme", repoSlug = "current"))
+                )
+
+                // THEN only its row stays and the dropdown offers the option
+                assertSoftly {
+                    viewModel.state.value.rows.map { it.pullRequest.summary.id } shouldContainExactly listOf(1L)
+                    viewModel.state.value.isProjectScopeOffered shouldBe true
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `pending current project - should behave as In any project and not offer the option`() {
+            // GIVEN a saved In current project choice and a lookup that has not resolved
+            val viewModel = workspaceViewModel(
+                initialFilter = PullRequestListFilter(
+                    userScope = PullRequestUserScope.Others,
+                    excludeResolved = false,
+                    excludeDrafts = false,
+                    projectScope = PullRequestProjectScope.CurrentProject
+                )
+            )
+            val scope = CoroutineScope(SupervisorJob())
+            try {
+                val generation = viewModel.beginRefresh()
+                loadWatched(
+                    viewModel = viewModel,
+                    generation = generation,
+                    scope = scope,
+                    entries = listOf(
+                        listEntry(id = 1, source = PullRequestListingSource.WatchedOpen, repoSlug = "current"),
+                        listEntry(id = 2, source = PullRequestListingSource.WatchedOpen, repoSlug = "other")
+                    )
+                )
+
+                // THEN every row is listed, the option is not offered, and the saved choice is kept
+                assertSoftly {
+                    viewModel.state.value.rows.map { it.pullRequest.summary.id } shouldContainExactlyInAnyOrder listOf(1L, 2L)
+                    viewModel.state.value.isProjectScopeOffered shouldBe false
+                    viewModel.state.value.filter.projectScope shouldBe PullRequestProjectScope.CurrentProject
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `unavailable current project - should show no rows and the dedicated card for In current project`() {
+            // GIVEN a saved In current project choice and a project that is not a Bitbucket repository
+            val viewModel = workspaceViewModel(
+                initialFilter = PullRequestListFilter(
+                    userScope = PullRequestUserScope.Others,
+                    excludeResolved = false,
+                    excludeDrafts = false,
+                    projectScope = PullRequestProjectScope.CurrentProject
+                )
+            )
+            val scope = CoroutineScope(SupervisorJob())
+            try {
+                val generation = viewModel.beginRefresh()
+                loadWatched(
+                    viewModel = viewModel,
+                    generation = generation,
+                    scope = scope,
+                    entries = listOf(listEntry(id = 1, source = PullRequestListingSource.WatchedOpen, repoSlug = "other"))
+                )
+                loadRemainingSourcesEmpty(viewModel = viewModel, generation = generation, scope = scope)
+
+                // WHEN the lookup reports the project unavailable
+                viewModel.setCurrentProject(state = CurrentProjectRepositoryState.Unavailable)
+
+                // THEN no row passes and the card says why
+                assertSoftly {
+                    viewModel.state.value.rows shouldBe emptyList()
+                    viewModel.state.value.card shouldBe PullRequestsCard.CurrentProjectUnavailable
+                    viewModel.state.value.isProjectScopeOffered shouldBe true
+                    viewModel.state.value.isCurrentProjectUnavailable shouldBe true
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `unavailable current project - should list every row for In any project`() {
+            // GIVEN the default In any project choice and an unavailable project
+            val viewModel =
+                workspaceViewModel(
+                    initialFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others, excludeResolved = false, excludeDrafts = false)
+                )
+            val scope = CoroutineScope(SupervisorJob())
+            try {
+                val generation = viewModel.beginRefresh()
+                loadWatched(
+                    viewModel = viewModel,
+                    generation = generation,
+                    scope = scope,
+                    entries = listOf(listEntry(id = 1, source = PullRequestListingSource.WatchedOpen, repoSlug = "other"))
+                )
+                loadRemainingSourcesEmpty(viewModel = viewModel, generation = generation, scope = scope)
+
+                // WHEN the lookup reports the project unavailable
+                viewModel.setCurrentProject(state = CurrentProjectRepositoryState.Unavailable)
+
+                // THEN the rows are listed
+                viewModel.state.value.rows.map { it.pullRequest.summary.id } shouldContainExactly listOf(1L)
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `onProjectScopeChanged - should persist the filter with the new project scope`() {
+            // GIVEN
+            val onFilterChanged = mockk<(PullRequestListFilter) -> Unit>(relaxed = true)
+            val viewModel = workspaceViewModel(onFilterChanged = onFilterChanged)
+
+            // WHEN
+            viewModel.onProjectScopeChanged(projectScope = PullRequestProjectScope.CurrentProject)
+
+            // THEN
+            verify { onFilterChanged(PullRequestListFilter(userScope = PullRequestUserScope.Others, projectScope = PullRequestProjectScope.CurrentProject)) }
+        }
+    }
+
+    @Nested
+    inner class PartialReload {
+        @Test
+        fun `beginReload - should keep the other sources loaded and ignore a response of an older full generation`() {
+            // GIVEN a loaded watched source and a loaded project source
+            val viewModel =
+                workspaceViewModel(
+                    initialFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others, excludeResolved = false, excludeDrafts = false)
+                )
+            val scope = CoroutineScope(SupervisorJob())
+            try {
+                val firstGeneration = viewModel.beginRefresh()
+                loadWatched(
+                    viewModel = viewModel,
+                    generation = firstGeneration,
+                    scope = scope,
+                    entries = listOf(listEntry(id = 1, source = PullRequestListingSource.WatchedOpen))
+                )
+
+                // WHEN only the project sources are reloaded
+                val reloadGeneration = viewModel.beginReload(
+                    reloaded = setOf(PullRequestListingSource.ProjectOpen, PullRequestListingSource.ProjectResolved)
+                )
+
+                // THEN the generation is unchanged, the watched row stays and the project sources load
+                assertSoftly {
+                    reloadGeneration shouldBe firstGeneration
+                    viewModel.state.value.rows.map { it.pullRequest.summary.id } shouldContainExactly listOf(1L)
+                    viewModel.state.value.isAnySourceLoading shouldBe true
+                }
+
+                // WHEN a full refresh starts, the late partial response is stale
+                viewModel.beginRefresh()
+                viewModel.applySource(
+                    generation = reloadGeneration,
+                    source = PullRequestListingSource.ProjectOpen,
+                    entries = listOf(listEntry(id = 9, source = PullRequestListingSource.ProjectOpen)),
+                    isTruncated = false,
+                    currentUserUuid = CURRENT_USER,
+                    coroutineScope = scope
+                )
+                viewModel.state.value.rows shouldBe emptyList()
+            } finally {
+                scope.cancel()
+            }
         }
     }
 
     @Test
     fun `applySource - should flag rows approved by the current user and update once the user uuid arrives`() {
         // GIVEN a project view model whose first load happens before the current user uuid is known
-        val viewModel = projectViewModel(initialFilter = PullRequestListFilter(excludeResolved = false, excludeDrafts = false))
+        val viewModel =
+            projectViewModel(initialFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others, excludeResolved = false, excludeDrafts = false))
         val scope = CoroutineScope(SupervisorJob())
         try {
             val generation = viewModel.beginRefresh()
@@ -237,7 +466,8 @@ class PullRequestsViewModelTest {
     @Test
     fun `applySource - should populate the reviewer stack of a loaded open row`() {
         // GIVEN an open entry carrying three reviewers
-        val viewModel = projectViewModel(initialFilter = PullRequestListFilter(excludeResolved = false, excludeDrafts = false))
+        val viewModel =
+            projectViewModel(initialFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others, excludeResolved = false, excludeDrafts = false))
         val scope = CoroutineScope(SupervisorJob())
         try {
             val generation = viewModel.beginRefresh()
@@ -400,12 +630,11 @@ class PullRequestsViewModelTest {
         onOpenTitle: (PullRequestListEntry) -> Unit = {},
         onCountsChanged: (Int, PullRequestsCard) -> Unit = { _, _ -> },
         seedKnownUsers: (List<PullRequestListEntry>) -> Unit = {},
-        initialFilter: PullRequestListFilter = PullRequestListFilter()
+        initialFilter: PullRequestListFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others)
     ): PullRequestsViewModel {
         return PullRequestsViewModel(
-            logName = "Current Project",
+            logName = "Pull Requests",
             sourcesOfTab = setOf(PullRequestListingSource.ProjectOpen, PullRequestListingSource.ProjectResolved),
-            scope = PullRequestListScope.CurrentProject,
             initialFilter = initialFilter,
             organizationUrl = { "https://bitbucket.org/acme/" },
             onFilterChangedCallback = onFilterChanged,
@@ -417,17 +646,47 @@ class PullRequestsViewModelTest {
         )
     }
 
-    private fun workspaceViewModel(initialFilter: PullRequestListFilter = PullRequestListFilter()): PullRequestsViewModel {
+    private fun loadWatched(viewModel: PullRequestsViewModel, generation: Long, scope: CoroutineScope, entries: List<PullRequestListEntry>) {
+        viewModel.applySource(
+            generation = generation,
+            source = PullRequestListingSource.WatchedOpen,
+            entries = entries,
+            isTruncated = false,
+            currentUserUuid = CURRENT_USER,
+            coroutineScope = scope
+        )
+    }
+
+    private fun loadRemainingSourcesEmpty(viewModel: PullRequestsViewModel, generation: Long, scope: CoroutineScope) {
+        PullRequestListingSource.entries.filter { source -> source != PullRequestListingSource.WatchedOpen }.forEach { source ->
+            viewModel.applySource(
+                generation = generation,
+                source = source,
+                entries = emptyList(),
+                isTruncated = false,
+                currentUserUuid = CURRENT_USER,
+                coroutineScope = scope
+            )
+        }
+    }
+
+    private fun workspaceViewModel(
+        initialFilter: PullRequestListFilter = PullRequestListFilter(userScope = PullRequestUserScope.Others),
+        onFilterChanged: (PullRequestListFilter) -> Unit = {}
+    ): PullRequestsViewModel {
         return PullRequestsViewModel(
-            logName = "Workspace",
-            sourcesOfTab = setOf(PullRequestListingSource.WorkspaceAuthored, PullRequestListingSource.WorkspaceAssigned),
-            scope = PullRequestListScope.Workspace,
+            logName = "Pull Requests",
+            sourcesOfTab = PullRequestListingSource.entries.toSet(),
             initialFilter = initialFilter,
             organizationUrl = { "https://bitbucket.org/acme/" },
-            onFilterChangedCallback = {},
+            onFilterChangedCallback = onFilterChanged,
             onOpenTitleCallback = {},
             onOpenPrOnWebCallback = {},
             onOpenRepositoryCallback = {}
         )
+    }
+
+    private fun recent(hoursAgo: Int): String {
+        return (Clock.System.now() - hoursAgo.hours).toString()
     }
 }

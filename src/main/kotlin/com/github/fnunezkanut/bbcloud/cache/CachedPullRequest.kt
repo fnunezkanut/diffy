@@ -20,10 +20,10 @@ data class CachedReviewer(
 
 /**
  * One pull request as last seen from Bitbucket Cloud. It holds every field the plugin shows in a listing, so the Current
- * Project and Workspace tabs can render without a request. [lastFetchedAt] is the last time Bitbucket reported on this
+ * Pull Requests can render without a request. [lastFetchedAt] is the last time Bitbucket reported on this
  * pull request. Optimistic patches never move it.
  *
- * [workspace] and [repoSlug] keep their original case because the Workspace tab and the worktree folder names use
+ * [workspace] and [repoSlug] keep their original case because the Pull Requests and the worktree folder names use
  * them. The [key] is only for lookup.
  */
 data class CachedPullRequest(

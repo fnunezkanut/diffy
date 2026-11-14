@@ -64,6 +64,33 @@ class DiffyOpenPullRequestService(
             organizationUrl = organizationUrl
         ) ?: return PullRequestListResult.Failed()
 
+        return listRecentPullRequestsOf(
+            target = target,
+            refresh = refresh
+        )
+    }
+
+    /**
+     * Lists the recent pull requests of the repository [workspace]/[repoSlug], with the same caching as the
+     * project-path variant. Used by the Pull Requests for watched projects, whose repository is known without a checkout.
+     */
+    suspend fun listRecentPullRequestsForRepository(
+        workspace: String,
+        repoSlug: String,
+        refresh: PullRequestCacheRefresh = PullRequestCacheRefresh.IfStale
+    ): PullRequestListResult {
+        val apiToken = accessTokenProvider.bearerTokenOrNull()
+        if (apiToken == null) {
+            LOG.info("Cannot list pull requests of $workspace/$repoSlug: no Bitbucket credentials")
+            return PullRequestListResult.Failed()
+        }
+        return listRecentPullRequestsOf(
+            target = RepositoryTarget(workspace = workspace, repoSlug = repoSlug, apiToken = apiToken),
+            refresh = refresh
+        )
+    }
+
+    private suspend fun listRecentPullRequestsOf(target: RepositoryTarget, refresh: PullRequestCacheRefresh): PullRequestListResult {
         val listingId = PullRequestListingIds.project(workspace = target.workspace, repoSlug = target.repoSlug)
         if (refresh == PullRequestCacheRefresh.IfStale) {
             val fresh = pullRequestCache.freshListing(listingId = listingId)
@@ -127,7 +154,20 @@ class DiffyOpenPullRequestService(
             projectBasePath = projectBasePath,
             organizationUrl = organizationUrl
         ) ?: return PullRequestListResult.Failed()
+        return listAllOpenPullRequestsOf(target = target)
+    }
 
+    /** The repository-keyed variant of [listAllOpenPullRequests]; always live and never cached. */
+    suspend fun listAllOpenPullRequestsForRepository(workspace: String, repoSlug: String): PullRequestListResult {
+        val apiToken = accessTokenProvider.bearerTokenOrNull()
+        if (apiToken == null) {
+            LOG.info("Cannot list all open pull requests of $workspace/$repoSlug: no Bitbucket credentials")
+            return PullRequestListResult.Failed()
+        }
+        return listAllOpenPullRequestsOf(target = RepositoryTarget(workspace = workspace, repoSlug = repoSlug, apiToken = apiToken))
+    }
+
+    private suspend fun listAllOpenPullRequestsOf(target: RepositoryTarget): PullRequestListResult {
         LOG.debug("Listing all open pull requests for ${target.workspace}/${target.repoSlug}")
         return pullRequestClient.listAllOpenPullRequests(
             workspace = target.workspace,

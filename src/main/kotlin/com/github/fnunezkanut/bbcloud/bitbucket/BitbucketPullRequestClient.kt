@@ -41,17 +41,6 @@ interface BitbucketPullRequestClient {
     suspend fun createPullRequest(workspace: String, repoSlug: String, request: NewPullRequest, apiToken: String): CreatePullRequestResult
 
     /**
-     * Only the first page is read. The result says whether the repository was listed, skipped, unauthorized or failed.
-     */
-    suspend fun listOpenPullRequestsReviewedBy(
-        workspace: String,
-        repoSlug: String,
-        reviewerUuid: String,
-        pageLen: Int,
-        apiToken: String
-    ): ReviewerQueueQueryResult
-
-    /**
      * The newest-updated open pull requests [selectedUserUuid] authored anywhere in [workspace]; null when the
      * request fails. Only the first page is read, and [AuthoredPullRequestPage.isTruncated] says when more pages
      * were on offer than were read.

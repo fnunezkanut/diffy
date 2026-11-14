@@ -7,6 +7,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.io.NioFiles
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import git4idea.commands.GitCommand
@@ -17,6 +18,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
@@ -106,11 +108,7 @@ class DiffyWorktreeService {
         val normalizedSource = sourceCheckoutRoot.toAbsolutePath().normalize()
         val normalizedWorktree = worktreePath.toAbsolutePath().normalize()
         val normalizedWorkTreeDirectory = workTreeDirectory.toAbsolutePath().normalize()
-        val targetName = normalizedWorktree.fileName?.toString()
-        val isSafeTarget = normalizedWorktree.parent == normalizedWorkTreeDirectory &&
-            targetName != null &&
-            PullRequestWorktreeLayout.repoSlugFromWorktreeFolderName(targetName) != null
-        if (!isSafeTarget) {
+        if (!isSafeWorktreeTarget(worktreePath = normalizedWorktree, workTreeDirectory = normalizedWorkTreeDirectory)) {
             return WorktreeRemovalResult.Failed(output = "refused to remove an unexpected worktree path: $normalizedWorktree")
         }
 
@@ -146,6 +144,51 @@ class DiffyWorktreeService {
                 }
             }
         }
+    }
+
+    /**
+     * Deletes a PR work tree folder from disk without git. Used only when the source checkout cannot be found, so
+     * `git worktree prune` cannot run; the stale registration in the unknown source repository is cleaned by the next
+     * prune in that repository. A symbolic link is deleted as a link and its target is never touched. A full clone named
+     * like a PR work tree is deleted like any other folder.
+     */
+    suspend fun deleteOrphanWorktreeFolder(worktreePath: Path, workTreeDirectory: Path): WorktreeRemovalResult {
+        val normalizedWorktree = worktreePath.toAbsolutePath().normalize()
+        val normalizedWorkTreeDirectory = workTreeDirectory.toAbsolutePath().normalize()
+        if (!isSafeWorktreeTarget(worktreePath = normalizedWorktree, workTreeDirectory = normalizedWorkTreeDirectory)) {
+            return WorktreeRemovalResult.Failed(output = "refused to delete an unexpected worktree path: $normalizedWorktree")
+        }
+        val failure = withContext(Dispatchers.IO) { deleteFolderOrNull(normalizedWorktree) }
+        if (failure != null) {
+            return failure
+        }
+        refreshVfs(normalizedWorktree)
+        forgetInRecentProjects(worktreePath = normalizedWorktree)
+        LOG.debug("Deleted the orphan pull request worktree folder at $normalizedWorktree")
+        return WorktreeRemovalResult.Success
+    }
+
+    private fun deleteFolderOrNull(worktreePath: Path): WorktreeRemovalResult.Failed? {
+        try {
+            if (Files.isSymbolicLink(worktreePath)) {
+                Files.deleteIfExists(worktreePath)
+            } else if (Files.exists(worktreePath)) {
+                if (Files.isDirectory(worktreePath.resolve(".git"), LinkOption.NOFOLLOW_LINKS)) {
+                    LOG.info("Deleting a full clone named like a PR work tree: ${worktreePath.fileName}")
+                }
+                NioFiles.deleteRecursively(worktreePath)
+            }
+            return null
+        } catch (exception: IOException) {
+            return WorktreeRemovalResult.Failed(output = exception.message.orEmpty(), cause = exception)
+        }
+    }
+
+    private fun isSafeWorktreeTarget(worktreePath: Path, workTreeDirectory: Path): Boolean {
+        val targetName = worktreePath.fileName?.toString()
+        return worktreePath.parent == workTreeDirectory &&
+            targetName != null &&
+            PullRequestWorktreeLayout.repoSlugFromWorktreeFolderName(targetName) != null
     }
 
     suspend fun ensureWorktree(

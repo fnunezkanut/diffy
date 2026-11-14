@@ -6,19 +6,19 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
 
-/** Selects the Diffy - Bitbucket PR Review Current Project listing from an editor-owned project link. */
+/** Selects the Diffy - Bitbucket PR Review Pull Requests listing from an editor-owned project link. */
 class DiffyPullRequestToolWindowNavigator(private val project: Project) {
-    fun showCurrentProjectPullRequests() {
+    fun showPullRequests() {
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID)
         if (toolWindow == null) {
-            LOG.info("Cannot navigate to Current Project: Diffy - Bitbucket PR Review tool window is unavailable")
+            LOG.info("Cannot navigate to the Pull Requests: Diffy - Bitbucket PR Review tool window is unavailable")
             return
         }
-        LOG.info("User navigated from a pull request editor to Current Project")
+        LOG.info("User navigated from a pull request editor to the Pull Requests")
         val panel = project.service<DiffyToolWindowPanel>()
         toolWindow.show {
-            if (!panel.showCurrentProjectPullRequestsListing()) {
-                LOG.info("Cannot navigate to Current Project: listing content is unavailable")
+            if (!panel.showPullRequestsListing()) {
+                LOG.info("Cannot navigate to the Pull Requests: listing content is unavailable")
             }
         }
     }

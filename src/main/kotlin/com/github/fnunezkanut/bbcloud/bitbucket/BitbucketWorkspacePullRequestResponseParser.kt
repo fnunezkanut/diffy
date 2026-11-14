@@ -8,12 +8,11 @@ import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 /**
- * Builds and reads the workspace-wide query behind the "PRs opened by me" section of the Other Projects tab: the
+ * Builds and reads the workspace-wide query behind the "PRs opened by me" source of the Pull Requests: the
  * open pull requests [selectedUserUuid] authored anywhere in the workspace.
  *
  * This is the documented `GET /2.0/workspaces/{workspace}/pullrequests/{selected_user}` route, which needs the
- * user uuid rather than a nickname. See [BitbucketReviewQueueResponseParser] for why the review queue, which
- * this route does not cover, has to be collected per repository instead.
+ * user uuid rather than a nickname.
  *
  * Unlike the per-repository route, this one returns no repository object per row, so the repository behind each
  * pull request is recovered from its own links; see [BitbucketRepositoryUrls.repoSlugFromPullRequestLink].

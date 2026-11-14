@@ -7,14 +7,13 @@ import org.junit.jupiter.api.Test
 @Tag("unit")
 class DiffyToolWindowTabTest {
     @Test
-    fun `entries - should list the six tabs in header order`() {
+    fun `entries - should list the five tabs in header order`() {
         // GIVEN
         val expected = listOf(
-            DiffyToolWindowTab.ProjectPrs,
-            DiffyToolWindowTab.WorkspacePrs,
-            DiffyToolWindowTab.WorkspaceWatchedProjects,
-            DiffyToolWindowTab.RecentProjects,
+            DiffyToolWindowTab.PullRequests,
             DiffyToolWindowTab.Notifications,
+            DiffyToolWindowTab.RecentProjects,
+            DiffyToolWindowTab.WatchedProjects,
             DiffyToolWindowTab.Settings
         )
 

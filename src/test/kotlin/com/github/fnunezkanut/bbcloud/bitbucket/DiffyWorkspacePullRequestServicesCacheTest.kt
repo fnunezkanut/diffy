@@ -4,14 +4,11 @@ import com.github.fnunezkanut.bbcloud.auth.DiffyAccessTokenProvider
 import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
 import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCacheState
 import com.github.fnunezkanut.bbcloud.cache.MutableTestClock
-import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheKey
-import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
 import com.github.fnunezkanut.bbcloud.cache.PullRequestListingIds
 import com.github.fnunezkanut.bbcloud.cache.cacheTestSummary
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.coEvery
@@ -105,90 +102,6 @@ class DiffyWorkspacePullRequestServicesCacheTest {
 
         // THEN no snapshot is stored, so the next load asks Bitbucket again
         cache.freshListing(PullRequestListingIds.workspaceAuthored(workspace = "acme")).shouldBeNull()
-    }
-
-    @Test
-    fun `reviewing - only the repository whose listing is stale is requested again`() {
-        // GIVEN payments was listed 30 seconds ago
-        val service = DiffyReviewQueueService(accessTokenProvider = tokens, pullRequestClient = client, pullRequestCache = cache)
-        coEvery {
-            client.listOpenPullRequestsReviewedBy(workspace = "acme", repoSlug = "payments", reviewerUuid = "{me}", pageLen = any(), apiToken = "token")
-        } returns ReviewerQueueQueryResult.Listed(pullRequests = listOf(cacheTestSummary(id = 10L)))
-        runBlocking {
-            service.listReviewingPullRequests(organizationUrl = ORGANIZATION, excludedRepoSlug = null, repoSlugs = listOf("payments"))
-        }
-        clock.advance(30.seconds)
-        coEvery {
-            client.listOpenPullRequestsReviewedBy(workspace = "acme", repoSlug = "billing", reviewerUuid = "{me}", pageLen = any(), apiToken = "token")
-        } returns ReviewerQueueQueryResult.Listed(pullRequests = listOf(cacheTestSummary(id = 20L)))
-
-        // WHEN both watched repositories load
-        val result = runBlocking {
-            service.listReviewingPullRequests(
-                organizationUrl = ORGANIZATION,
-                excludedRepoSlug = null,
-                repoSlugs = listOf("payments", "billing")
-            )
-        }
-
-        // THEN payments came from the cache and only billing was requested
-        assertSoftly {
-            result.shouldBeInstanceOf<ReviewingPullRequestListResult.Success>().pullRequests.map { it.summary.id } shouldContainExactly listOf(10L, 20L)
-            coVerify(exactly = 1) {
-                client.listOpenPullRequestsReviewedBy(workspace = "acme", repoSlug = "payments", reviewerUuid = "{me}", pageLen = any(), apiToken = "token")
-            }
-        }
-    }
-
-    @Test
-    fun `reviewing - a skipped repository writes no listing`() {
-        // GIVEN a repository the token cannot read
-        val service = DiffyReviewQueueService(accessTokenProvider = tokens, pullRequestClient = client, pullRequestCache = cache)
-        coEvery {
-            client.listOpenPullRequestsReviewedBy(workspace = "acme", repoSlug = "archived", reviewerUuid = "{me}", pageLen = any(), apiToken = "token")
-        } returns ReviewerQueueQueryResult.Skipped
-
-        // WHEN it is queried
-        runBlocking {
-            service.listReviewingPullRequests(organizationUrl = ORGANIZATION, excludedRepoSlug = null, repoSlugs = listOf("archived"))
-        }
-
-        // THEN no listing is stored for it
-        cache.listing(PullRequestListingIds.workspaceReviewing(workspace = "acme", repoSlug = "archived")).shouldBeNull()
-    }
-
-    @Test
-    fun `reviewing - a failed repository falls back to its stored listing`() {
-        // GIVEN payments listed once, then a request that fails
-        val service = DiffyReviewQueueService(accessTokenProvider = tokens, pullRequestClient = client, pullRequestCache = cache)
-        coEvery {
-            client.listOpenPullRequestsReviewedBy(workspace = "acme", repoSlug = "payments", reviewerUuid = "{me}", pageLen = any(), apiToken = "token")
-        } returns ReviewerQueueQueryResult.Listed(pullRequests = listOf(cacheTestSummary(id = 30L)))
-        runBlocking {
-            service.listReviewingPullRequests(organizationUrl = ORGANIZATION, excludedRepoSlug = null, repoSlugs = listOf("payments"))
-        }
-        clock.advance(120.seconds)
-        coEvery {
-            client.listOpenPullRequestsReviewedBy(workspace = "acme", repoSlug = "payments", reviewerUuid = "{me}", pageLen = any(), apiToken = "token")
-        } returns ReviewerQueueQueryResult.Failed()
-
-        // WHEN it loads again
-        val result = runBlocking {
-            service.listReviewingPullRequests(
-                organizationUrl = ORGANIZATION,
-                excludedRepoSlug = null,
-                repoSlugs = listOf("payments"),
-                refresh = PullRequestCacheRefresh.Force
-            )
-        }
-
-        // THEN the stored row is shown and the load is not truncated
-        assertSoftly {
-            val success = result.shouldBeInstanceOf<ReviewingPullRequestListResult.Success>()
-            success.pullRequests.map { it.summary.id } shouldContainExactly listOf(30L)
-            success.isTruncated shouldBe false
-        }
-        cache.get(PullRequestCacheKey.of(workspace = "acme", repoSlug = "payments", prNum = 30L)).shouldNotBeNull()
     }
 
     private fun authoredPage(id: Long, repoSlug: String): AuthoredPullRequestPage {

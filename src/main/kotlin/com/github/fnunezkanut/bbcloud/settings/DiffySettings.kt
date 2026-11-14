@@ -1,6 +1,7 @@
 package com.github.fnunezkanut.bbcloud.settings
 
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
+import com.github.fnunezkanut.bbcloud.toolwindow.DiffyToolWindowTab
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.BaseState
 import com.intellij.openapi.components.SimplePersistentStateComponent
@@ -51,47 +52,30 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
         var repoAvatarUrls by map<String, String>()
 
         /**
-         * The Exclude checkbox states and the Created by dropdown of the Current Project tab. Each is a view preference,
-         * persisted across restarts and independent of the Workspace tab's states (see
-         * [workspaceExcludeApprovedByMePullRequests] etc.). The option names are part of the persisted XML; do not
-         * rename them without a migration (see [watchedRepos] for the earlier corruption incident). `BaseState` omits
-         * values equal to the default, so existing installs get these defaults automatically with no migration.
+         * The Exclude checkbox states and the two dropdowns of the Pull Requests tab. Each is a view preference, persisted
+         * across restarts. The option names are part of the persisted XML; do not rename them without a migration (see
+         * [watchedRepos] for the earlier corruption incident). The names were renamed from the former `inbox*` names, and
+         * the platform ignores the stale elements on load, so filters saved under the old names reset to the defaults once.
+         * `BaseState` omits values equal to the default, so fresh installs get these defaults automatically.
          *
          * Default true: hide pull requests that are not Open (Merged, Declined).
          */
-        var projectExcludeResolvedPullRequests by property(true)
+        var pullRequestsExcludeResolved by property(true)
 
         /** Default false: when true, hide the PRs the current user has approved. */
-        var projectExcludeApprovedByMePullRequests by property(false)
+        var pullRequestsExcludeApprovedByMe by property(false)
 
         /** Default true: hide draft pull requests. */
-        var projectExcludeDraftPullRequests by property(true)
+        var pullRequestsExcludeDrafts by property(true)
+
+        /** The Created by dropdown of the Pull Requests, persisted as the [PullRequestUserScope] name. Default AssignedToMe. */
+        var pullRequestsAuthorScope by string(PullRequestUserScope.AssignedToMe.name)
 
         /**
-         * The user scope dropdown of the Current Project tab, persisted as the [PullRequestUserScope] name. Default
-         * [PullRequestUserScope.AnyUser]. The name is new, so the removed boolean `projectExcludeMinePullRequests`
-         * option is never read as this value. The property keeps its persisted name, so saved choices survive the
-         * rename of the type.
+         * The project scope dropdown of the Pull Requests, persisted as the [PullRequestProjectScope] name. Default
+         * [PullRequestProjectScope.AnyProject].
          */
-        var projectPullRequestAuthorScope by string(PullRequestUserScope.AnyUser.name)
-
-        /**
-         * The Exclude checkbox states and the Created by dropdown of the Workspace tab. There is no workspace Resolved
-         * property: the two workspace sources request open pull requests only, so that option is neither shown nor
-         * persisted. Each is a view preference, persisted across restarts and independent of the Current Project
-         * states. The option names are part of the persisted XML; do not rename them without a migration.
-         */
-        var workspaceExcludeApprovedByMePullRequests by property(false)
-
-        /** Default true: hide draft pull requests. */
-        var workspaceExcludeDraftPullRequests by property(true)
-
-        /**
-         * The user scope dropdown of the Workspace tab, persisted as the [PullRequestUserScope] name. Default
-         * [PullRequestUserScope.AnyUser]. See [projectPullRequestAuthorScope] for why the name is new and why the
-         * property keeps its persisted name.
-         */
-        var workspacePullRequestAuthorScope by string(PullRequestUserScope.AnyUser.name)
+        var pullRequestsProjectScope by string(PullRequestProjectScope.AnyProject.name)
 
         /**
          * The divider position of the pull-request page split layout, as the fraction of the width given to the left
@@ -132,7 +116,21 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
          * rename it without a migration.
          */
         var collapseUnchangedDefaultApplied by property(false)
+
+        /**
+         * The tool window tab that was selected last, persisted as the [DiffyToolWindowTab] name. It is a view
+         * preference: the tool window opens on this tab, and a settings reset puts it back to Pull Requests. The option
+         * name and the enum entry names are part of the persisted XML; do not rename them without a migration.
+         */
+        var lastSelectedTab by string(DiffyToolWindowTab.PullRequests.name)
     }
+
+    /** The tool window tab that was selected last. See [State.lastSelectedTab]. Unset or unknown names fall back to Pull Requests. */
+    var lastSelectedTab: DiffyToolWindowTab
+        get() = parseTab(stored = state.lastSelectedTab)
+        set(value) {
+            state.lastSelectedTab = value.name
+        }
 
     /** Whether the plugin already applied the collapse-unchanged default. See [State.collapseUnchangedDefaultApplied]. */
     var collapseUnchangedDefaultApplied: Boolean
@@ -266,45 +264,24 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
         state.repoAvatarUrls.clear()
     }
 
-    /**
-     * Reads the persisted Exclude: checkbox states of [scope]. For [PullRequestListScope.Workspace] the returned filter
-     * always carries `excludeResolved = false`, because that tab offers no Resolved checkbox.
-     */
-    fun pullRequestListFilter(scope: PullRequestListScope): PullRequestListFilter {
-        return when (scope) {
-            PullRequestListScope.CurrentProject -> PullRequestListFilter(
-                excludeResolved = state.projectExcludeResolvedPullRequests,
-                excludeApprovedByMe = state.projectExcludeApprovedByMePullRequests,
-                excludeDrafts = state.projectExcludeDraftPullRequests,
-                userScope = parseUserScope(stored = state.projectPullRequestAuthorScope)
-            )
-            PullRequestListScope.Workspace -> PullRequestListFilter(
-                excludeResolved = false,
-                excludeApprovedByMe = state.workspaceExcludeApprovedByMePullRequests,
-                excludeDrafts = state.workspaceExcludeDraftPullRequests,
-                userScope = parseUserScope(stored = state.workspacePullRequestAuthorScope)
-            )
-        }
+    /** Reads the persisted Exclude: checkbox states and dropdown selections of the Pull Requests. */
+    fun pullRequestsListFilter(): PullRequestListFilter {
+        return PullRequestListFilter(
+            excludeResolved = state.pullRequestsExcludeResolved,
+            excludeApprovedByMe = state.pullRequestsExcludeApprovedByMe,
+            excludeDrafts = state.pullRequestsExcludeDrafts,
+            userScope = parseUserScope(stored = state.pullRequestsAuthorScope),
+            projectScope = parseProjectScope(stored = state.pullRequestsProjectScope)
+        )
     }
 
-    /**
-     * Persists the Exclude: checkbox states of [scope]. For [PullRequestListScope.Workspace], [filter]'s
-     * `excludeResolved` is ignored, because that tab has no Resolved checkbox to persist.
-     */
-    fun savePullRequestListFilter(scope: PullRequestListScope, filter: PullRequestListFilter) {
-        when (scope) {
-            PullRequestListScope.CurrentProject -> {
-                state.projectExcludeResolvedPullRequests = filter.excludeResolved
-                state.projectExcludeApprovedByMePullRequests = filter.excludeApprovedByMe
-                state.projectExcludeDraftPullRequests = filter.excludeDrafts
-                state.projectPullRequestAuthorScope = filter.userScope.name
-            }
-            PullRequestListScope.Workspace -> {
-                state.workspaceExcludeApprovedByMePullRequests = filter.excludeApprovedByMe
-                state.workspaceExcludeDraftPullRequests = filter.excludeDrafts
-                state.workspacePullRequestAuthorScope = filter.userScope.name
-            }
-        }
+    /** Persists the Exclude: checkbox states and dropdown selections of the Pull Requests. */
+    fun savePullRequestsListFilter(filter: PullRequestListFilter) {
+        state.pullRequestsExcludeResolved = filter.excludeResolved
+        state.pullRequestsExcludeApprovedByMe = filter.excludeApprovedByMe
+        state.pullRequestsExcludeDrafts = filter.excludeDrafts
+        state.pullRequestsAuthorScope = filter.userScope.name
+        state.pullRequestsProjectScope = filter.projectScope.name
     }
 
     companion object {
@@ -316,9 +293,20 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
             return ApplicationManager.getApplication().service()
         }
 
-        /** Maps a stored [PullRequestUserScope] name back to the enum. Unset or unknown values fall back to AnyUser. */
+        /** Maps a stored [DiffyToolWindowTab] name back to the enum. Unset or unknown values fall back to PullRequests. */
+        private fun parseTab(stored: String?): DiffyToolWindowTab {
+            return DiffyToolWindowTab.entries.firstOrNull { tab -> tab.name == stored } ?: DiffyToolWindowTab.PullRequests
+        }
+
+        /** Maps a stored [PullRequestUserScope] name back to the enum. Unset or unknown values fall back to AssignedToMe. */
         private fun parseUserScope(stored: String?): PullRequestUserScope {
-            return PullRequestUserScope.entries.firstOrNull { scope -> scope.name == stored } ?: PullRequestUserScope.AnyUser
+            return PullRequestUserScope.entries.firstOrNull { scope -> scope.name == stored } ?: PullRequestUserScope.AssignedToMe
+        }
+
+        /** Maps a stored [PullRequestProjectScope] name back to the enum. Unset or unknown values fall back to AnyProject. */
+        private fun parseProjectScope(stored: String?): PullRequestProjectScope {
+            return PullRequestProjectScope.entries.firstOrNull { scope -> scope.name == stored }
+                ?: PullRequestProjectScope.AnyProject
         }
     }
 }
