@@ -4,21 +4,41 @@ import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketAccountUuid
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
 import com.github.fnunezkanut.bbcloud.settings.PullRequestListFilter
+import com.github.fnunezkanut.bbcloud.settings.PullRequestProjectScope
 import com.github.fnunezkanut.bbcloud.settings.PullRequestUserScope
 
 /** Applies the Exclude checkboxes and the user scope dropdown to a merged list of pull request entries. Pure: no Compose, no IntelliJ APIs. */
 object PullRequestListFiltering {
     /**
      * Keeps the entries that pass every enabled exclusion and the user scope. With [PullRequestUserScope.Me], only the
-     * current user's authored entries pass; see [isMine]. With [PullRequestUserScope.AssignedToMe], only entries where
-     * the current user is a reviewer pass; see [isAssignedTo]. A null [currentUserUuid] also disables the
-     * Approved-by-me exclusion.
+     * current user's authored entries pass; see [isMine]. With [PullRequestUserScope.AssignedToMe], entries authored or
+     * reviewed by the current user pass; see [isAssignedTo]. With [PullRequestUserScope.Others], entries not authored
+     * by the current user pass. A null [currentUserUuid] also disables the
+     * Approved-by-me exclusion. With [PullRequestProjectScope.CurrentProject], only entries of
+     * [currentProjectRepository] pass; a null repository matches nothing.
      */
-    fun apply(entries: List<PullRequestListEntry>, filter: PullRequestListFilter, currentUserUuid: String?): List<PullRequestListEntry> {
-        return entries.filter { entry -> keeps(entry = entry, filter = filter, currentUserUuid = currentUserUuid) }
+    fun apply(
+        entries: List<PullRequestListEntry>,
+        filter: PullRequestListFilter,
+        currentUserUuid: String?,
+        currentProjectRepository: PullRequestRepositoryKey? = null
+    ): List<PullRequestListEntry> {
+        return entries.filter { entry ->
+            keeps(
+                entry = entry,
+                filter = filter,
+                currentUserUuid = currentUserUuid,
+                currentProjectRepository = currentProjectRepository
+            )
+        }
     }
 
-    private fun keeps(entry: PullRequestListEntry, filter: PullRequestListFilter, currentUserUuid: String?): Boolean {
+    private fun keeps(
+        entry: PullRequestListEntry,
+        filter: PullRequestListFilter,
+        currentUserUuid: String?,
+        currentProjectRepository: PullRequestRepositoryKey?
+    ): Boolean {
         val summary = entry.pullRequest.summary
         if (filter.excludeResolved && summary.state != PullRequestState.Open) {
             return false
@@ -29,18 +49,46 @@ object PullRequestListFiltering {
         if (!passesUserScope(entry = entry, userScope = filter.userScope, currentUserUuid = currentUserUuid)) {
             return false
         }
+        if (!passesProjectScope(entry = entry, projectScope = filter.projectScope, currentProjectRepository = currentProjectRepository)) {
+            return false
+        }
         if (filter.excludeApprovedByMe && isApprovedByMe(entry = entry, currentUserUuid = currentUserUuid)) {
             return false
         }
         return true
     }
 
-    /** Whether [entry] passes [userScope]. [PullRequestUserScope.AnyUser] passes every entry. */
+    /**
+     * Whether [entry] passes [userScope]. [PullRequestUserScope.AssignedToMe] passes entries the user authored or
+     * reviews; [PullRequestUserScope.Others] passes entries the user did not author. While the current user is
+     * unknown, those two scopes cannot be evaluated and pass every entry.
+     */
     private fun passesUserScope(entry: PullRequestListEntry, userScope: PullRequestUserScope, currentUserUuid: String?): Boolean {
+        val isUserKnown = !currentUserUuid.isNullOrBlank()
         return when (userScope) {
-            PullRequestUserScope.AnyUser -> true
-            PullRequestUserScope.Me -> isMine(entry = entry, currentUserUuid = currentUserUuid)
-            PullRequestUserScope.AssignedToMe -> isAssignedTo(entry = entry, currentUserUuid = currentUserUuid)
+            PullRequestUserScope.Me -> {
+                isMine(entry = entry, currentUserUuid = currentUserUuid)
+            }
+            PullRequestUserScope.AssignedToMe -> {
+                !isUserKnown ||
+                    isMine(entry = entry, currentUserUuid = currentUserUuid) ||
+                    isAssignedTo(entry = entry, currentUserUuid = currentUserUuid)
+            }
+            PullRequestUserScope.Others -> {
+                !isUserKnown || !isMine(entry = entry, currentUserUuid = currentUserUuid)
+            }
+        }
+    }
+
+    /** Whether [entry] passes [projectScope]. [PullRequestProjectScope.AnyProject] passes every entry. */
+    private fun passesProjectScope(
+        entry: PullRequestListEntry,
+        projectScope: PullRequestProjectScope,
+        currentProjectRepository: PullRequestRepositoryKey?
+    ): Boolean {
+        return when (projectScope) {
+            PullRequestProjectScope.AnyProject -> true
+            PullRequestProjectScope.CurrentProject -> currentProjectRepository != null && entry.repositoryKey == currentProjectRepository
         }
     }
 

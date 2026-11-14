@@ -28,7 +28,11 @@ data class RecentProjectsUiState(
     val searchQuery: String,
     val loadFailed: Boolean,
     /** Bumped whenever a repository avatar finishes loading, so the screen recomposes. */
-    val avatarRevision: Int = 0
+    val avatarRevision: Int = 0,
+    /** True while "Remove all PR Work Trees" runs from this tab. */
+    val isRemovingAllWorktrees: Boolean = false,
+    /** True when a projects directory is configured, so PR work trees can exist. */
+    val canRemoveAllWorktrees: Boolean = false
 ) {
     val isEmpty: Boolean
         get() = groups.isEmpty() && ungrouped.isEmpty()

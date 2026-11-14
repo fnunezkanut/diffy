@@ -3,7 +3,6 @@ package com.github.fnunezkanut.bbcloud.ui.setup
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -11,7 +10,6 @@ import org.junit.jupiter.api.Test
 @Tag("unit")
 class SetupFooterTextTest {
     private val disclaimer = DiffyBundle.message("setup.disclaimer")
-    private val separator = "\u2022"
 
     @Test
     fun `build - should include the resolved version`() {
@@ -22,39 +20,34 @@ class SetupFooterTextTest {
         val result = SetupFooterText.build(version)
 
         // THEN
-        assertSoftly {
-            result shouldContain "Diffy - Bitbucket PR Review plugin: $version"
-            result shouldContain "$separator $disclaimer"
-        }
+        result shouldBe "Diffy - Bitbucket PR Review plugin: 0.1.3"
     }
 
     @Test
-    fun `build - should omit the version suffix when it is unknown`() {
-        // GIVEN
-        val version = null
-
+    fun `build - should not contain the disclaimer`() {
         // WHEN
-        val result = SetupFooterText.build(version)
+        val result = SetupFooterText.build("0.1.3")
 
         // THEN
-        assertSoftly {
-            // The ": <version>" suffix is dropped; the disclaimer keeps its own colon.
-            result shouldNotContain "Diffy - Bitbucket PR Review plugin:"
-            result shouldNotContain "Unknown"
-            result shouldContain "Diffy - Bitbucket PR Review plugin $separator $disclaimer"
-        }
+        result shouldNotContain disclaimer
     }
 
     @Test
-    fun `build - should omit the version suffix when it is blank`() {
-        // GIVEN
-        val version = "   "
-
+    fun `build - should be only the label when the version is null`() {
         // WHEN
-        val result = SetupFooterText.build(version)
+        val result = SetupFooterText.build(null)
 
         // THEN
-        result shouldContain "Diffy - Bitbucket PR Review plugin $separator $disclaimer"
+        result shouldBe SetupFooterText.label()
+    }
+
+    @Test
+    fun `build - should be only the label when the version is blank`() {
+        // WHEN
+        val result = SetupFooterText.build("   ")
+
+        // THEN
+        result shouldBe SetupFooterText.label()
     }
 
     @Test
@@ -66,51 +59,30 @@ class SetupFooterTextTest {
         assertSoftly {
             result shouldBe "Diffy - Bitbucket PR Review plugin"
             result shouldNotContain disclaimer
-            result shouldNotContain separator
         }
     }
 
     @Test
     fun `build - should start with the label so the screen can split it off`() {
-        // GIVEN
-        val version = "0.1.3"
-
         // WHEN
-        val result = SetupFooterText.build(version)
+        val result = SetupFooterText.build("0.1.3")
 
         // THEN
-        // The screen renders label() as a link and the remainder as text, so build() must be label + suffix.
         assertSoftly {
             result.startsWith(SetupFooterText.label()) shouldBe true
-            result.removePrefix(SetupFooterText.label()) shouldBe SetupFooterText.buildSuffix(version)
+            result.removePrefix(SetupFooterText.label()) shouldBe SetupFooterText.buildVersionSuffix("0.1.3")
         }
     }
 
     @Test
-    fun `buildSuffix - should include the version and disclaimer`() {
-        // GIVEN
-        val version = "0.1.3"
-
+    fun `disclaimer - should be the bundle disclaimer without a separator`() {
         // WHEN
-        val result = SetupFooterText.buildSuffix(version)
+        val result = SetupFooterText.disclaimer()
 
         // THEN
         assertSoftly {
-            result shouldContain ": $version"
-            result shouldContain "$separator $disclaimer"
-            result shouldNotContain "Diffy - Bitbucket PR Review plugin"
-        }
-    }
-
-    @Test
-    fun `buildSuffix - should omit the version when it is null`() {
-        // WHEN
-        val result = SetupFooterText.buildSuffix(null)
-
-        // THEN
-        assertSoftly {
-            result shouldContain "$separator $disclaimer"
-            result shouldNotContain "Unknown"
+            result shouldBe disclaimer
+            result shouldNotContain "\u2022"
         }
     }
 }

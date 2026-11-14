@@ -25,6 +25,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * updates while the tab is open, also when another IDE process changed the persisted notifications. Rows are built on
  * [ioDispatcher] because up to 2000 notifications can be stored, and the state is written through [runOnEdt].
  * [setUnread] persists the read flag; [latestPullRequests] are the pull requests of the latest snapshot, if any.
+ * [onUnreadCountChanged] is called on the EDT with the unread count each time the rows change it.
  */
 class NotificationsViewModel internal constructor(
     private val stored: Flow<DiffyNotificationsContent>,
@@ -46,7 +47,8 @@ class NotificationsViewModel internal constructor(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val openMessage: (NotificationRow) -> Unit = {},
     initialShowOnlyUnread: Boolean = false,
-    private val saveShowOnlyUnread: (Boolean) -> Unit = {}
+    private val saveShowOnlyUnread: (Boolean) -> Unit = {},
+    private val onUnreadCountChanged: (Int) -> Unit = {}
 ) {
     val state: MutableState<NotificationsUiState> =
         mutableStateOf(NotificationsUiState.INITIAL.copy(showOnlyUnread = initialShowOnlyUnread))
@@ -56,6 +58,8 @@ class NotificationsViewModel internal constructor(
 
     @Volatile
     private var latestContent: DiffyNotificationsContent? = null
+
+    private var lastPublishedUnreadCount: Int? = null
 
     /** Starts collecting the snapshots. Safe to call more than once; only the first call has an effect. */
     fun start() {
@@ -129,6 +133,7 @@ class NotificationsViewModel internal constructor(
             return
         }
         state.value = current.copy(rows = current.rows.map { row -> if (row.id in ids) row.copy(isUnread = unread) else row })
+        publishUnreadCount()
         coroutineScope.launch {
             try {
                 setUnread(ids, unread)
@@ -196,9 +201,21 @@ class NotificationsViewModel internal constructor(
                     avatarRevision = current.avatarRevision,
                     showOnlyUnread = current.showOnlyUnread
                 )
+                publishUnreadCount()
                 prefetchAvatars(rows.mapNotNull { row -> row.actorAvatarUrl }.distinct(), ::onAvatarLoaded)
             }
         }
+    }
+
+    /** Reports the unread count when it changed. Called on the EDT only, so no synchronization is needed. */
+    private fun publishUnreadCount() {
+        val count = state.value.unreadCount
+        if (count == lastPublishedUnreadCount) {
+            return
+        }
+        lastPublishedUnreadCount = count
+        LOG.debug("Unread notification count changed to $count")
+        onUnreadCountChanged(count)
     }
 
     private fun onAvatarLoaded() {

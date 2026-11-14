@@ -42,7 +42,7 @@ class DiffySettingsViewModel(
     private var ownsLogin = false
 
     init {
-        // Mirror the application-level login state so every project's Settings tab shows the same progress and can
+        // Mirror the application-level login state so every project's settings page shows the same progress and can
         // cancel it (decision 13b). A finish or cancel started elsewhere refreshes this tab's status.
         coroutineScope.launch {
             oauthLoginService.state.collect { loginState ->
@@ -75,9 +75,9 @@ class DiffySettingsViewModel(
     }
 
     /**
-     * Re-reads persisted Settings values whenever the Settings tab is selected.
+     * Re-reads persisted Settings values when the settings page opens and after each change.
      *
-     * A successful Save re-binds the already-selected Settings tab (see refreshAfterSave in the tool window panel),
+     * A successful Save re-binds the settings page (see DiffyToolsConfigurable),
      * so the "Valid API Token..." success affordance set by [persist] must survive this re-bind; clearing it here
      * wiped the message before the user could see it. The message is retained and only drops when the user edits the
      * token field (see [setTokenFieldText]) or a later Save fails. The success message is now shown inside the API

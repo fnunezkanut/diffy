@@ -19,7 +19,7 @@ import kotlin.time.Instant
  * The application-level cache of Bitbucket pull request metadata. It keeps one [CachedPullRequest] per pull request and
  * one [ListingSnapshot] per listing, and writes both through to [DiffyPullRequestCacheState] after every change.
  *
- * Every public method takes one lock, so the Current Project and Workspace tabs of several IDE windows can share one
+ * Every public method takes one lock, so the Pull Requests of several IDE windows can share one
  * instance. Call it only from a background thread (`Dispatchers.IO`). The JSON encoding of up to [PullRequestCacheLimits.maxEntries]
  * rows is too slow for the event dispatch thread. Callers read watched repository slugs before they call in, because
  * settings access must not run under this lock.

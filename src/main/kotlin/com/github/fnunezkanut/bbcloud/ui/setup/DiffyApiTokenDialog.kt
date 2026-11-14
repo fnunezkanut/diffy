@@ -30,7 +30,7 @@ import javax.swing.Action
 import javax.swing.JComponent
 
 /**
- * Modal that hosts the API token field, Save button, and token-creation instructions from the Settings tab.
+ * Modal that hosts the API token field, Save button, and token-creation instructions from the settings page.
  *
  * It binds to the same [DiffySettingsViewModel] instance as the Settings page, so Compose snapshot state is shared
  * and the token's save/validation/workspace-chooser logic is reused unchanged. The dialog has only a Close action; the

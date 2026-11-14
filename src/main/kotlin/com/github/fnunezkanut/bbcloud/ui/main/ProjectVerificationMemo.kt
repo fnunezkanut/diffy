@@ -6,7 +6,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeSource
 
 /**
- * A repository verification the Current Project tab remembers, so that re-opening the tab within
+ * A repository verification the Pull Requests remembers, so that re-opening the tab within
  * [VERIFICATION_REUSE_WINDOW] does not repeat the repository GET. Only a Found status is remembered. A missing or
  * broken repository is always checked again.
  */

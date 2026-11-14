@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## *1.13.0* - 2026-11-14
+* Added: the Pull Requests and Notifications tabs show the number of open PRs and unread notifications in their titles
+* Changed: the Current Project and Workspace tabs are merged into one PR Overview tab that lists PRs of the current project, PRs you opened, and PRs of watched projects, open PRs first. It has an In any project / In current project dropdown and a Create new PR button. Watched projects now list all their PRs; use Assigned to me to narrow
+* Changed: work trees of merged or declined PRs are also cleaned up for watched projects
+* Changed: the plugin settings moved to Settings > Tools > "Diffy - Bitbucket PR Review". Until the plugin is configured, the PR tabs show a link to that page; Recent Projects keeps working
+* Fixed: the PR Overview shows "Loading PRs…" until rows are ready, instead of briefly showing "No PRs match the current filters"
+* Added: Clear Recent Projects and Remove all PR Work Trees buttons on the Recent Projects tab; entries now use two lines
+
 ## *1.12.0* - 2026-11-11
 * Added: Firefox extension "Diffy - Bitbucket PR Review" in `diffy-firefox-ext` with the same features as the Chrome extension
 * Changed: the plugin accepts requests from Firefox extension origins as well as the Diffy Chrome extension

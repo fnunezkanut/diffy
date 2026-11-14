@@ -469,7 +469,7 @@ class WatchedProjectsViewModel(
     }
 
     fun onGoToWorkspaceClicked() {
-        LOG.info("User opened the Workspace tab from the Watched Projects footer link")
+        LOG.info("User opened the Pull Requests tab from the Watched Projects footer link")
         onGoToWorkspaceCallback()
     }
 
@@ -572,7 +572,7 @@ class WatchedProjectsViewModel(
     companion object {
         private val LOG = logger<WatchedProjectsViewModel>()
 
-        /** The most projects that can be watched at once, to bound the Bitbucket API calls the Workspace tab makes. */
+        /** The most projects that can be watched at once, to bound the Bitbucket API calls the Pull Requests makes. */
         const val MAX_WATCHED_PROJECTS = 20
     }
 }

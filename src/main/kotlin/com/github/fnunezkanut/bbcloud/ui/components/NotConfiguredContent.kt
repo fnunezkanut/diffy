@@ -13,8 +13,8 @@ import org.jetbrains.jewel.ui.component.Link
 private val LOG = Logger.getInstance("com.github.fnunezkanut.bbcloud.ui.components.NotConfiguredContent")
 
 /**
- * Shown by the Project and Workspace tabs while the plugin is not configured. The whole message is the link, so
- * first-time setup is one click away.
+ * Shown by the Pull Requests, Notifications, and Watched Projects tabs while the plugin is not configured. The whole message is the link to the Settings > Tools > Diffy - Bitbucket PR Review page, so first-time
+ * setup is one click away.
  */
 @Composable
 internal fun NotConfiguredContent(onGoToSettings: () -> Unit, modifier: Modifier = Modifier) {

@@ -5,7 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequest
 import com.github.fnunezkanut.bbcloud.settings.PullRequestListFilter
-import com.github.fnunezkanut.bbcloud.settings.PullRequestListScope
+import com.github.fnunezkanut.bbcloud.settings.PullRequestProjectScope
 import com.github.fnunezkanut.bbcloud.settings.PullRequestUserScope
 import com.github.fnunezkanut.bbcloud.ui.main.AuthorAvatarCache
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.buildWorkspacePullRequestRow
@@ -13,20 +13,17 @@ import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.CoroutineScope
 
 /**
- * The reusable view model behind both merged pull request tabs. It is instantiated twice: once by the main panel for
- * Current Project (sources ProjectOpen and ProjectResolved), and once by the other-projects panel for
- * Workspace (sources WorkspaceAuthored and WorkspaceAssigned). Each instance owns its source slots, its filter,
- * one [AuthorAvatarCache], and the derived visible rows.
+ * The view model behind the Pull Requests. There is one instance, owned by the other-projects panel; its sources are all
+ * [PullRequestListingSource] entries. It owns the source slots, the filter, one [AuthorAvatarCache], and the derived
+ * visible rows.
  *
  * Filtering is pure and local: a toggle re-filters the already-loaded rows and persists the flag; it does not reload.
  * All source-map mutation happens on the EDT, as the coordinators already arrange via invokeLater.
  */
 class PullRequestsViewModel(
-    // "Current Project" or "Workspace", used in log lines only.
+    // Used in log lines only.
     private val logName: String,
     private val sourcesOfTab: Set<PullRequestListingSource>,
-    // Decides whether the Resolved checkbox is offered and whether open rows are listed first.
-    val scope: PullRequestListScope,
     initialFilter: PullRequestListFilter,
     private val organizationUrl: () -> String?,
     // Persists the filter via DiffyConfigurationService.
@@ -40,7 +37,7 @@ class PullRequestsViewModel(
     private val seedKnownUsers: (List<PullRequestListEntry>) -> Unit = {}
 ) {
     val state: MutableState<PullRequestsUiState> = mutableStateOf(
-        PullRequestsUiState(filter = normalizeFilter(filter = initialFilter))
+        PullRequestsUiState(filter = initialFilter)
     )
 
     /** The load state of every source of this tab. Mutated on the EDT only. */
@@ -50,6 +47,8 @@ class PullRequestsViewModel(
 
     private var currentUserUuid: String? = null
 
+    private var currentProject: CurrentProjectRepositoryState = CurrentProjectRepositoryState.Pending
+
     /** Incremented by [beginRefresh]; stale responses are ignored so a slow reload cannot overwrite a newer one. */
     private var refreshGeneration: Long = 0
 
@@ -58,9 +57,17 @@ class PullRequestsViewModel(
     /** The visible entries, keyed for action routing; rebuilt by [recompute]. */
     private var visibleEntriesByKey: Map<PullRequestListKey, PullRequestListEntry> = emptyMap()
 
-    /** Sets every source back to Idle, so the card derivation shows Hidden. */
+    /** Sets every source back to Idle, so the card derivation shows Hidden, and forgets the current project. */
     fun showHidden() {
         sourcesOfTab.forEach { source -> sources[source] = PullRequestSourceState.Idle }
+        currentProject = CurrentProjectRepositoryState.Pending
+        recompute()
+    }
+
+    /** Stores what is known about the IDE project's repository and re-filters the rows. */
+    fun setCurrentProject(state: CurrentProjectRepositoryState) {
+        LOG.debug("$logName: current project state is ${describe(state = state)}")
+        currentProject = state
         recompute()
     }
 
@@ -75,6 +82,17 @@ class PullRequestsViewModel(
     fun beginRefresh(): Long {
         refreshGeneration += 1
         sourcesOfTab.forEach { source -> sources[source] = PullRequestSourceState.Loading }
+        recompute()
+        return refreshGeneration
+    }
+
+    /**
+     * Sets only the given [reloaded] sources to Loading, without incrementing the generation, and returns the current
+     * generation. Used to reload the current project alone (after a branch switch or a created PR) without disturbing
+     * the watched and authored rows. A concurrent full [beginRefresh] makes the partial reload stale.
+     */
+    fun beginReload(reloaded: Set<PullRequestListingSource>): Long {
+        reloaded.forEach { source -> sources[source] = PullRequestSourceState.Loading }
         recompute()
         return refreshGeneration
     }
@@ -145,6 +163,11 @@ class PullRequestsViewModel(
         updateFilter(filter = state.value.filter.copy(userScope = userScope))
     }
 
+    fun onProjectScopeChanged(projectScope: PullRequestProjectScope) {
+        LOG.info("User changed the project scope dropdown on the $logName tab: projectScope=$projectScope")
+        updateFilter(filter = state.value.filter.copy(projectScope = projectScope))
+    }
+
     fun onExcludeApprovedByMeChanged(checked: Boolean) {
         LOG.info("User toggled the Exclude Approved-by-me checkbox on the $logName tab: checked=$checked")
         updateFilter(filter = state.value.filter.copy(excludeApprovedByMe = checked))
@@ -196,33 +219,35 @@ class PullRequestsViewModel(
     }
 
     private fun updateFilter(filter: PullRequestListFilter) {
-        val normalized = normalizeFilter(filter = filter)
-        state.value = state.value.copy(filter = normalized)
-        onFilterChangedCallback(normalized)
+        state.value = state.value.copy(filter = filter)
+        onFilterChangedCallback(filter)
         recompute()
     }
 
     private fun recompute() {
         val filter = state.value.filter
         val isCurrentUserKnown = !currentUserUuid.isNullOrBlank()
-        // Created by me and Assigned to me need the current user's uuid. Until it is known, the dropdown offers only
-        // Created by any user, so the rows are filtered as AnyUser. The saved choice stays in the filter and applies
-        // once the uuid arrives.
-        val effectiveFilter = if (!isCurrentUserKnown && filter.userScope != PullRequestUserScope.AnyUser) {
-            filter.copy(userScope = PullRequestUserScope.AnyUser)
+        // While the current project is pending, a saved In current project choice behaves as In any project. When the
+        // project is unavailable, that choice keeps nothing (a null repository matches no row).
+        val currentRepository = (currentProject as? CurrentProjectRepositoryState.Found)?.repository
+        val effectiveProjectScopeFilter = if (currentProject == CurrentProjectRepositoryState.Pending) {
+            filter.copy(projectScope = PullRequestProjectScope.AnyProject)
         } else {
             filter
         }
+        val isCurrentProjectFilterUnavailable = currentProject == CurrentProjectRepositoryState.Unavailable &&
+            effectiveProjectScopeFilter.projectScope == PullRequestProjectScope.CurrentProject
         val entriesBySource = sources
             .mapNotNull { (source, sourceState) ->
                 (sourceState as? PullRequestSourceState.Loaded)?.let { loaded -> source to loaded.entries }
             }
             .toMap()
-        val merged = PullRequestListMerger.merge(entriesBySource = entriesBySource, openFirst = scope.openFirst)
+        val merged = PullRequestListMerger.merge(entriesBySource = entriesBySource, openFirst = true)
         val visibleEntries = PullRequestListFiltering.apply(
             entries = merged,
-            filter = effectiveFilter,
-            currentUserUuid = currentUserUuid
+            filter = effectiveProjectScopeFilter,
+            currentUserUuid = currentUserUuid,
+            currentProjectRepository = currentRepository
         )
         visibleEntriesByKey = visibleEntries.associateBy { entry -> entry.key }
         val resolvedOrganizationUrl = organizationUrl()
@@ -239,7 +264,12 @@ class PullRequestsViewModel(
             )
         }
         val totalCount = merged.size
-        val card = derivePullRequestsCard(sources = sources, totalCount = totalCount, visibleCount = rows.size)
+        val card = derivePullRequestsCard(
+            sources = sources,
+            totalCount = totalCount,
+            visibleCount = rows.size,
+            isCurrentProjectFilterUnavailable = isCurrentProjectFilterUnavailable
+        )
         val anyLoaded = sources.values.any { sourceState -> sourceState is PullRequestSourceState.Loaded }
         val isUserFilterUnavailable = filter.excludeApprovedByMe && !isCurrentUserKnown && anyLoaded
         // The pill tracks the visible open rows (after filters), so toggling an Exclude checkbox updates it (decision 4c).
@@ -255,7 +285,8 @@ class PullRequestsViewModel(
                 .keys,
             loadedSources = sources.filterValues { sourceState -> sourceState is PullRequestSourceState.Loaded }.keys,
             isUserFilterUnavailable = isUserFilterUnavailable,
-            isCurrentUserKnown = isCurrentUserKnown
+            isProjectScopeOffered = currentProject != CurrentProjectRepositoryState.Pending,
+            isCurrentProjectUnavailable = currentProject == CurrentProjectRepositoryState.Unavailable
         )
         LOG.debug("$logName: merged $totalCount rows, ${rows.size} visible after filters")
         onCountsChanged(visibleOpenCount, card)
@@ -265,12 +296,12 @@ class PullRequestsViewModel(
         state.value = state.value.copy(avatarRevision = state.value.avatarRevision + 1)
     }
 
-    /** Forces excludeResolved to false when the scope offers no Resolved checkbox, so that tab never hides resolved rows. */
-    private fun normalizeFilter(filter: PullRequestListFilter): PullRequestListFilter {
-        if (scope.offersResolved) {
-            return filter
+    private fun describe(state: CurrentProjectRepositoryState): String {
+        return when (state) {
+            CurrentProjectRepositoryState.Pending -> "Pending"
+            CurrentProjectRepositoryState.Unavailable -> "Unavailable"
+            is CurrentProjectRepositoryState.Found -> "Found(${state.repository.repoSlug})"
         }
-        return filter.copy(excludeResolved = false)
     }
 
     companion object {

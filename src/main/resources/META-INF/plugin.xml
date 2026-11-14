@@ -8,10 +8,9 @@
             <li>🔐 <b>Secure authentication</b> signs you in to Bitbucket Cloud with OAuth so tokens are obtained and stored safely through the IDE.</li>
             <li>🪟 A <b>Diffy - Bitbucket PR Review</b> tool window on the bottom strip keeps pull request triage inside IntelliJ instead of the browser.</li>
             <li>🌳 Opening a PR spins up a separate <b>PR Work Tree</b> project window with its own git work tree so reviews never clash with your main branch or other PRs.</li>
-            <li>📂 The <b>Current Project</b> tab shows open and completed PRs for the repo in your IDE, with repo links, open-PR counts, reviewer avatars, refresh, and persistent <b>Exclude</b> filters and a <b>Created by</b> dropdown with an <b>Assigned to me</b> option.</li>
-            <li>🧭 The <b>Workspace</b> tab merges PRs you opened and review assignments from watched projects into one newest-first list across your Bitbucket workspace.</li>
-            <li>👀 <b>Watched Projects</b> controls which repositories contribute to the workspace queue, with search by slug, folder, PR number, or branch and a master checkbox for matching rows.</li>
-            <li>🕘 <b>Recent Projects</b> lists the IDE recent projects and their groups, with search, the project icon, path, and current branch; click a project to open or focus it. Each row has a button to remove it from the list, and PR work trees also have a button that removes the work tree.</li>
+            <li>📋 The <b>Pull Requests</b> tab merges three sources into one de-duplicated list, open PRs first: the recent PRs (open, merged, declined) of the repo in your IDE, the open PRs you opened anywhere in the workspace, and the recent PRs of your watched projects. It has reviewer avatars, persistent <b>Exclude</b> filters, a <b>Created by</b> dropdown with an <b>Assigned to me</b> option, an <b>In any project / In current project</b> dropdown, and a <b>Create new PR</b> button. Refresh requests the current project and your own PRs again, but watched projects listed less than a minute ago stay cached. The tab titles of <b>Pull Requests</b> and <b>Notifications</b> show the number of open PRs and unread notifications.</li>
+            <li>👀 <b>Watched Projects</b> controls which repositories contribute to the Pull Requests, with search by slug, folder, PR number, or branch and a master checkbox for matching rows.</li>
+            <li>🕘 <b>Recent Projects</b> lists the IDE recent projects and their groups, with search, the project icon, path, and current branch; click a project to open or focus it. Each row has a button to remove it from the list, and PR work trees also have a button that removes the work tree. Entries use two lines. <b>Clear Recent Projects</b> empties the list except for open projects, and <b>Remove all PR Work Trees</b> closes and deletes every PR work tree after a confirmation.</li>
             <li>📋 Each PR gets a dedicated <code>&lt;prNum&gt;.pr</code> tab plus a blue header stripe with line-change stats, refresh, file changes, and merge, approve, draft, or decline actions.</li>
             <li>🕐 The PR <b>Activity</b> timeline mixes commits, approvals, tasks, builds, and file or inline comment threads in time order, with a box to add PR-scoped comments and reply in threads.</li>
             <li>🤖 Every comment box has a <b>Send this comment to Air</b> button (needs the JetBrains Air plugin). It puts the file location and the comment into the Air chat input, ready to send.</li>
@@ -27,9 +26,12 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Added: Firefox extension "Diffy - Bitbucket PR Review" in <code>diffy-firefox-ext</code> with the same features as the Chrome extension</li>
-            <li>Changed: the plugin accepts requests from Firefox extension origins as well as the Diffy Chrome extension</li>
-            <li>Changed: Slight update to the "Explain this PR with AI" prompt</li>
+            <li>Added: the Pull Requests and Notifications tabs show the number of open PRs and unread notifications in their titles</li>
+            <li>Changed: the Current Project and Workspace tabs are merged into one PR Overview tab that lists PRs of the current project, PRs you opened, and PRs of watched projects, open PRs first. It has an In any project / In current project dropdown and a Create new PR button. Watched projects now list all their PRs; use Assigned to me to narrow</li>
+            <li>Changed: work trees of merged or declined PRs are also cleaned up for watched projects</li>
+            <li>Changed: the plugin settings moved to Settings &gt; Tools &gt; Diffy - Bitbucket PR Review. Until the plugin is configured, the PR tabs show a link to that page; Recent Projects keeps working</li>
+            <li>Fixed: the PR Overview shows "Loading PRs…" until rows are ready, instead of briefly showing "No PRs match the current filters"</li>
+            <li>Added: Clear Recent Projects and Remove all PR Work Trees buttons on the Recent Projects tab; entries now use two lines</li>
         </ul>
     ]]></change-notes>
 

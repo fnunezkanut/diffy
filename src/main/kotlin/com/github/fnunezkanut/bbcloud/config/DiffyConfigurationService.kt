@@ -19,7 +19,6 @@ import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectsDiscoveryResult
 import com.github.fnunezkanut.bbcloud.settings.DiffySettings
 import com.github.fnunezkanut.bbcloud.settings.PullRequestListFilter
-import com.github.fnunezkanut.bbcloud.settings.PullRequestListScope
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.WatchedProjectsViewModel
 import com.github.fnunezkanut.bbcloud.validation.BitbucketWorkspaceValidator
 import com.intellij.openapi.application.ApplicationManager
@@ -311,8 +310,8 @@ class DiffyConfigurationService(
     /**
      * Wipes every persisted plugin setting and the stored API token: the token, the workspace slug, the legacy
      * organization URL, the projects directory, and all watched project mappings. The plugin is unconfigured
-     * afterwards, so the Settings tab must be filled in again before the plugin can be used. Called by the Settings
-     * tab's Reset Plugin button, which is a wider reset than [resetApiToken]. It also removes the stored OAuth login,
+     * afterwards, so the settings page must be filled in again before the plugin can be used. Called by the settings
+     * page's Reset Plugin button, which is a wider reset than [resetApiToken]. It also removes the stored OAuth login,
      * which is the only way to sign out of OAuth (decision 4a). The derived work tree root is not deleted from disk
      * (deleting user-adjacent directories is out of scope); clearing the projects directory is enough for
      * [workTreeDirectoryOrNull] to report null until a projects directory is saved again.
@@ -331,17 +330,18 @@ class DiffyConfigurationService(
         thisLogger().info("Diffy - Bitbucket PR Review plugin settings fully reset")
     }
 
-    /** Reads the persisted Exclude: checkbox states of [scope]; the Workspace scope always reports excludeResolved=false. */
-    fun pullRequestListFilter(scope: PullRequestListScope): PullRequestListFilter {
-        return settings.pullRequestListFilter(scope = scope)
+    /** Reads the persisted Exclude: checkbox states and dropdown selections of the Pull Requests. */
+    fun pullRequestsListFilter(): PullRequestListFilter {
+        return settings.pullRequestsListFilter()
     }
 
-    /** Persists the Exclude: checkbox states of [scope]; the Workspace scope ignores [filter]'s excludeResolved. */
-    fun savePullRequestListFilter(scope: PullRequestListScope, filter: PullRequestListFilter) {
-        settings.savePullRequestListFilter(scope = scope, filter = filter)
+    /** Persists the Exclude: checkbox states and dropdown selections of the Pull Requests. */
+    fun savePullRequestsListFilter(filter: PullRequestListFilter) {
+        settings.savePullRequestsListFilter(filter = filter)
         thisLogger().info(
-            "Saved $scope pull request list filter: resolved=${filter.excludeResolved}, " +
-                "userScope=${filter.userScope}, approvedByMe=${filter.excludeApprovedByMe}, drafts=${filter.excludeDrafts}"
+            "Pull Requests filter changed: resolved=${filter.excludeResolved}, userScope=${filter.userScope}, " +
+                "projectScope=${filter.projectScope}, approvedByMe=${filter.excludeApprovedByMe}, " +
+                "drafts=${filter.excludeDrafts}"
         )
     }
 

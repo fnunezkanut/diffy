@@ -7,38 +7,38 @@ import org.junit.jupiter.api.Test
 @Tag("unit")
 class DiffyToolWindowTabResolverTest {
     @Test
-    fun `initialTab - should open the current project PRs tab when configured`() {
+    fun `initialTab - should open the Pull Requests tab when it was selected last`() {
         // GIVEN
-        val isConfigured = true
+        val lastSelectedTab = DiffyToolWindowTab.PullRequests
 
         // WHEN
-        val result = DiffyToolWindowTabResolver.initialTab(isConfigured = isConfigured)
+        val result = DiffyToolWindowTabResolver.initialTab(lastSelectedTab = lastSelectedTab)
 
         // THEN
-        result shouldBe DiffyToolWindowTab.ProjectPrs
+        result shouldBe DiffyToolWindowTab.PullRequests
     }
 
     @Test
-    fun `initialTab - should open the settings tab when not configured`() {
+    fun `initialTab - should open the last selected tab`() {
         // GIVEN
-        val isConfigured = false
+        val lastSelectedTab = DiffyToolWindowTab.Notifications
 
         // WHEN
-        val result = DiffyToolWindowTabResolver.initialTab(isConfigured = isConfigured)
+        val result = DiffyToolWindowTabResolver.initialTab(lastSelectedTab = lastSelectedTab)
 
         // THEN
-        result shouldBe DiffyToolWindowTab.Settings
+        result shouldBe DiffyToolWindowTab.Notifications
     }
 
     @Test
-    fun `initialTab - should open the current project PRs tab while the configuration check is unresolved`() {
+    fun `initialTab - should open the Pull Requests tab when the Settings tab was selected last`() {
         // GIVEN
-        val isConfigured = null
+        val lastSelectedTab = DiffyToolWindowTab.Settings
 
         // WHEN
-        val result = DiffyToolWindowTabResolver.initialTab(isConfigured = isConfigured)
+        val result = DiffyToolWindowTabResolver.initialTab(lastSelectedTab = lastSelectedTab)
 
         // THEN
-        result shouldBe DiffyToolWindowTab.ProjectPrs
+        result shouldBe DiffyToolWindowTab.PullRequests
     }
 }

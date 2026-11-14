@@ -14,6 +14,8 @@ data class WatchedProjectRow(
     val remoteUrl: String?,
     val localSlug: String,
     val isLocalOpenable: Boolean,
+    /** Branch the local checkout is on; null when there is no local checkout, HEAD is detached, or it is unreadable. */
+    val localBranch: String? = null,
     val avatarUrl: String?
 )
 
@@ -103,6 +105,33 @@ internal fun buildWatchedProjectRow(
         isLocalOpenable = mapping.localFolderPath.isNotBlank() && runCatching {
             Files.isDirectory(Path.of(mapping.localFolderPath))
         }.getOrDefault(false),
+        localBranch = readLocalBranch(mapping.localFolderPath),
         avatarUrl = avatarUrl
     )
+}
+
+private const val HEAD_REF_PREFIX = "ref: refs/heads/"
+private const val GITDIR_PREFIX = "gitdir:"
+
+/**
+ * Reads the checked-out branch of the repository at [localFolderPath] straight from `HEAD`, following the `.git` file
+ * that linked work trees use. Returns null for a blank path, a non-repository, a detached HEAD, or any read failure.
+ */
+internal fun readLocalBranch(localFolderPath: String): String? {
+    if (localFolderPath.isBlank()) {
+        return null
+    }
+    return runCatching {
+        val dotGit = Path.of(localFolderPath).resolve(".git")
+        val gitDir = if (Files.isDirectory(dotGit)) {
+            dotGit
+        } else if (Files.isRegularFile(dotGit)) {
+            val target = Files.readString(dotGit).trim().removePrefix(GITDIR_PREFIX).trim()
+            Path.of(localFolderPath).resolve(target)
+        } else {
+            return@runCatching null
+        }
+        val head = Files.readString(gitDir.resolve("HEAD")).trim()
+        if (head.startsWith(HEAD_REF_PREFIX)) head.removePrefix(HEAD_REF_PREFIX) else null
+    }.getOrNull()
 }

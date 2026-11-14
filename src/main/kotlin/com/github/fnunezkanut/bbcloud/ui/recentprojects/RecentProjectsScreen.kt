@@ -18,10 +18,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.ui.components.DiffyCompactOutlinedIconButton
+import com.github.fnunezkanut.bbcloud.ui.components.DiffyOutlinedActionButton
 import com.github.fnunezkanut.bbcloud.ui.components.REPOSITORY_ICON_SIZE
 import com.github.fnunezkanut.bbcloud.ui.components.actionButtonHoverBackground
 import com.github.fnunezkanut.bbcloud.ui.main.ActionButtonOutlines
@@ -92,6 +95,44 @@ fun RecentProjectsScreen(viewModel: RecentProjectsViewModel) {
                     viewModel = viewModel
                 )
             }
+        }
+        RecentProjectsFooter(
+            state = state,
+            onClearAll = viewModel::onClearAllRequested,
+            onRemoveAllWorktrees = viewModel::onRemoveAllWorktreesRequested
+        )
+    }
+}
+
+/** The fixed footer: Clear Recent Projects on the left, Remove all PR Work Trees on the right. */
+@Composable
+private fun RecentProjectsFooter(state: RecentProjectsUiState, onClearAll: () -> Unit, onRemoveAllWorktrees: () -> Unit) {
+    Divider(
+        orientation = Orientation.Horizontal,
+        modifier = Modifier.fillMaxWidth()
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Tooltip(tooltip = { Text(text = DiffyBundle.message("recentProjects.footer.clearAll.tooltip")) }) {
+            DiffyOutlinedActionButton(
+                text = DiffyBundle.message("recentProjects.footer.clearAll"),
+                icon = AllIconsKeys.Actions.Close,
+                outlineColor = ActionButtonOutlines.neutral(),
+                enabled = !state.isEmpty && !state.isLoading,
+                onClick = onClearAll
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        Tooltip(tooltip = { Text(text = DiffyBundle.message("recentProjects.footer.removeAllWorktrees.tooltip")) }) {
+            DiffyOutlinedActionButton(
+                text = DiffyBundle.message("recentProjects.footer.removeAllWorktrees"),
+                icon = AllIconsKeys.Actions.GC,
+                outlineColor = ActionButtonOutlines.red(),
+                enabled = state.canRemoveAllWorktrees && !state.isRemovingAllWorktrees,
+                onClick = onRemoveAllWorktrees
+            )
         }
     }
 }
@@ -273,31 +314,56 @@ private fun RecentProjectRowItem(row: RecentProjectRow, viewModel: RecentProject
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Tooltip(tooltip = { Text(text = row.path) }) {
-                        Text(
-                            text = row.displayPath,
-                            color = secondaryColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    if (row.branch != null) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Start
+                    ) {
+                        if (row.isPullRequestWorktree) {
+                            Icon(
+                                key = AllIconsKeys.General.Tree,
+                                contentDescription = "Worktree",
+                                modifier = Modifier.size(BRANCH_ICON_SIZE),
+                                tint = secondaryColor
+                            )
+                        } else {
+                            Icon(
+                                key = AllIconsKeys.Nodes.IdeaProject,
+                                contentDescription = "Project",
+                                modifier = Modifier.size(BRANCH_ICON_SIZE)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Tooltip(
+                            tooltip = { Text(text = row.path) },
+                            modifier = Modifier.weight(1f, fill = false)
                         ) {
+                            Text(
+                                text = row.displayPath,
+                                color = secondaryColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (row.branch != null) {
+                            Spacer(modifier = Modifier.width(10.dp))
                             Icon(
                                 key = AllIconsKeys.Vcs.Branch,
                                 contentDescription = DiffyBundle.message("recentProjects.row.branch.description"),
                                 modifier = Modifier.size(BRANCH_ICON_SIZE),
                                 tint = secondaryColor
                             )
-                            Text(
-                                text = row.branch,
-                                color = secondaryColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Tooltip(
+                                tooltip = { Text(text = row.branch) },
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
+                                Text(
+                                    text = row.branch,
+                                    color = secondaryColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }

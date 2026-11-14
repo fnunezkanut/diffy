@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
@@ -64,7 +65,7 @@ import org.jetbrains.jewel.ui.icons.AllIconsKeys
 fun WatchedProjectsScreen(viewModel: WatchedProjectsViewModel) {
     val state by viewModel.state
     Column(
-        modifier = Modifier.fillMaxSize().padding(8.dp)
+        modifier = Modifier.fillMaxSize().padding(start = 8.dp, top = 8.dp, end = 8.dp)
     ) {
         if (state.rescanFailed) {
             Row(
@@ -325,9 +326,20 @@ private fun WatchedProjectsTable(viewModel: WatchedProjectsViewModel) {
                     cellBorderColor = Color.Unspecified,
                     cellBorderWidth = CELL_BORDER_WIDTH,
                     rows = rows,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().trimBottomPadding(trim = CELL_BORDER_WIDTH)
                 )
             }
+        }
+    }
+}
+
+/** Reports a height smaller by [trim], removing the empty border BasicTableLayout reserves below the last row. */
+private fun Modifier.trimBottomPadding(trim: androidx.compose.ui.unit.Dp): Modifier {
+    return this.layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        val trimPx = trim.roundToPx()
+        layout(width = placeable.width, height = (placeable.height - trimPx).coerceAtLeast(0)) {
+            placeable.place(x = 0, y = 0)
         }
     }
 }
@@ -525,27 +537,46 @@ private fun RemoteCell(row: WatchedProjectRow, viewModel: WatchedProjectsViewMod
 
 @Composable
 private fun LocalCell(row: WatchedProjectRow, viewModel: WatchedProjectsViewModel, modifier: Modifier) {
-    val localModifier = if (row.isLocalOpenable) {
-        modifier.clickable { viewModel.onOpenLocalProject(row.mapping) }
-            .pointerHoverIcon(PointerIcon.Hand)
-    } else {
-        modifier
-    }
-    Tooltip(
-        tooltip = { Text(text = row.mapping.localFolderPath) },
-        enabled = row.mapping.localFolderPath.isNotBlank()
-    ) {
-        Text(
-            text = row.localSlug,
-            modifier = localModifier,
-            color = if (row.isLocalOpenable) {
-                JewelTheme.globalColors.text.normal
-            } else {
-                JewelTheme.globalColors.text.disabled
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+    Column(modifier = modifier) {
+        Tooltip(
+            tooltip = { Text(text = row.mapping.localFolderPath) },
+            enabled = row.mapping.localFolderPath.isNotBlank()
+        ) {
+            Text(
+                text = row.localSlug,
+                modifier = if (row.isLocalOpenable) {
+                    Modifier.clickable { viewModel.onOpenLocalProject(row.mapping) }
+                        .pointerHoverIcon(PointerIcon.Hand)
+                } else {
+                    Modifier
+                },
+                color = if (row.isLocalOpenable) {
+                    JewelTheme.globalColors.text.normal
+                } else {
+                    JewelTheme.globalColors.text.disabled
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (row.isLocalOpenable && !row.localBranch.isNullOrBlank()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    key = AllIconsKeys.Vcs.Branch,
+                    contentDescription = "Local branch"
+                )
+                Text(
+                    text = row.localBranch,
+                    modifier = Modifier.weight(1f),
+                    color = JewelTheme.globalColors.text.info,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 
@@ -583,8 +614,8 @@ private fun WorktreeEntry(mapping: WatchedProjectMapping, worktree: WatchedProje
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(
-                key = AllIconsKeys.Vcs.Branch,
-                contentDescription = "Worktree branch"
+                key = AllIconsKeys.General.Tree,
+                contentDescription = "Worktree"
             )
             Link(
                 text = label,
@@ -653,13 +684,17 @@ private fun WatchedProjectsFooter(
                     Text(text = DiffyBundle.message("workspace.watchedProjects.prune.tooltip"))
                 }
             ) {
-                OutlinedButton(onClick = onPrune, enabled = state.pruneEnabled && state.syncEnabled) {
+                OutlinedButton(
+                    onClick = onPrune,
+                    enabled = state.pruneEnabled && state.syncEnabled,
+                    modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            key = AllIconsKeys.Actions.GC,
+                            key = AllIconsKeys.Actions.MenuCut,
                             contentDescription = DiffyBundle.message("workspace.watchedProjects.prune.button")
                         )
                         Text(text = DiffyBundle.message("workspace.watchedProjects.prune.button"))
@@ -667,7 +702,11 @@ private fun WatchedProjectsFooter(
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
-            OutlinedButton(onClick = onSync, enabled = state.syncEnabled && state.pruneEnabled) {
+            OutlinedButton(
+                onClick = onSync,
+                enabled = state.syncEnabled && state.pruneEnabled,
+                modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)

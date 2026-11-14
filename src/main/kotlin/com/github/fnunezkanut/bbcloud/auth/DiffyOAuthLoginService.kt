@@ -23,7 +23,7 @@ sealed class OAuthLoginState {
 }
 
 /**
- * Application-level service that owns the one OAuth login allowed per IDE. Every open project's Settings tab observes
+ * Application-level service that owns the one OAuth login allowed per IDE. Every open project's settings page observes
  * [state] to show progress, and any project may [cancel] it (decision 13b). The login runs in this service's scope, so
  * it is cancelled on application shutdown and the callback server closes through the flow's `NonCancellable` cleanup.
  */

@@ -11,7 +11,7 @@ import androidx.compose.ui.unit.dp
 internal const val LISTING_AUTHOR_AVATAR_SIZE_DP = 28
 
 /** The branches-and-created column: the source/destination branch chips over the relative created time. */
-internal val LISTING_BRANCHES_COLUMN_WIDTH = 220.dp
+internal val LISTING_BRANCHES_COLUMN_WIDTH = 330.dp
 internal val LISTING_ACTIVITY_COLUMN_WIDTH = 56.dp
 internal val LISTING_REVIEWERS_COLUMN_WIDTH = 84.dp
 

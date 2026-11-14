@@ -3,7 +3,7 @@ package com.github.fnunezkanut.bbcloud.ui.pullrequests
 import com.github.fnunezkanut.bbcloud.settings.PullRequestListFilter
 import com.github.fnunezkanut.bbcloud.ui.otherprojects.WorkspacePullRequestRow
 
-/** The load state of one source of a merged pull request tab. */
+/** The load state of one source of the Pull Requests. */
 sealed interface PullRequestSourceState {
     data object Idle : PullRequestSourceState
 
@@ -14,7 +14,18 @@ sealed interface PullRequestSourceState {
     data object Failed : PullRequestSourceState
 }
 
-enum class PullRequestsCard { Hidden, Loading, Listing, Empty, FilteredEmpty, Error }
+enum class PullRequestsCard { Hidden, Loading, Listing, Empty, FilteredEmpty, CurrentProjectUnavailable, Error }
+
+/** What the Pull Requests knows about the IDE project's repository; drives the project scope dropdown and filter. */
+sealed interface CurrentProjectRepositoryState {
+    /** The lookup has not resolved yet (initial state, after showHidden, and while not configured). */
+    data object Pending : CurrentProjectRepositoryState
+
+    data class Found(val repository: PullRequestRepositoryKey) : CurrentProjectRepositoryState
+
+    /** The project is not a verified Bitbucket repository of the workspace. */
+    data object Unavailable : CurrentProjectRepositoryState
+}
 
 data class PullRequestsUiState(
     val card: PullRequestsCard = PullRequestsCard.Hidden,
@@ -29,19 +40,26 @@ data class PullRequestsUiState(
     val loadedSources: Set<PullRequestListingSource> = emptySet(),
     // Approved by me is checked while the current user uuid is unknown.
     val isUserFilterUnavailable: Boolean = false,
-    // False until a source reports the current user's uuid. Gates the Created by me option.
-    val isCurrentUserKnown: Boolean = false,
-    val avatarRevision: Int = 0
+    val avatarRevision: Int = 0,
+    // True once the current project lookup resolved (Found or Unavailable); gates the In current project option.
+    val isProjectScopeOffered: Boolean = false,
+    val isCurrentProjectUnavailable: Boolean = false
 )
 
 /**
  * Derives the card from the per-source load states and the row counts. Pure, so it is unit-testable.
  *
- * [PullRequestsCard.Hidden] matches the former `ProjectPullRequestsCard.Hidden`, which the main panel shows while it
- * checks the project repository. When some sources are Loaded and others Failed, the card still resolves to
- * Listing/Empty/FilteredEmpty from the loaded rows, and the failed sources are surfaced through the footer instead.
+ * [PullRequestsCard.Hidden] is shown before the first load. While any source is Loading and no row is visible, the card is
+ * [PullRequestsCard.Loading]; CurrentProjectUnavailable, FilteredEmpty, and Empty are shown only after every source has finished (Loaded or Failed).
+ * When some sources are Loaded and others Failed, the card still resolves to Listing/Empty/FilteredEmpty (or CurrentProjectUnavailable)
+ * from the loaded rows, and the failed sources are surfaced through the footer instead.
  */
-internal fun derivePullRequestsCard(sources: Map<PullRequestListingSource, PullRequestSourceState>, totalCount: Int, visibleCount: Int): PullRequestsCard {
+internal fun derivePullRequestsCard(
+    sources: Map<PullRequestListingSource, PullRequestSourceState>,
+    totalCount: Int,
+    visibleCount: Int,
+    isCurrentProjectFilterUnavailable: Boolean = false
+): PullRequestsCard {
     val states = sources.values
     if (states.all { state -> state is PullRequestSourceState.Idle }) {
         return PullRequestsCard.Hidden
@@ -54,8 +72,9 @@ internal fun derivePullRequestsCard(sources: Map<PullRequestListingSource, PullR
     if (anyLoaded) {
         return when {
             visibleCount > 0 -> PullRequestsCard.Listing
-            totalCount > 0 -> PullRequestsCard.FilteredEmpty
             anyLoading -> PullRequestsCard.Loading
+            isCurrentProjectFilterUnavailable -> PullRequestsCard.CurrentProjectUnavailable
+            totalCount > 0 -> PullRequestsCard.FilteredEmpty
             else -> PullRequestsCard.Empty
         }
     }

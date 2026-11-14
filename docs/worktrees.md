@@ -80,7 +80,7 @@ Bitbucket does, so a stale local destination branch cannot inflate them.
 
 ## Automatic cleanup
 
-When the Current Project tab loads its pull request list, the work trees of merged or declined PRs are removed in the background, both the folder and its git link. No prompt is shown. The IDE window of such a work tree is closed first, and uncommitted changes in it are discarded. A work tree that is being opened is skipped. Results are logged in `idea.log`.
+When the Pull Requests loads the pull requests of the current project or of a watched project from Bitbucket (not from the cache), the work trees of merged or declined PRs are removed in the background, both the folder and its git link. No prompt is shown. The IDE window of such a work tree is closed first, and uncommitted changes in it are discarded. A work tree that is being opened is skipped. Results are logged in `idea.log`.
 
 ## References
 

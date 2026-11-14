@@ -55,6 +55,8 @@ class RecentProjectsViewModel internal constructor(
     private val resolveSourceRoot: (worktreePath: Path, repoSlug: String?) -> Path? = { _, _ -> null },
     private val removeWorktree: (sourceCheckoutRoot: Path, worktreePath: Path, prNumber: Long) -> Unit = { _, _, _ -> },
     private val onWorktreeRemovalUnavailable: (RecentProjectRow) -> Unit = {},
+    private val onClearFailed: (Throwable) -> Unit = {},
+    private val removeAllWorktrees: (onFinished: () -> Unit) -> Unit = { onFinished -> onFinished() },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     val state: MutableState<RecentProjectsUiState> = mutableStateOf(RecentProjectsUiState.INITIAL)
@@ -148,6 +150,35 @@ class RecentProjectsViewModel internal constructor(
         reload()
     }
 
+    /** Clears the IDE Recent Projects list at once, keeping open projects. No confirmation. */
+    fun onClearAllRequested() {
+        LOG.info("User clicked Clear Recent Projects")
+        try {
+            val removed = source.clearAll()
+            LOG.debug("Cleared $removed recent project paths")
+        } catch (exception: Exception) {
+            onClearFailed(exception)
+        }
+        state.value = state.value.copy(searchQuery = "")
+        reload()
+    }
+
+    /** Starts removing all PR work trees through the host. Ignored while a removal started here is still running. */
+    fun onRemoveAllWorktreesRequested() {
+        LOG.info("User clicked Remove all PR Work Trees")
+        if (state.value.isRemovingAllWorktrees) {
+            LOG.info("Ignoring Remove all PR Work Trees: it is already running")
+            return
+        }
+        state.value = state.value.copy(isRemovingAllWorktrees = true)
+        removeAllWorktrees {
+            runOnEdt {
+                state.value = state.value.copy(isRemovingAllWorktrees = false)
+                reload()
+            }
+        }
+    }
+
     /**
      * Removes the PR work tree of [row]: resolves its source checkout off the EDT, then hands over to the host, which
      * asks for confirmation and removes it. Ignored for other rows and for the project hosting this tool window.
@@ -203,15 +234,21 @@ class RecentProjectsViewModel internal constructor(
         bumpAvatarRevision()
     }
 
-    private data class LoadedRows(val groups: List<RecentProjectGroupRow>, val ungrouped: List<RecentProjectRow>, val avatarUrls: Map<String, String>)
+    private data class LoadedRows(
+        val groups: List<RecentProjectGroupRow>,
+        val ungrouped: List<RecentProjectRow>,
+        val avatarUrls: Map<String, String>,
+        val canRemoveAllWorktrees: Boolean
+    )
 
     /** What every row needs to know about the work tree root, the current project, and the watched mappings. */
     private class RowContext(val workTreeDirectory: String?, val currentProjectKey: String?, val mappingsByFolder: Map<String, String>)
 
     private suspend fun loadRows(): LoadedRows {
         val snapshot = source.snapshot()
+        val workTreeDirectory = workTreeDirectory()
         val context = RowContext(
-            workTreeDirectory = workTreeDirectory(),
+            workTreeDirectory = workTreeDirectory,
             currentProjectKey = currentProjectBasePath()?.let { base -> normalizedFolderKey(path = base) },
             mappingsByFolder = avatars.slugsByLocalFolder()
         )
@@ -241,7 +278,8 @@ class RecentProjectsViewModel internal constructor(
                     }
                 },
                 ungrouped = ungrouped.awaitAll(),
-                avatarUrls = avatars.avatarUrlsBySlug()
+                avatarUrls = avatars.avatarUrlsBySlug(),
+                canRemoveAllWorktrees = workTreeDirectory != null
             )
         }
     }
@@ -290,7 +328,8 @@ class RecentProjectsViewModel internal constructor(
             isLoading = false,
             groups = loaded.groups,
             ungrouped = loaded.ungrouped,
-            loadFailed = false
+            loadFailed = false,
+            canRemoveAllWorktrees = loaded.canRemoveAllWorktrees
         )
         prefetchAvatars(loaded = loaded)
     }

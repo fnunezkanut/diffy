@@ -1,20 +1,19 @@
 package com.github.fnunezkanut.bbcloud.toolwindow
 
-/** The six permanent tabs of the Diffy - Bitbucket PR Review tool window, in header order. */
-enum class DiffyToolWindowTab { ProjectPrs, WorkspacePrs, WorkspaceWatchedProjects, RecentProjects, Notifications, Settings }
+/** The five permanent tabs of the Diffy - Bitbucket PR Review tool window, in header order. */
+enum class DiffyToolWindowTab { PullRequests, Notifications, RecentProjects, WatchedProjects, Settings }
 
 object DiffyToolWindowTabResolver {
     /**
-     * The tab the tool window opens on. Settings opens first while the plugin is unconfigured, so first-time configuration
-     * is one click away; the other tabs are never redirected and offer a link to Settings while unconfigured.
-     *
-     * [isConfigured] is null until the initial async configuration check resolves.
+     * The tab the tool window opens on: the tab that was selected last ([lastSelectedTab]). The Settings tab only opens
+     * the Settings > Tools page, so a stored Settings selection (written by versions before 1.13.0) opens the Pull
+     * Requests tab instead. While the plugin is unconfigured, every tab shows a link to the settings page.
      */
-    fun initialTab(isConfigured: Boolean?): DiffyToolWindowTab {
-        return if (isConfigured == false) {
-            DiffyToolWindowTab.Settings
+    fun initialTab(lastSelectedTab: DiffyToolWindowTab): DiffyToolWindowTab {
+        return if (lastSelectedTab == DiffyToolWindowTab.Settings) {
+            DiffyToolWindowTab.PullRequests
         } else {
-            DiffyToolWindowTab.ProjectPrs
+            lastSelectedTab
         }
     }
 }

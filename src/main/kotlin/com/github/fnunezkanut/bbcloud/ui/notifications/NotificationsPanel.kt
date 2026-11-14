@@ -35,7 +35,7 @@ private enum class NotificationsCard {
  * not-configured link. The view model collects the persisted notifications from [start] on, so the table is current when the
  * tab is first shown.
  */
-internal class NotificationsPanel(project: Project, coroutineScope: CoroutineScope, onGoToSettings: () -> Unit) {
+internal class NotificationsPanel(project: Project, coroutineScope: CoroutineScope, onGoToSettings: () -> Unit, onUnreadCountChanged: (Int) -> Unit = {}) {
     private val card: MutableState<NotificationsCard> = mutableStateOf(NotificationsCard.NotConfigured)
 
     private val avatarCache = AuthorAvatarCache(avatarSize = NOTIFICATION_AVATAR_SIZE)
@@ -67,6 +67,7 @@ internal class NotificationsPanel(project: Project, coroutineScope: CoroutineSco
         },
         initialShowOnlyUnread = DiffySettings.getInstance().notificationsShowOnlyUnread,
         saveShowOnlyUnread = { value -> DiffySettings.getInstance().notificationsShowOnlyUnread = value },
+        onUnreadCountChanged = onUnreadCountChanged,
         openMessage = { row ->
             val url = row.url
             if (url != null && url.startsWith("https://")) {

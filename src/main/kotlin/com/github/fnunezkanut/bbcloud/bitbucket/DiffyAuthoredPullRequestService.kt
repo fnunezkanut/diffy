@@ -11,9 +11,9 @@ import com.github.fnunezkanut.bbcloud.cache.PullRequestListingIds
 import com.intellij.openapi.diagnostic.logger
 
 /**
- * Collects the "PRs opened by me" listing of the Other Projects tab: every open pull request the current user
- * authored in the workspace, minus [excludedRepoSlug], which is the repository of the current project and is
- * therefore already listed by the Current Project tab.
+ * Collects the "PRs opened by me" source of the Pull Requests: every open pull request the current user
+ * authored in the workspace, minus [excludedRepoSlug] when one is given. The Pull Requests passes null and de-duplicates
+ * against the repository listings instead.
  *
  * Bitbucket answers this in one documented request, `GET /2.0/workspaces/{workspace}/pullrequests/{selected_user}`,
  * so the workspace repositories are not walked the way the review queue has to be. That route returns no

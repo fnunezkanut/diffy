@@ -63,4 +63,108 @@ class PullRequestsUiStateTest {
         val sources = mapOf(open to loaded(count = 2), resolved to PullRequestSourceState.Failed)
         derivePullRequestsCard(sources = sources, totalCount = 2, visibleCount = 2) shouldBe PullRequestsCard.Listing
     }
+
+    @Test
+    fun `derivePullRequestsCard - should be CurrentProjectUnavailable when the current project filter cannot match and a source loaded`() {
+        val sources = mapOf(open to loaded(count = 0), resolved to loaded(count = 0))
+        derivePullRequestsCard(
+            sources = sources,
+            totalCount = 0,
+            visibleCount = 0,
+            isCurrentProjectFilterUnavailable = true
+        ) shouldBe PullRequestsCard.CurrentProjectUnavailable
+    }
+
+    @Test
+    fun `derivePullRequestsCard - should still be Loading while nothing loaded even if the current project filter is unavailable`() {
+        val sources = mapOf(open to PullRequestSourceState.Loading, resolved to PullRequestSourceState.Loading)
+        derivePullRequestsCard(
+            sources = sources,
+            totalCount = 0,
+            visibleCount = 0,
+            isCurrentProjectFilterUnavailable = true
+        ) shouldBe PullRequestsCard.Loading
+    }
+
+    @Test
+    fun `derivePullRequestsCard - should still be Loading when loaded rows are all filtered out and another source is loading`() {
+        // GIVEN
+        val sources = mapOf(open to loaded(count = 3), resolved to PullRequestSourceState.Loading)
+
+        // WHEN
+        val card = derivePullRequestsCard(sources = sources, totalCount = 3, visibleCount = 0)
+
+        // THEN
+        card shouldBe PullRequestsCard.Loading
+    }
+
+    @Test
+    fun `derivePullRequestsCard - should be FilteredEmpty when every source finished and all rows are filtered out`() {
+        // GIVEN
+        val sources = mapOf(open to loaded(count = 3), resolved to loaded(count = 0))
+
+        // WHEN
+        val card = derivePullRequestsCard(sources = sources, totalCount = 3, visibleCount = 0)
+
+        // THEN
+        card shouldBe PullRequestsCard.FilteredEmpty
+    }
+
+    @Test
+    fun `derivePullRequestsCard - should be Listing when some rows are visible and another source is loading`() {
+        // GIVEN
+        val sources = mapOf(open to loaded(count = 2), resolved to PullRequestSourceState.Loading)
+
+        // WHEN
+        val card = derivePullRequestsCard(sources = sources, totalCount = 2, visibleCount = 1)
+
+        // THEN
+        card shouldBe PullRequestsCard.Listing
+    }
+
+    @Test
+    fun `derivePullRequestsCard - should be FilteredEmpty when one source loaded filtered-out rows and the other failed`() {
+        // GIVEN
+        val sources = mapOf(open to loaded(count = 3), resolved to PullRequestSourceState.Failed)
+
+        // WHEN
+        val card = derivePullRequestsCard(sources = sources, totalCount = 3, visibleCount = 0)
+
+        // THEN
+        card shouldBe PullRequestsCard.FilteredEmpty
+    }
+
+    @Test
+    fun `derivePullRequestsCard - should still be Loading while another source is loading even if the current project filter is unavailable`() {
+        // GIVEN
+        val sources = mapOf(open to loaded(count = 3), resolved to PullRequestSourceState.Loading)
+
+        // WHEN
+        val card = derivePullRequestsCard(
+            sources = sources,
+            totalCount = 3,
+            visibleCount = 0,
+            isCurrentProjectFilterUnavailable = true
+        )
+
+        // THEN
+        card shouldBe PullRequestsCard.Loading
+    }
+
+    @Test
+    fun `derivePullRequestsCard - should be CurrentProjectUnavailable when every source finished and the current project filter is unavailable`() {
+        // GIVEN
+        val sources = mapOf(open to loaded(count = 3), resolved to PullRequestSourceState.Failed)
+
+        // WHEN
+        val card = derivePullRequestsCard(
+            sources = sources,
+            totalCount = 3,
+            visibleCount = 0,
+            isCurrentProjectFilterUnavailable = true
+        )
+
+        // THEN
+        card shouldBe PullRequestsCard.CurrentProjectUnavailable
+    }
 }
