@@ -5,8 +5,12 @@
 ![plugin icon](docs/icon16.png) **Diffy - Bitbucket PR Review**. Seamless Bitbucket Cloud PR reviews inside your JetBrains IDE..
 
 * [Install **Diffy - Bitbucket PR Review** from the JetBrains Marketplace](https://plugins.jetbrains.com/plugin/35502-diffy--bitbucket-pr-review)
-* [Chrome Extension](diffy-chrome-ext/README.md) Easily launch PR reviews with Diffy in IntelliJ straight from Bitbucket.org.
-* [Firefox Extension](diffy-firefox-ext/README.md) The same, for Firefox.
+
+Optionally there are a couple of browser extensions to enhance this plugin:
+* [Install Firefox Extension](https://addons.mozilla.org/addon/diffy-bitbucket-pr-review/) - [more info](diffy-chrome-ext/README.md)
+* Chrome Extension (under development) - [more info](diffy-chrome-ext/README.md) 
+
+They permit one to launch PR reviews with Diffy in IntelliJ straight from Bitbucket.org and sync notifications.
 
 
 ## Main features
@@ -14,21 +18,21 @@
 Helps you review Bitbucket Cloud pull requests without leaving your Jetbrains IDE (and its excellent tooling) with help of [Work Trees](docs/worktrees.md), inline comments and much more.
 
 
-* 🔐 **Secure authentication** signs you in to Bitbucket Cloud with OAuth so tokens are obtained and stored safely through the IDE.
-* ![plugin icon](docs/icon16.png)  A **Diffy - Bitbucket PR Review** tool window on the bottom strip keeps pull request triage inside IntelliJ instead of the browser.
-* 🌳 Opening a PR spins up a separate **PR Work Tree** project window with its own git [work tree](docs/worktrees.md) so reviews never clash with your main branch or other PRs.
-* 📋 The **Pull Requests** tab merges three sources into one de-duplicated list, open PRs first: the recent PRs (open, merged, declined) of the repo in your IDE, the open PRs you opened anywhere in the workspace, and the recent PRs of your watched projects. It has reviewer avatars, persistent **Exclude** filters, a **Created by** dropdown with an **Assigned to me** option, an **In any project / In current project** dropdown, and a **Create new PR** button. Refresh requests the current project and your own PRs again, but watched projects listed less than a minute ago stay cached. The tab titles of **Pull Requests** and **Notifications** show the number of open PRs and unread notifications.
-* 👀 **Watched Projects** controls which repositories contribute to the Pull Requests, with search by slug, folder, PR number, or branch and a master checkbox for matching rows.
-* 🕘 **Recent Projects** lists the IDE recent projects and their groups, with search, the project icon, path, and current branch; click a project to open or focus it. Each row has a button to remove it from the list, and PR work trees also have a button that removes the work tree. Entries use two lines. **Clear Recent Projects** empties the list except for open projects, and **Remove all PR Work Trees** closes and deletes every PR work tree after a confirmation.
-* 📋 Each PR gets a dedicated **`<prNum>.pr`** tab plus a blue header stripe with line-change stats, refresh, file changes, and merge, approve, draft, or decline actions.
-* 🕐 The PR **Activity** timeline mixes commits, approvals, tasks, builds, and file or inline comment threads in time order, with a box to add PR-scoped comments and reply in threads.
-* 🤖 Every comment box has a **Send this comment to Air** button (needs the JetBrains Air plugin). It puts the file location and the comment into the Air chat input, ready to send.
-* 🤖 Open pull requests have an **Explain this PR with AI** button next to Edit Description (needs the JetBrains Air plugin). It puts a prompt in a new Air chat that asks the agent to explain the pull request with Mermaid diagrams. Press Enter to run it.
-* 📁 The **PR Changes** tool window lists every file in the diff; picking a file opens it in the editor or diff view driven from the stripe’s **Show pull request file changes** button.
-* ✏️ **Modified File View** and **Diff View** surface existing comments and let you add line-level feedback from the gutter or context menu, view add/remove counts, and mark files reviewed.
-* 📝 **Rendered Markdown side by side diff view** shows the rendered result of changed Markdown files next to each other, so documentation changes can be reviewed as readers will see them. The **Wrap Lines** button in the review bar of a Markdown diff wraps long lines so there is no horizontal scrolling, and remembers your choice.
-* 🚀 **Create Pull Request** walks you through title, description, source and destination branches, reviewers (including defaults), remote cleanup after merge, then opens the new PR in a work tree window.
-* 🔔 **Notifications** lists the Bitbucket notifications captured by the [Diffy Chrome extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-chrome-ext) or [Firefox extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-firefox-ext), newest first, with time, type, pull request, actor, and message
+* 🔐 **Secure sign-in**: connects to Bitbucket Cloud with OAuth, and the IDE stores your tokens.
+* ![plugin icon](docs/icon16.png) **Diffy - Bitbucket PR Review tool window**: triage pull requests from the bottom tool window strip instead of the browser.
+* 🌳 **PR Work Trees**: each PR opens in its own project window backed by a separate git [work tree](docs/worktrees.md), so a review never touches your main checkout or other PRs.
+* 📋 **Pull Requests tab**: one list of PRs from the current repository, your own PRs across the workspace, and your watched projects, open PRs first. Filter by author, assignee, or project, or start a new PR.
+* 👀 **Watched Projects tab**: choose which repositories feed the Pull Requests tab. Search by slug, folder, PR number, or branch, and use the master checkbox to toggle every matching row.
+* 🕘 **Recent Projects tab**: your IDE recent projects and PR Work Tree projects in one list.
+* 🔖 **PR editor tab**: each PR opens as a **`<prNum>.pr`** tab with a blue header stripe that shows line-change stats and has buttons to refresh, show file changes, merge, approve, toggle draft, or decline.
+* 🕐 **Activity timeline**: commits, approvals, tasks, builds, and file and inline comment threads in time order. Add PR-level comments or reply in any thread.
+* 🤖 **Send this comment to Air**: a button on every comment box that copies the file location and the comment into the JetBrains Air chat input, ready to send. Requires the JetBrains Air plugin.
+* ✨ **Explain this PR with AI**: a button next to Edit Description on open PRs that starts a new Air chat with a prompt asking the agent to explain the PR with Mermaid diagrams. Press Enter to run it. Requires the JetBrains Air plugin.
+* 📁 **PR Changes tool window**: lists every file in the diff. Open it with the stripe's **Show pull request file changes** button, then pick a file to view it in the editor or in a diff view.
+* ✏️ **Modified File View and Diff View**: see existing comments, add line comments from the gutter or context menu, check added and removed line counts, and mark files as reviewed.
+* 📝 **Rendered Markdown diff**: changed Markdown files render side by side, so you review documentation the way readers will see it. The **Wrap Lines** button in the review bar removes horizontal scrolling and remembers your choice.
+* 🚀 **Create Pull Request**: set the title, description, source and destination branches, and reviewers (defaults included), choose whether to clean up the remote branch after merge, then open the new PR in a work tree window.
+* 🔔 **Notifications tab**: Bitbucket notifications captured by the [Diffy Chrome extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-chrome-ext) or [Firefox extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-firefox-ext), newest first, with time, type, pull request, actor, and message.
 
 
 ## Notice
