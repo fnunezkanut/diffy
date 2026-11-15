@@ -6,16 +6,9 @@ the **diffy** plugin (1.12.0 or newer) installed. It has the same features as th
 [`diffy-chrome-ext/`](../diffy-chrome-ext/README.md).
 
 
-## Install for your own use (temporary)
+## Install
 
-1. Open `about:debugging#/runtime/this-firefox`.
-2. Click **Load Temporary Add-on...** and select `manifest.json` in this `diffy-firefox-ext/` directory.
-3. Grant the host permissions (Firefox MV3 does not grant them at install): open `about:addons`, select **Diffy -
-   Bitbucket PR Review**, open the **Permissions** tab and turn on access to `bitbucket.org` and `127.0.0.1`/`localhost`.
-4. Open a pull request list or a pull request page on `bitbucket.org`. An **Open in IntelliJ** icon appears next to
-   each PR in a list, or beside the PR title on detail pages.
-
-A temporary add-on is removed when Firefox restarts; load it again after a restart.
+[Install Firefox Extension](https://addons.mozilla.org/addon/diffy-bitbucket-pr-review/)
 
 
 ## How it works
