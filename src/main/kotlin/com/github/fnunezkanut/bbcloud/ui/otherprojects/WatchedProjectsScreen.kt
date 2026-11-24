@@ -90,8 +90,18 @@ fun WatchedProjectsScreen(viewModel: WatchedProjectsViewModel) {
                 query = state.searchQuery,
                 onShowOnlyWatchedChange = viewModel::onShowOnlyWatchedChanged,
                 onQueryChange = viewModel::onSearchQueryChanged,
-                onClear = viewModel::onSearchCleared
+                onClear = viewModel::onSearchCleared,
+                checkoutEnabled = state.checkoutEnabled,
+                onCheckoutProject = viewModel::onCheckoutProjectClicked
             )
+        }
+        if (state.card == WatchedProjectsCard.Empty) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                CheckoutProjectButton(enabled = state.checkoutEnabled, onClick = viewModel::onCheckoutProjectClicked)
+            }
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (state.card) {
@@ -158,9 +168,10 @@ private data class FlexibleColumnWidths(
 )
 
 /**
- * The row above the table: the "Show only watched" checkbox and the search field. At [FILTER_BAR_STACK_THRESHOLD] or
- * wider they share the row as two equal halves, checkbox left and search right; narrower, the checkbox stacks above
- * the search field.
+ * The row above the table: the "Show only watched" checkbox, the search field, and the Checkout Project button. At
+ * [FILTER_BAR_STACK_THRESHOLD] or wider the checkbox and the search field share the row as two equal halves with the
+ * button to the right of the search field; narrower, the checkbox stacks above a row holding the search field and the
+ * button.
  */
 @Composable
 private fun WatchedProjectsFilterBar(
@@ -168,7 +179,9 @@ private fun WatchedProjectsFilterBar(
     query: String,
     onShowOnlyWatchedChange: (Boolean) -> Unit,
     onQueryChange: (String) -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    checkoutEnabled: Boolean,
+    onCheckoutProject: () -> Unit
 ) {
     // Hold the TextFieldValue here, above the layout branch, so the caret survives switching between the two layouts;
     // resync from the incoming query only when the backing text differs (for example after the clear icon).
@@ -200,6 +213,7 @@ private fun WatchedProjectsFilterBar(
                     onClear = onClear,
                     modifier = Modifier.weight(1f)
                 )
+                CheckoutProjectButton(enabled = checkoutEnabled, onClick = onCheckoutProject)
             }
         } else {
             Column(
@@ -211,12 +225,46 @@ private fun WatchedProjectsFilterBar(
                     onCheckedChange = onShowOnlyWatchedChange,
                     modifier = Modifier.fillMaxWidth()
                 )
-                WatchedProjectsSearchField(
-                    fieldValue = fieldValue,
-                    onFieldValueChange = onFieldValueChange,
-                    onClear = onClear,
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    WatchedProjectsSearchField(
+                        fieldValue = fieldValue,
+                        onFieldValueChange = onFieldValueChange,
+                        onClear = onClear,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CheckoutProjectButton(enabled = checkoutEnabled, onClick = onCheckoutProject)
+                }
+            }
+        }
+    }
+}
+
+/** The Checkout Project button: clones a repository of the workspace into the projects directory. */
+@Composable
+private fun CheckoutProjectButton(enabled: Boolean, onClick: () -> Unit) {
+    Tooltip(
+        tooltip = {
+            Text(text = DiffyBundle.message("workspace.watchedProjects.checkout.tooltip"))
+        }
+    ) {
+        OutlinedButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    key = AllIconsKeys.Vcs.Clone,
+                    contentDescription = DiffyBundle.message("workspace.watchedProjects.checkout.button")
                 )
+                Text(text = DiffyBundle.message("workspace.watchedProjects.checkout.button"), maxLines = 1)
             }
         }
     }
@@ -686,7 +734,7 @@ private fun WatchedProjectsFooter(
             ) {
                 OutlinedButton(
                     onClick = onPrune,
-                    enabled = state.pruneEnabled && state.syncEnabled,
+                    enabled = state.pruneEnabled && state.syncEnabled && !state.checkoutInProgress,
                     modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
                 ) {
                     Row(
@@ -704,7 +752,7 @@ private fun WatchedProjectsFooter(
             Spacer(modifier = Modifier.width(8.dp))
             OutlinedButton(
                 onClick = onSync,
-                enabled = state.syncEnabled && state.pruneEnabled,
+                enabled = state.syncEnabled && state.pruneEnabled && !state.checkoutInProgress,
                 modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)
             ) {
                 Row(

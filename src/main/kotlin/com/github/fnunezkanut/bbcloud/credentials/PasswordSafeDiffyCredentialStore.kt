@@ -11,36 +11,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 class PasswordSafeDiffyCredentialStore : DiffyCredentialStore {
-    private val credentialAttributes = CredentialAttributes(generateServiceName(SERVICE_NAMESPACE, CREDENTIAL_KEY))
+    private val legacyApiTokenAttributes = CredentialAttributes(generateServiceName(SERVICE_NAMESPACE, CREDENTIAL_KEY))
     private val oauthAttributes = CredentialAttributes(generateServiceName(SERVICE_NAMESPACE, OAUTH_CREDENTIAL_KEY))
 
-    override suspend fun hasToken(): Boolean {
-        return withContext(Dispatchers.IO) {
-            val hasToken = !PasswordSafe.instance.getPassword(credentialAttributes).isNullOrBlank()
-            LOG.debug("Password safe token presence check: hasToken=$hasToken")
-            hasToken
-        }
-    }
-
-    override suspend fun getToken(): String? {
-        return withContext(Dispatchers.IO) {
-            val token = PasswordSafe.instance.getPassword(credentialAttributes)?.takeIf { it.isNotBlank() }
-            LOG.debug("Password safe token read: found=${token != null}")
-            token
-        }
-    }
-
-    override suspend fun saveToken(token: String) {
+    override suspend fun clearLegacyApiToken() {
         withContext(Dispatchers.IO) {
-            PasswordSafe.instance.setPassword(credentialAttributes, token)
-            LOG.debug("Password safe token saved")
-        }
-    }
-
-    override suspend fun clearToken() {
-        withContext(Dispatchers.IO) {
-            PasswordSafe.instance.set(credentialAttributes, null)
-            LOG.debug("Password safe token cleared")
+            PasswordSafe.instance.set(legacyApiTokenAttributes, null)
+            LOG.debug("Password safe legacy API token cleared")
         }
     }
 
@@ -84,7 +61,7 @@ class PasswordSafeDiffyCredentialStore : DiffyCredentialStore {
         private val JSON = Json { ignoreUnknownKeys = true }
 
         private const val SERVICE_NAMESPACE = "Diffy - Bitbucket PR Review"
-        private const val CREDENTIAL_KEY = "ApiToken"
+        private const val CREDENTIAL_KEY = "ApiToken" // legacy key, kept so the old entry can be deleted
         private const val OAUTH_CREDENTIAL_KEY = "OAuthTokens"
     }
 }

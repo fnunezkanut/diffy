@@ -16,7 +16,7 @@ class DiffyPingBodyTest {
     @Test
     fun `build - should include the workspace for the diffy extension only`() {
         // GIVEN / WHEN
-        val allowed = ping(origin = DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN, workspace = "acme-workspace")
+        val allowed = ping(origin = DiffyExternalOrigins.CHROME_WEB_STORE_EXTENSION_ORIGIN, workspace = "acme-workspace")
         val other = ping(origin = "chrome-extension://someoneelse", workspace = "acme-workspace")
         val none = ping(origin = null, workspace = "acme-workspace")
 
@@ -31,12 +31,21 @@ class DiffyPingBodyTest {
 
     @Test
     fun `build - should write a missing workspace as json null`() {
-        val body = ping(origin = DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN, workspace = null)
+        val body = ping(origin = DiffyExternalOrigins.CHROME_WEB_STORE_EXTENSION_ORIGIN, workspace = null)
 
         assertSoftly {
             body.has("workspace") shouldBe true
             body.get("workspace").isJsonNull shouldBe true
         }
+    }
+
+    @Test
+    fun `build - should include the workspace for the unpacked chrome extension`() {
+        // GIVEN / WHEN
+        val unpacked = ping(origin = DiffyExternalOrigins.CHROME_UNPACKED_EXTENSION_ORIGIN, workspace = "acme-workspace")
+
+        // THEN
+        unpacked.get("workspace").asString shouldBe "acme-workspace"
     }
 
     @Test
@@ -59,14 +68,22 @@ class DiffyPingBodyTest {
     }
 
     @Test
-    fun `isDiffyExtensionOrigin - should accept the diffy chrome id and any firefox extension`() {
+    fun `isDiffyExtensionOrigin - should accept the diffy chrome ids and any firefox extension`() {
         assertSoftly {
-            isDiffyExtensionOrigin(origin = DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN) shouldBe true
+            isDiffyExtensionOrigin(origin = DiffyExternalOrigins.CHROME_WEB_STORE_EXTENSION_ORIGIN) shouldBe true
+            isDiffyExtensionOrigin(origin = DiffyExternalOrigins.CHROME_UNPACKED_EXTENSION_ORIGIN) shouldBe true
+            isDiffyExtensionOrigin(origin = "chrome-extension://pkeoedpgepmldoikeedkchmhkgjpelln/") shouldBe false
+            isDiffyExtensionOrigin(origin = "CHROME-EXTENSION://pkeoedpgepmldoikeedkchmhkgjpelln") shouldBe false
             isDiffyExtensionOrigin(origin = "moz-extension://abc") shouldBe true
             isDiffyExtensionOrigin(origin = "moz-extension://") shouldBe false
             isDiffyExtensionOrigin(origin = "chrome-extension://someoneelse") shouldBe false
             isDiffyExtensionOrigin(origin = "https://bitbucket.org") shouldBe false
             isDiffyExtensionOrigin(origin = null) shouldBe false
         }
+    }
+
+    @Test
+    fun `CHROME_WEB_STORE_EXTENSION_ORIGIN - should stay pinned to the published store id`() {
+        DiffyExternalOrigins.CHROME_WEB_STORE_EXTENSION_ORIGIN shouldBe "chrome-extension://pkeoedpgepmldoikeedkchmhkgjpelln"
     }
 }

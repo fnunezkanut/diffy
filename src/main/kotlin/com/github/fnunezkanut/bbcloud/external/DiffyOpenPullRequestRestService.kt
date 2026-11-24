@@ -21,10 +21,10 @@ import kotlin.coroutines.cancellation.CancellationException
  * The browser entry point of the "Open in IntelliJ" feature, served at `/api/diffy/open`.
  *
  * - `GET` is the port-discovery ping. It answers `{"plugin":"diffy","version":...}`. Only for
- *   [DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN] it adds the configured `workspace` slug (or null); see [DiffyPingBody].
+ *   [DiffyExternalOrigins.ALLOWED_CHROME_EXTENSION_ORIGINS] it adds the configured `workspace` slug (or null); see [DiffyPingBody].
  *   Chrome omits `Origin` on this GET from the extension, so the extension reads the workspace from
  *   [DiffyWorkspaceRestService] instead.
- * - `POST` opens a pull request. Only [DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN] may send it. The body is
+ * - `POST` opens a pull request. Only [DiffyExternalOrigins.ALLOWED_CHROME_EXTENSION_ORIGINS] may send it. The body is
  *   validated, the reply is `accepted` or `rejected`, and the open runs in the background.
  *
  * Requests run on a Netty I/O thread, so this class does no git, network or project work itself.
@@ -42,7 +42,7 @@ class DiffyOpenPullRequestRestService : RestService() {
      * Lets requests from any Chrome or Firefox extension reach [execute]. Without this, the platform's accessibility check drops a
      * request from an unknown extension and answers 404, and the extension cannot tell why it failed. [execute] keeps the
      * real gate: it answers the ping for any extension, and it accepts a POST only from
-     * [DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN]. Other origins keep the platform's default handling.
+     * [DiffyExternalOrigins.ALLOWED_CHROME_EXTENSION_ORIGINS]. Other origins keep the platform's default handling.
      */
     override fun isOriginAllowed(request: HttpRequest): OriginCheckResult {
         if (isBrowserExtensionOrigin(request = request)) {
@@ -86,7 +86,7 @@ class DiffyOpenPullRequestRestService : RestService() {
         } else if (isBrowserExtensionOrigin(origin = origin)) {
             LOG.info(
                 "Ping from a browser extension that is not the diffy extension: origin=$origin, expected " +
-                    "${DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN}; the workspace is not disclosed"
+                    "${DiffyExternalOrigins.expectedOriginsDescription()}; the workspace is not disclosed"
             )
         } else {
             LOG.debug("Answering the diffy ping: origin=$origin")
@@ -97,7 +97,7 @@ class DiffyOpenPullRequestRestService : RestService() {
     private fun handleOpen(request: FullHttpRequest, context: ChannelHandlerContext) {
         if (!isDiffyExtensionOrigin(origin = request.origin)) {
             LOG.info(
-                "Rejected an open request from origin ${request.origin}; expected ${DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN}"
+                "Rejected an open request from origin ${request.origin}; expected ${DiffyExternalOrigins.expectedOriginsDescription()}"
             )
             sendJson(body = statusBody(status = STATUS_REJECTED, message = FORBIDDEN_ORIGIN), request = request, context = context)
             return

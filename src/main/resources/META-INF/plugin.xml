@@ -10,7 +10,7 @@
             <li>🪟 <b>Diffy - Bitbucket PR Review tool window</b>: triage pull requests from the bottom tool window strip instead of the browser.</li>
             <li>🌳 <b>PR Work Trees</b>: each PR opens in its own project window backed by a separate git <a href="https://github.com/fnunezkanut/diffy/blob/main/docs/worktrees.md">work tree</a>, so a review never touches your main checkout or other PRs.</li>
             <li>📋 <b>Pull Requests tab</b>: one list of PRs from the current repository, your own PRs across the workspace, and your watched projects, open PRs first. Filter by author, assignee, or project, or start a new PR.</li>
-            <li>👀 <b>Watched Projects tab</b>: choose which repositories feed the Pull Requests tab. Search by slug, folder, PR number, or branch, and use the master checkbox to toggle every matching row.</li>
+            <li>👀 <b>Watched Projects tab</b>: choose which repositories feed the Pull Requests tab. Search by slug, folder, PR number, or branch, and use the master checkbox to toggle every matching row. The Checkout Project button clones, over SSH, a workspace repository that is not in the Projects Directory yet and watches it.</li>
             <li>🕘 <b>Recent Projects tab</b>: your IDE recent projects and PR Work Tree projects in one list.</li>
             <li>🔖 <b>PR editor tab</b>: each PR opens as a <b><code>&lt;prNum&gt;.pr</code></b> tab with a blue header stripe that shows line-change stats and has buttons to refresh, show file changes, merge, approve, toggle draft, or decline.</li>
             <li>🕐 <b>Activity timeline</b>: commits, approvals, tasks, builds, and file and inline comment threads in time order. Add PR-level comments or reply in any thread.</li>
@@ -26,12 +26,11 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Added: the Pull Requests and Notifications tabs show the number of open PRs and unread notifications in their titles</li>
-            <li>Changed: the Current Project and Workspace tabs are merged into one PR Overview tab that lists PRs of the current project, PRs you opened, and PRs of watched projects, open PRs first. It has an In any project / In current project dropdown and a Create new PR button. Watched projects now list all their PRs; use Assigned to me to narrow</li>
-            <li>Changed: work trees of merged or declined PRs are also cleaned up for watched projects</li>
-            <li>Changed: the plugin settings moved to Settings &gt; Tools &gt; Diffy - Bitbucket PR Review. Until the plugin is configured, the PR tabs show a link to that page; Recent Projects keeps working</li>
-            <li>Fixed: the PR Overview shows "Loading PRs…" until rows are ready, instead of briefly showing "No PRs match the current filters"</li>
-            <li>Added: Clear Recent Projects and Remove all PR Work Trees buttons on the Recent Projects tab; entries now use two lines</li>
+            <li>Fixed: the Chrome Web Store extension could not sync, open pull requests, or deliver notifications because the plugin accepted only the development extension ID; the Sync button also reported this as a missing workspace</li>
+            <li>Removed: Bitbucket API token sign-in. The plugin now signs in with Bitbucket OAuth only. If you used an API token, open Settings &gt; Tools &gt; Diffy - Bitbucket PR Review and authenticate with Bitbucket oauth login; the old token is deleted when you do</li>
+            <li>Added: Notifications tab has a Filter out bots checkbox that hides notifications from bots; the choice is remembered</li>
+            <li>Changed: PR diffs in a work tree show the editable, fully navigable work tree file on the right side when the work tree is at or ahead of the pull request source commit (Settings &gt; Tools &gt; Diffy)</li>
+            <li>Added: an orange bar under the blue bar marks files with changes that are not in the pull request yet (unpushed commits or uncommitted edits), with Commit… and Push… links</li>
         </ul>
     ]]></change-notes>
 
@@ -58,6 +57,8 @@
                 serviceImplementation="com.github.fnunezkanut.bbcloud.review.DiffyKnownUsersState"/>
         <applicationService
                 serviceImplementation="com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCacheState"/>
+        <applicationService
+                serviceImplementation="com.github.fnunezkanut.bbcloud.cache.DiffyWorkspaceRepositoryCacheState"/>
         <applicationService
                 serviceImplementation="com.github.fnunezkanut.bbcloud.external.DiffyNotificationsState"/>
         <applicationService
@@ -144,6 +145,8 @@
                 implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestReviewBarProvider"/>
         <editorNotificationProvider
                 implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyWorktreePrViewBlueBarEditorNotificationProvider"/>
+        <editorNotificationProvider
+                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyWorktreeUnpushedChangesEditorNotificationProvider"/>
         <treeStructureProvider
                 implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.DiffyPullRequestTreeStructureProvider"/>
         <postStartupActivity

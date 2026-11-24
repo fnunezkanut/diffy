@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Downloads author avatar images. Avatar URLs point to public CDNs outside Bitbucket,
- * so requests must never carry the Bitbucket API token.
+ * so requests must never carry the Bitbucket access token.
  */
 class BitbucketAvatarClient(private val httpClient: OkHttpClient = sharedHttpClient) {
     suspend fun fetchAvatar(url: String): ByteArray? {

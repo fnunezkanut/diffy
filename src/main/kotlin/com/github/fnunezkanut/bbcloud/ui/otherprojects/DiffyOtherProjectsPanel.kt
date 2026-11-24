@@ -18,14 +18,18 @@ import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyAuthoredPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyWatchedProjectsPullRequestService
+import com.github.fnunezkanut.bbcloud.bitbucket.DiffyWorkspaceRepositoryService
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketPullRequestClient
+import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketRepositoryClient
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewingPullRequest
 import com.github.fnunezkanut.bbcloud.bitbucket.WatchedPullRequestListResult
 import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
+import com.github.fnunezkanut.bbcloud.cache.DiffyWorkspaceRepositoryCache
 import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.DiffyBranchCheckoutService
+import com.github.fnunezkanut.bbcloud.git.DiffyProjectCloneService
 import com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService
 import com.github.fnunezkanut.bbcloud.git.WorktreeRemovalResult
 import com.github.fnunezkanut.bbcloud.project.LocalRepositoryProjectOpener
@@ -183,7 +187,26 @@ class DiffyOtherProjectsPanel(
         onRemoveWorktreeCallback = ::confirmAndRemoveWatchedWorktree,
         onPruneWorktreesCallback = ::pruneAllWatchedWorktrees,
         onOpenWorktreesHelpCallback = ::openWorktreesHelp,
-        onGoToWorkspaceCallback = onGoToWorkspace
+        onGoToWorkspaceCallback = onGoToWorkspace,
+        onCheckoutProjectCallback = ::startWatchedProjectCheckout
+    )
+
+    /** Lists the workspace repositories (cached) and re-checks one against Bitbucket before it is cloned. */
+    private val workspaceRepositoryService = DiffyWorkspaceRepositoryService(
+        accessTokenProvider = ApplicationManager.getApplication().service<DiffyAccessTokenProvider>(),
+        repositoryListClient = OkHttpBitbucketRepositoryClient(),
+        repositoryCache = DiffyWorkspaceRepositoryCache.getInstance()
+    )
+
+    /** The Checkout Project flow of the Watched Projects tab. */
+    private val watchedProjectCheckoutLauncher = WatchedProjectCheckoutLauncher(
+        project = project,
+        configurationService = configurationService,
+        repositoryService = workspaceRepositoryService,
+        cloneService = DiffyProjectCloneService(),
+        coroutineScope = coroutineScope,
+        onInProgressChanged = watchedProjectsViewModel::setCheckoutInProgress,
+        onCheckedOut = watchedProjectsViewModel::onProjectCheckedOut
     )
 
     // One workspace header for the Pull Requests root.
@@ -283,7 +306,7 @@ class DiffyOtherProjectsPanel(
 
     /**
      * Drops the in-memory decoded repository avatars on the Watched Projects tab. Called by the Reset Plugin flow after
-     * [DiffyConfigurationService.resetApiToken] and [DiffyConfigurationService.clearProjectsDirectory] paths also
+     * [DiffyConfigurationService.resetAll] and [DiffyConfigurationService.clearProjectsDirectory] paths also
      * clear the persisted URL map; they need no in-memory wipe because the next bind replaces the slug->URL map, so any
      * leftover decoded icons are simply unreferenced.
      */
@@ -639,6 +662,11 @@ class DiffyOtherProjectsPanel(
         notification.notify(project)
     }
 
+    /** Starts the Checkout Project flow: pick a workspace repository, clone it over SSH, and watch it. */
+    private fun startWatchedProjectCheckout() {
+        watchedProjectCheckoutLauncher.start()
+    }
+
     /**
      * Opens a watched project's local checkout as an IntelliJ project in a new IDE window. Unlike
      * [openRepositoryForPullRequest], this opens the plain checkout (not a PR) and does not launch the pull request
@@ -923,14 +951,14 @@ class DiffyOtherProjectsPanel(
         LOG.debug("Pruning PR worktrees of ${mappings.size} watched project(s)")
         coroutineScope.launch {
             try {
-                val hasToken = configurationService.hasStoredToken()
+                val hasLogin = configurationService.hasStoredOAuthTokens()
                 val outcomes = mutableListOf<ProjectPruneOutcome>()
                 for (mapping in mappings) {
                     outcomes += pruneWorktreesOfProject(
                         mapping = mapping,
                         organizationUrl = organizationUrl,
                         workTreeDirectory = workTreeDirectory,
-                        hasToken = hasToken
+                        hasLogin = hasLogin
                     )
                 }
                 val summary = WorktreePruneSummary.from(outcomes = outcomes)
@@ -967,7 +995,7 @@ class DiffyOtherProjectsPanel(
         mapping: WatchedProjectMapping,
         organizationUrl: String,
         workTreeDirectory: Path,
-        hasToken: Boolean
+        hasLogin: Boolean
     ): ProjectPruneOutcome {
         val repoSlug = mapping.remoteRepoSlug
         if (mapping.localFolderPath.isBlank()) {
@@ -987,10 +1015,10 @@ class DiffyOtherProjectsPanel(
                 return ProjectPruneOutcome(repoSlug = repoSlug)
             }
 
-            // A missing token also makes the PR service return null. Check token presence first so that missing
+            // A missing login also makes the PR service return null. Check login presence first so that missing
             // credentials are treated as unverifiable rather than as Bitbucket NotFound responses to prune.
-            if (!hasToken) {
-                LOG.info("Cannot verify PR worktrees for $repoSlug: no stored API token")
+            if (!hasLogin) {
+                LOG.info("Cannot verify PR worktrees for $repoSlug: no stored OAuth login")
                 return ProjectPruneOutcome(repoSlug = repoSlug, unverifiableCount = worktrees.size)
             }
 

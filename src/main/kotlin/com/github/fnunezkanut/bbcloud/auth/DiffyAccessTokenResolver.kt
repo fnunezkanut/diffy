@@ -8,8 +8,8 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 /**
- * The testable core of the access-token provider. It prefers a working OAuth access token (refreshing it proactively
- * and under a single-flight [Mutex]) and falls back to the stored API token. [onOAuthSessionExpired] fires once when a
+ * The testable core of the access-token provider. It supplies the OAuth access token (refreshing it proactively and
+ * under a single-flight [Mutex]). [onOAuthSessionExpired] fires once when a
  * refresh permanently fails; [onCredentialsChanged] invalidates downstream caches after any credential change here.
  */
 class DiffyAccessTokenResolver(
@@ -28,7 +28,7 @@ class DiffyAccessTokenResolver(
     private var nextRefreshAllowedAt: Instant? = null
 
     override suspend fun bearerTokenOrNull(): String? {
-        return oauthAccessTokenOrNull() ?: credentialStore.getToken()
+        return oauthAccessTokenOrNull()
     }
 
     override suspend fun oauthAccessTokenOrNull(): String? {
@@ -92,7 +92,7 @@ class DiffyAccessTokenResolver(
                 val now = clock.now()
                 val backoffUntil = nextRefreshAllowedAt
                 if (backoffUntil != null && now < backoffUntil) {
-                    return@withLock apiTokenFallback(rejectedToken = rejectedToken)
+                    return@withLock null
                 }
                 return@withLock when (val result = tokenClient.refresh(refreshToken = tokens.refreshToken)) {
                     is OAuthTokenResult.Success -> {
@@ -105,29 +105,23 @@ class DiffyAccessTokenResolver(
                         oauthNotWorking = true
                         onOAuthSessionExpired()
                         onCredentialsChanged()
-                        apiTokenFallback(rejectedToken = rejectedToken)
+                        null
                     }
                     is OAuthTokenResult.Failed -> {
                         nextRefreshAllowedAt = now + DiffyOAuthConfig.REFRESH_BACKOFF
-                        apiTokenFallback(rejectedToken = rejectedToken)
+                        null
                     }
                 }
             }
-            // The rejected token is the API token (or there is no OAuth session); nothing to refresh.
+            // There is no OAuth session; nothing to refresh.
             null
         }
-    }
-
-    /** The stored API token when it exists and differs from [rejectedToken], else null. Never returns the rejected one. */
-    private suspend fun apiTokenFallback(rejectedToken: String): String? {
-        val apiToken = credentialStore.getToken() ?: return null
-        return apiToken.takeIf { it != rejectedToken }
     }
 
     override fun markOAuthNotWorking() {
         oauthNotWorking = true
         onCredentialsChanged()
-        LOG.info("OAuth marked not working; requests fall back to the API token")
+        LOG.info("OAuth marked not working; requests are unauthenticated until the next login")
     }
 
     override fun onOAuthTokensChanged() {

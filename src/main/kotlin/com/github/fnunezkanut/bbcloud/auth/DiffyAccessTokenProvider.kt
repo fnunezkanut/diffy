@@ -1,19 +1,19 @@
 package com.github.fnunezkanut.bbcloud.auth
 
 /**
- * Supplies the bearer token for Bitbucket API calls: a working OAuth access token when available, otherwise the stored
- * API token. Also drives the proactive refresh and the single forced refresh after a 401.
+ * Supplies the bearer token for Bitbucket API calls: a working OAuth access token, or null when there is none. Also
+ * drives the proactive refresh and the single forced refresh after a 401.
  */
 interface DiffyAccessTokenProvider {
-    /** Bearer token for Bitbucket API calls: a working OAuth access token, else the API token, else null. */
+    /** Bearer token for Bitbucket API calls: a working OAuth access token, else null. */
     suspend fun bearerTokenOrNull(): String?
 
     /** A usable (proactively refreshed) OAuth access token, or null when OAuth is not stored or not working. */
     suspend fun oauthAccessTokenOrNull(): String?
 
     /**
-     * Called after Bitbucket answered 401 for [rejectedToken]. Returns a different token to retry with once (a
-     * refreshed OAuth token, or the API token fallback), or null to give up.
+     * Called after Bitbucket answered 401 for [rejectedToken]. Returns a refreshed OAuth token to retry with once, or
+     * null to give up.
      */
     suspend fun refreshAfterUnauthorized(rejectedToken: String): String?
 

@@ -16,7 +16,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Receives the Bitbucket snapshot of the Chrome extension at `POST /api/diffy/snapshot`. Only
- * [DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN] may send it. The body is parsed by [DiffyBrowserSnapshotParser], the
+ * a Diffy extension origin ([DiffyExternalOrigins.ALLOWED_CHROME_EXTENSION_ORIGINS] or Firefox) may send it. The body is parsed by [DiffyBrowserSnapshotParser], the
  * latest valid snapshot is kept by [DiffyBrowserSnapshotStore], and the reply has the same `status` / `message` shape as
  * `/api/diffy/open`. Bodies, titles and names are never logged, only counts.
  */
@@ -50,7 +50,7 @@ class DiffyBrowserSnapshotRestService : RestService() {
         )
         if (!isDiffyExtensionOrigin(origin = request.origin)) {
             LOG.info(
-                "Rejected a snapshot from origin ${request.origin}; expected ${DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN}"
+                "Rejected a snapshot from origin ${request.origin}; expected ${DiffyExternalOrigins.expectedOriginsDescription()}"
             )
             sendJson(body = statusBody(status = STATUS_REJECTED, message = FORBIDDEN_ORIGIN), request = request, context = context)
             return null

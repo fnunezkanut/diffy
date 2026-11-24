@@ -254,10 +254,6 @@ private class PullRequestReviewBarPanel :
     JPanel(BorderLayout()),
     Weighted {
     override fun getWeight(): Double {
-        return WEIGHT
-    }
-
-    companion object {
-        private const val WEIGHT = 1.0
+        return WorktreeBarWeights.REVIEW
     }
 }

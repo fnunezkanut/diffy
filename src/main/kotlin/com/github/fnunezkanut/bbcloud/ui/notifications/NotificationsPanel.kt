@@ -67,6 +67,8 @@ internal class NotificationsPanel(project: Project, coroutineScope: CoroutineSco
         },
         initialShowOnlyUnread = DiffySettings.getInstance().notificationsShowOnlyUnread,
         saveShowOnlyUnread = { value -> DiffySettings.getInstance().notificationsShowOnlyUnread = value },
+        initialFilterOutBots = DiffySettings.getInstance().notificationsFilterOutBots,
+        saveFilterOutBots = { value -> DiffySettings.getInstance().notificationsFilterOutBots = value },
         onUnreadCountChanged = onUnreadCountChanged,
         openMessage = { row ->
             val url = row.url

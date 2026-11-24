@@ -3,7 +3,7 @@ package com.github.fnunezkanut.bbcloud.bitbucket
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
- * Decides which URLs may receive the Bitbucket API token. Pagination `next` links come from response bodies, so they
+ * Decides which URLs may receive the Bitbucket access token. Pagination `next` links come from response bodies, so they
  * are checked here before the `Authorization` header is attached: only HTTPS on the default port with an exact host
  * match on the Bitbucket API host is trusted.
  *

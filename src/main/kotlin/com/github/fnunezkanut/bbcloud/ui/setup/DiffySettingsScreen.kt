@@ -7,24 +7,21 @@
 package com.github.fnunezkanut.bbcloud.ui.setup
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.DiffyBundle
@@ -42,7 +39,7 @@ import org.jetbrains.jewel.foundation.ExperimentalJewelApi
 import org.jetbrains.jewel.foundation.LocalComponent
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
-import org.jetbrains.jewel.ui.Outline
+import org.jetbrains.jewel.ui.component.CheckboxRow
 import org.jetbrains.jewel.ui.component.DefaultButton
 import org.jetbrains.jewel.ui.component.Divider
 import org.jetbrains.jewel.ui.component.GroupHeader
@@ -50,7 +47,6 @@ import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
-import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
@@ -94,15 +90,10 @@ fun DiffySettingsScreen(viewModel: DiffySettingsViewModel, onOpenWatchedProjects
             AuthenticationSection(
                 state = state,
                 onOAuthLogin = viewModel::onOAuthLoginClicked,
-                onOAuthCancel = viewModel::onOAuthLoginCancelClicked,
-                onApiToken = {
-                    viewModel.onApiTokenDialogOpened()
-                    // Compose click handlers run on the EDT, so showing the modal here is safe. show() blocks until
-                    // the dialog closes and needs nothing afterwards.
-                    DiffyApiTokenDialog(parent = hostComponent, viewModel = viewModel).show()
-                }
+                onOAuthCancel = viewModel::onOAuthLoginCancelClicked
             )
             WatchedProjectsSection(onOpenWatchedProjects = { onOpenWatchedProjects(hostComponent) })
+            PullRequestDiffsSection(viewModel = viewModel)
             ResetSection(
                 isBusy = state.isBusy,
                 onReset = viewModel::onResetClicked
@@ -163,6 +154,24 @@ private fun WatchedProjectsSection(onOpenWatchedProjects: () -> Unit) {
 }
 
 @Composable
+private fun PullRequestDiffsSection(viewModel: DiffySettingsViewModel) {
+    var enabled by remember { mutableStateOf(viewModel.isEditableSourceSideEnabled()) }
+    GroupHeader(text = DiffyBundle.message("setup.section.pullRequestDiffs.title"))
+    CheckboxRow(
+        text = DiffyBundle.message("settings.editableSourceSideInDiffs.label"),
+        checked = enabled,
+        onCheckedChange = { checked ->
+            enabled = checked
+            viewModel.onEditableSourceSideChanged(enabled = checked)
+        }
+    )
+    Text(
+        text = DiffyBundle.message("settings.editableSourceSideInDiffs.comment"),
+        color = JewelTheme.globalColors.text.info
+    )
+}
+
+@Composable
 private fun ProjectsDirectorySection(state: SettingsUiState, onSelectDirectory: () -> Unit) {
     GroupHeader(text = DiffyBundle.message("setup.section.projectsDirectory.title"))
     Row(
@@ -196,12 +205,12 @@ private fun ProjectsDirectorySection(state: SettingsUiState, onSelectDirectory: 
 }
 
 /**
- * The Authentication section: an intro line, the OAuth and API Token buttons, OAuth login progress with a Cancel link
- * (and a browser-fallback URL when the browser could not be opened), an OAuth status message, and a status label that
- * reflects the working authentication method.
+ * The Authentication section: the OAuth button, OAuth login progress with a Cancel link (and a browser-fallback URL
+ * when the browser could not be opened), an OAuth status message, and a status label that reflects the working
+ * authentication method.
  */
 @Composable
-private fun AuthenticationSection(state: SettingsUiState, onOAuthLogin: () -> Unit, onOAuthCancel: () -> Unit, onApiToken: () -> Unit) {
+private fun AuthenticationSection(state: SettingsUiState, onOAuthLogin: () -> Unit, onOAuthCancel: () -> Unit) {
     GroupHeader(text = DiffyBundle.message("setup.section.authentication.title"))
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -218,14 +227,6 @@ private fun AuthenticationSection(state: SettingsUiState, onOAuthLogin: () -> Un
                 icon = AllIconsKeys.General.User,
                 iconDescription = "OAuth login",
                 text = DiffyBundle.message("setup.authentication.oauth.button")
-            )
-        }
-        Text(text = DiffyBundle.message("setup.authentication.or"))
-        OutlinedButton(onClick = onApiToken, enabled = !state.isBusy, modifier = handModifier()) {
-            ButtonContent(
-                icon = AllIconsKeys.Actions.MenuSaveall,
-                iconDescription = "API token",
-                text = DiffyBundle.message("setup.authentication.apiToken.button")
             )
         }
     }
@@ -312,150 +313,11 @@ private fun AuthenticationStatus(state: SettingsUiState) {
             color = JewelTheme.globalColors.text.warning
         )
 
-        DiffyAuthenticationMethod.ApiToken -> StatusContent(
-            icon = AllIconsKeys.General.InspectionsOK,
-            iconDescription = "Authenticated with API token",
-            text = text,
-            color = SUCCESS_COLOR
-        )
-
         DiffyAuthenticationMethod.OAuth -> StatusContent(
             icon = AllIconsKeys.General.InspectionsOK,
             iconDescription = "Authenticated with OAuth",
             text = text,
             color = OAUTH_COLOR
-        )
-    }
-}
-
-/**
- * The API token component: the token field, the Save button, the inline error/success status, and the token-creation
- * instructions. Kept as a shared composable so the settings page's API token dialog and any future host render exactly
- * the same control.
- */
-@Composable
-internal fun ApiTokenSection(state: SettingsUiState, tokenFieldValue: TextFieldValue, onTokenChange: (TextFieldValue) -> Unit, onSave: () -> Unit) {
-    GroupHeader(text = DiffyBundle.message("setup.section.apiToken.title"))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        TextField(
-            value = tokenFieldValue,
-            onValueChange = onTokenChange,
-            modifier = Modifier.width(300.dp),
-            enabled = !state.isBusy,
-            outline = if (state.hasStoredToken) {
-                // Jewel 0.42 has no success outline; Outline.None preserves the native field while the placeholder
-                // and status affordance communicate that the stored token is available.
-                Outline.None
-            } else {
-                Outline.Warning
-            },
-            placeholder = if (state.hasStoredToken) {
-                { Text("********") }
-            } else {
-                null
-            },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions.Default
-        )
-        DefaultButton(onClick = onSave, enabled = !state.isBusy, modifier = handModifier()) {
-            ButtonContent(
-                icon = AllIconsKeys.Actions.MenuSaveall,
-                iconDescription = "Save API token",
-                text = DiffyBundle.message("setup.save.apiToken")
-            )
-        }
-        if (state.errorMessage != null) {
-            StatusContent(
-                icon = AllIconsKeys.General.Error,
-                iconDescription = "Setup error",
-                text = state.errorMessage,
-                color = JewelTheme.globalColors.text.error
-            )
-        } else if (state.successMessage != null) {
-            StatusContent(
-                icon = AllIconsKeys.General.InspectionsOK,
-                iconDescription = "API token saved",
-                text = state.successMessage,
-                color = SUCCESS_COLOR
-            )
-        }
-    }
-    InstructionsBlock()
-}
-
-@Composable
-internal fun InstructionsBlock() {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text(text = DiffyBundle.message("setup.instructions.intro"))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            StepsPanel(modifier = Modifier.weight(1f))
-            ScopeTable(modifier = Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun StepsPanel(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "1. Go to ")
-            Link(
-                text = DiffySetupInstructionsHtml.API_TOKENS_URL,
-                onClick = {
-                    LOG.info("User opened setup instructions link ${DiffySetupInstructionsHtml.API_TOKENS_URL}")
-                    BrowserUtil.browse(DiffySetupInstructionsHtml.API_TOKENS_URL)
-                }
-            )
-        }
-        Text(text = "2. Click \"Create API token with scopes\"")
-        Text(text = "3. Create a Bitbucket App API token with the following scopes:")
-    }
-}
-
-@Composable
-private fun ScopeTable(modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        ScopeRow(scope = "Scope", access = "Access", isHeader = true)
-        DiffyRequiredApiTokenScopes.entries.forEachIndexed { index, entry ->
-            ScopeRow(scope = entry.scope, access = entry.access, isHeader = false, rowIndex = index)
-        }
-    }
-}
-
-@Composable
-private fun ScopeRow(scope: String, access: String, isHeader: Boolean, rowIndex: Int? = null) {
-    val stripeColor = JewelTheme.globalColors.borders.normal.copy(alpha = 0.12f)
-    val rowModifier = if (rowIndex != null && rowIndex % 2 == 1) {
-        Modifier.background(color = stripeColor)
-    } else {
-        Modifier
-    }
-    Row(
-        modifier = rowModifier.fillMaxWidth().padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(
-            text = access,
-            modifier = Modifier.width(72.dp),
-            fontWeight = if (isHeader) FontWeight.Bold else null
-        )
-        Text(
-            text = scope,
-            modifier = Modifier.weight(1f),
-            fontWeight = if (isHeader) FontWeight.Bold else null
         )
     }
 }
@@ -521,8 +383,8 @@ private fun <T> runOnEdtAndWait(action: () -> T): T {
         return action()
     }
     var result: T? = null
-    // ModalityState.any() lets the workspace chooser run on the EDT even while the API token modal is showing;
-    // the default modality would queue the runnable until the modal closes, deadlocking the Save that opened it.
+    // ModalityState.any() lets the workspace chooser run on the EDT even while another modal dialog is showing;
+    // the default modality would queue the runnable until that modal closes.
     ApplicationManager.getApplication().invokeAndWait({ result = action() }, ModalityState.any())
     @Suppress("UNCHECKED_CAST")
     return result as T

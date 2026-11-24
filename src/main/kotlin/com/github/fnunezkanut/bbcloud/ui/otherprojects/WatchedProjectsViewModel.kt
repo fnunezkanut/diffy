@@ -56,7 +56,8 @@ interface WatchedProjectsDataSource {
  * mappings, toggling watched flags, and rescanning the projects directory are orchestrated here against
  * [dataSource]; the host only switches its card ([onShowContentCallback], [onShowNotConfiguredCallback]) and shows the
  * unreadable-directory dialog ([onProjectsDirectoryUnreadableCallback]), which needs a Swing parent. The host also shows
- * the watched-limit warning ([onWatchedLimitReachedCallback]) when a selection would exceed [MAX_WATCHED_PROJECTS].
+ * the watched-limit warning ([onWatchedLimitReachedCallback]) when a selection would exceed [MAX_WATCHED_PROJECTS], and
+ * starts the Checkout Project flow ([onCheckoutProjectCallback]).
  */
 class WatchedProjectsViewModel(
     private val coroutineScope: CoroutineScope,
@@ -71,6 +72,7 @@ class WatchedProjectsViewModel(
     private val onPruneWorktreesCallback: () -> Unit,
     private val onOpenWorktreesHelpCallback: () -> Unit,
     private val onGoToWorkspaceCallback: () -> Unit,
+    private val onCheckoutProjectCallback: () -> Unit,
     private val runOnEdt: (() -> Unit) -> Unit = { block -> ApplicationManager.getApplication().invokeLater(block) }
 ) {
     val state: MutableState<WatchedProjectsUiState> = mutableStateOf(
@@ -92,7 +94,7 @@ class WatchedProjectsViewModel(
      * Shows the persisted mappings of the current workspace on the Watched Projects tab, or routes to the generic
      * not-configured card when no projects directory is set. Does not rescan: a rescan runs only after a directory is
      * chosen, or a workspace slug change is saved in Settings (see [rescanWatchedProjects] and
-     * [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.saveSetup]).
+     * [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.saveOAuthSetup]).
      */
     fun bindWatchedProjects() {
         LOG.debug("Binding the Workspace - Watched Projects tab")
@@ -428,6 +430,26 @@ class WatchedProjectsViewModel(
     fun onSearchCleared() {
         LOG.info("User cleared the Watched Projects search filter")
         onSearchQueryChanged(query = "")
+    }
+
+    fun onCheckoutProjectClicked() {
+        if (!state.value.checkoutEnabled) {
+            LOG.info("Checkout Project ignored: another operation is running")
+            return
+        }
+        LOG.info("User clicked Checkout Project on the Watched Projects tab")
+        onCheckoutProjectCallback()
+    }
+
+    fun setCheckoutInProgress(inProgress: Boolean) {
+        state.value = state.value.copy(checkoutInProgress = inProgress)
+    }
+
+    /** Reloads the table from storage after a project was cloned and added. The search query and filters stay. */
+    fun onProjectCheckedOut(repoSlug: String) {
+        LOG.debug("Reloading Watched Projects after checking out $repoSlug")
+        showStoredResult(organizationUrl = dataSource.organizationUrlOrNull())
+        onShowContentCallback()
     }
 
     fun onSyncClicked() {

@@ -634,10 +634,65 @@ class WatchedProjectsViewModelTest {
         }
     }
 
+    @Test
+    fun `onCheckoutProjectClicked - invokes the callback once`() {
+        // GIVEN
+        var calls = 0
+        val viewModel = viewModel(onCheckoutProject = { calls++ })
+
+        // WHEN
+        viewModel.onCheckoutProjectClicked()
+
+        // THEN
+        calls shouldBe 1
+    }
+
+    @Test
+    fun `onCheckoutProjectClicked - does nothing while a checkout, a sync, or a prune runs`() {
+        // GIVEN
+        var calls = 0
+        val viewModel = viewModel(onCheckoutProject = { calls++ })
+
+        // WHEN
+        viewModel.setCheckoutInProgress(inProgress = true)
+        viewModel.onCheckoutProjectClicked()
+        viewModel.setCheckoutInProgress(inProgress = false)
+        viewModel.setSyncEnabled(enabled = false)
+        viewModel.onCheckoutProjectClicked()
+        viewModel.setSyncEnabled(enabled = true)
+        viewModel.setPruneInProgress(inProgress = true)
+        viewModel.onCheckoutProjectClicked()
+
+        // THEN
+        calls shouldBe 0
+    }
+
+    @Test
+    fun `onProjectCheckedOut - reloads the stored rows, shows the listing, and keeps the search query`() {
+        // GIVEN
+        val dataSource = FakeWatchedProjectsDataSource()
+        val host = HostCalls()
+        val viewModel = viewModel(dataSource = dataSource, host = host)
+        viewModel.onSearchQueryChanged(query = "new")
+        dataSource.mappings = listOf(mapping("new-repo", watched = true))
+
+        // WHEN
+        viewModel.onProjectCheckedOut(repoSlug = "new-repo")
+
+        // THEN
+        assertSoftly {
+            viewModel.state.value.rows.map { row -> row.mapping.remoteRepoSlug } shouldBe listOf("new-repo")
+            viewModel.state.value.card shouldBe WatchedProjectsCard.Listing
+            viewModel.state.value.searchQuery shouldBe "new"
+            host.content shouldBe 1
+        }
+    }
+
     private fun viewModel(
         onPruneWorktrees: () -> Unit = {},
         onOpenWorktreesHelp: () -> Unit = {},
         onGoToWorkspace: () -> Unit = {},
+        onCheckoutProject: () -> Unit = {},
         onRemoveWorktree: (WatchedProjectMapping, WatchedProjectWorktreeRow) -> Unit = { _, _ -> },
         dataSource: WatchedProjectsDataSource = FakeWatchedProjectsDataSource(),
         host: HostCalls = HostCalls()
@@ -655,6 +710,7 @@ class WatchedProjectsViewModelTest {
             onPruneWorktreesCallback = onPruneWorktrees,
             onOpenWorktreesHelpCallback = onOpenWorktreesHelp,
             onGoToWorkspaceCallback = onGoToWorkspace,
+            onCheckoutProjectCallback = onCheckoutProject,
             runOnEdt = { block -> block() }
         )
     }

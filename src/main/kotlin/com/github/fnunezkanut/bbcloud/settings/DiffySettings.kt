@@ -23,9 +23,9 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
         /**
          * The watched projects, as a single-level map keyed by repository slug whose value is the watched boolean.
          * There is no workspace layer: the map is a rebuildable cache of the repositories found under the currently
-         * configured projects directory, workspace, and API token. Any change to those inputs empties the map first
+         * configured projects directory and workspace. Any change to those inputs empties the map first
          * and then rebuilds it (see [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.saveProjectsDirectory]
-         * and [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.saveSetup]), so there is never a moment
+         * and [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.saveOAuthSetup]), so there is never a moment
          * where slugs from two different workspaces coexist. As a consequence of emptying first, a transient verify
          * failure right after a directory change leaves the map empty rather than restoring stale entries; that is
          * intentional. The local folder path and the former manual flag are not persisted.
@@ -42,11 +42,11 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
 
         /**
          * The configured avatar/icon URL of each watched repository, as a flat map keyed by repository slug. Like
-         * [watchedRepos], this is a rebuildable cache tied to the currently configured projects directory, workspace,
-         * and API token: it is written only on a Sync/rescan (from the repo-existence call discovery already makes),
+         * [watchedRepos], this is a rebuildable cache tied to the currently configured projects directory and workspace:
+         * it is written only on a Sync/rescan (from the repo-existence call discovery already makes),
          * read with zero API calls when the Watched Projects tab binds, and cleared whenever [watchedRepos] is cleared
          * (see [clearWatchedProjects]). Only the URL is persisted, never the image bytes; the bytes live in an
-         * in-memory cache and re-download cheaply over the public CDN because they carry no API token. A repository
+         * in-memory cache and re-download cheaply over the public CDN because they carry no access token. A repository
          * without an avatar has no entry here, which the UI renders as a neutral placeholder.
          */
         var repoAvatarUrls by map<String, String>()
@@ -103,12 +103,27 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
         var notificationsShowOnlyUnread by property(false)
 
         /**
+         * Default false: when true, the Notifications tab hides notifications whose actor is a bot. It is a view
+         * preference, so it is kept across a settings reset. The option name is part of the persisted XML; do not
+         * rename it without a migration.
+         */
+        var notificationsFilterOutBots by property(false)
+
+        /**
          * Default false: when true, the diffs of Markdown files in a pull request work tree open with soft-wrapped
          * lines. It is a view preference, so it is kept across a settings reset. The option name is part of the
          * persisted XML; do not rename it without a migration. `BaseState` omits the default value, so existing
          * installs need no migration.
          */
         var markdownDiffWrapLines by property(false)
+
+        /**
+         * Default true: when true, the right side of the pull request diffs of a work tree is the editable work tree
+         * file, as long as the work tree is at or ahead of the pull request source commit. It is a view preference, so
+         * it is kept across a settings reset. The option name is part of the persisted XML; do not rename it without a
+         * migration. `BaseState` omits the default value, so existing installs need no migration.
+         */
+        var editableSourceSideInDiffs by property(true)
 
         /**
          * Default false: set to true once the plugin has turned on "Collapse unchanged fragments" for pull request
@@ -146,6 +161,13 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
             state.markdownDiffWrapLines = value
         }
 
+    /** Whether the source side of pull request diffs is the editable work tree file. See [State.editableSourceSideInDiffs]. */
+    var editableSourceSideInDiffs: Boolean
+        get() = state.editableSourceSideInDiffs
+        set(value) {
+            state.editableSourceSideInDiffs = value
+        }
+
     /** Whether the Watched Projects table lists only watched projects. See [State.watchedProjectsShowOnlyWatched]. */
     var watchedProjectsShowOnlyWatched: Boolean
         get() = state.watchedProjectsShowOnlyWatched
@@ -158,6 +180,13 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
         get() = state.notificationsShowOnlyUnread
         set(value) {
             state.notificationsShowOnlyUnread = value
+        }
+
+    /** Whether the Notifications tab hides notifications from bots. See [State.notificationsFilterOutBots]. */
+    var notificationsFilterOutBots: Boolean
+        get() = state.notificationsFilterOutBots
+        set(value) {
+            state.notificationsFilterOutBots = value
         }
 
     /** Legacy value kept only so existing installs can migrate the URL to a slug; see [organizationUrl]. */
@@ -254,9 +283,8 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
 
     /**
      * Clears the watched map AND the avatar-URL map, so every caller (incl.
-     * [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.resetAll],
-     * [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.resetApiToken], and
-     * [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.clearProjectsDirectory]) wipes the avatar
+     * [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.resetAll]
+     * and [com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService.clearProjectsDirectory]) wipes the avatar
      * URLs for free. Both maps share the same "rebuildable cache keyed by slug" lifecycle.
      */
     fun clearWatchedProjects() {

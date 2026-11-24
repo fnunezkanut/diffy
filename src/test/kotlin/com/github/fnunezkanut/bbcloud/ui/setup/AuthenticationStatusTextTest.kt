@@ -22,27 +22,15 @@ class AuthenticationStatusTextTest {
     }
 
     @Test
-    fun `build - should include workspace for ApiToken with slug`() {
+    fun `build - should omit workspace for OAuth without slug`() {
         // GIVEN
-        val method = DiffyAuthenticationMethod.ApiToken
-
-        // WHEN
-        val result = AuthenticationStatusText.build(method = method, workspaceSlug = "acme")
-
-        // THEN
-        result shouldBe "Authenticated using API Token. Workspace: acme"
-    }
-
-    @Test
-    fun `build - should omit workspace for ApiToken without slug`() {
-        // GIVEN
-        val method = DiffyAuthenticationMethod.ApiToken
+        val method = DiffyAuthenticationMethod.OAuth
 
         // WHEN
         val result = AuthenticationStatusText.build(method = method, workspaceSlug = null)
 
         // THEN
-        result shouldBe "Authenticated using API Token"
+        result shouldBe "Authenticated using Bitbucket oauth login"
     }
 
     @Test
@@ -60,12 +48,12 @@ class AuthenticationStatusTextTest {
     @Test
     fun `build - should omit workspace when slug is blank`() {
         // GIVEN
-        val method = DiffyAuthenticationMethod.ApiToken
+        val method = DiffyAuthenticationMethod.OAuth
 
         // WHEN
         val result = AuthenticationStatusText.build(method = method, workspaceSlug = "   ")
 
         // THEN
-        result shouldBe "Authenticated using API Token"
+        result shouldBe "Authenticated using Bitbucket oauth login"
     }
 }

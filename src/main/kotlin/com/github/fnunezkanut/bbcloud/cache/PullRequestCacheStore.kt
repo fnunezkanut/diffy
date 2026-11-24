@@ -65,7 +65,7 @@ interface PullRequestCacheStore {
 
     /**
      * Records which Bitbucket account the cache belongs to. A change clears the cache, but only after two calls in a row
-     * report the same new account, because the OAuth and API-token paths can belong to different accounts.
+     * report the same new account, because a new OAuth login can belong to a different account.
      */
     fun bindUser(userUuid: String?)
 

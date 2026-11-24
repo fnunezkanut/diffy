@@ -35,7 +35,7 @@ internal class WorktreePrViewBlueBarPanel private constructor() :
         }
 
         override fun getWeight(): Double {
-            return WEIGHT
+            return WorktreeBarWeights.BLUE
         }
 
         @OptIn(ExperimentalComposeUiApi::class)
@@ -49,8 +49,6 @@ internal class WorktreePrViewBlueBarPanel private constructor() :
         }
 
         companion object {
-            private const val WEIGHT = 0.0
-
             fun create(project: Project): WorktreePrViewBlueBarPanel {
                 val banner = WorktreePrViewBlueBarPanel()
                 val viewModel = WorktreeTodoBannerViewModel.getInstance(project)

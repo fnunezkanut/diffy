@@ -45,6 +45,8 @@ data class NotificationRow(
     val isForeignWorkspace: Boolean,
     /** The state the latest snapshot reports for the pull request, or null when it does not list it. */
     val knownPullRequestState: PullRequestState?,
+    /** True when the event's actor is a bot, see [DiffyBrowserNotificationEvent.actorIsBot]. */
+    val isBot: Boolean,
     /** The read flag the plugin keeps; unread by default. The `readState` Bitbucket reports is ignored. */
     val isUnread: Boolean,
     /** The Bitbucket link of the event. The UI only uses [pullRequestWebUrl], which is derived from validated parts. */
@@ -59,15 +61,20 @@ data class NotificationsUiState(
     val selectedIds: Set<String> = emptySet(),
     val avatarRevision: Int = 0,
     /** When true, [visibleRows] holds only the unread rows. */
-    val showOnlyUnread: Boolean = false
+    val showOnlyUnread: Boolean = false,
+    /** When true, rows whose actor is a bot are left out of [visibleRows]. */
+    val filterOutBots: Boolean = false
 ) {
     /** True when there are no stored rows at all, whatever the unread filter says. */
     val isEmpty: Boolean
         get() = rows.isEmpty()
 
-    /** The rows the table shows: all of [rows], or only the unread ones when [showOnlyUnread] is on. */
+    /**
+     * The rows the table shows: all of [rows], narrowed to the unread ones when [showOnlyUnread] is on and
+     * without bot rows when [filterOutBots] is on.
+     */
     val visibleRows: List<NotificationRow>
-        get() = if (showOnlyUnread) rows.filter { row -> row.isUnread } else rows
+        get() = rows.filter { row -> (!showOnlyUnread || row.isUnread) && (!filterOutBots || !row.isBot) }
 
     val unreadCount: Int
         get() = rows.count { row -> row.isUnread }
@@ -223,6 +230,7 @@ private fun toRow(
             workspace = effectiveWorkspace,
             cachedState = context.cachedPullRequestState
         ),
+        isBot = event.actorIsBot,
         isUnread = notification.unread,
         url = event.url
     )

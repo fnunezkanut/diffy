@@ -21,17 +21,8 @@ class DiffyCredentialValidatorTest {
         override fun now(): Instant = now
     }
 
-    private class FakeStore(var apiToken: String? = null, var oauth: OAuthTokens? = null) : DiffyCredentialStore {
-        override suspend fun hasToken() = apiToken != null
-
-        override suspend fun getToken() = apiToken
-
-        override suspend fun saveToken(token: String) {
-            apiToken = token
-        }
-
-        override suspend fun clearToken() {
-            apiToken = null
+    private class FakeStore(var oauth: OAuthTokens? = null) : DiffyCredentialStore {
+        override suspend fun clearLegacyApiToken() {
         }
 
         override suspend fun getOAuthTokens() = oauth
@@ -118,61 +109,47 @@ class DiffyCredentialValidatorTest {
         }
 
     @Test
-    fun `workingMethod - OAuth failing twice falls back to a valid API token`(): Unit =
+    fun `workingMethod - OAuth failing twice maps to None`(): Unit =
         runBlocking {
-            // GIVEN OAuth that stays unauthorized, and a valid API token
-            val store = FakeStore(apiToken = "api", oauth = tokens(access = "bad"))
+            // GIVEN OAuth that stays unauthorized
+            val store = FakeStore(oauth = tokens(access = "bad"))
             val provider = FakeProvider(oauthToken = "bad", refreshedToken = "bad")
             val validator = validator(
                 store = store,
                 provider = provider,
-                check = checkClient(
-                    mapOf(
-                        "bad" to CredentialCheckResult.Unauthorized,
-                        "api" to CredentialCheckResult.Valid
-                    )
-                ),
+                check = checkClient(mapOf("bad" to CredentialCheckResult.Unauthorized)),
                 clock = MutableClock(base)
             )
 
-            validator.workingMethod() shouldBe DiffyAuthenticationMethod.ApiToken
+            validator.workingMethod() shouldBe DiffyAuthenticationMethod.None
             provider.markedNotWorking shouldBe true
         }
 
     @Test
-    fun `workingMethod - OAuth Forbidden falls back to the API token`(): Unit =
+    fun `workingMethod - OAuth Forbidden maps to None`(): Unit =
         runBlocking {
-            val store = FakeStore(apiToken = "api", oauth = tokens(access = "at"))
+            val store = FakeStore(oauth = tokens(access = "at"))
             val provider = FakeProvider(oauthToken = "at")
             val validator = validator(
                 store = store,
                 provider = provider,
-                check = checkClient(
-                    mapOf(
-                        "at" to CredentialCheckResult.Forbidden,
-                        "api" to CredentialCheckResult.Valid
-                    )
-                ),
+                check = checkClient(mapOf("at" to CredentialCheckResult.Forbidden)),
                 clock = MutableClock(base)
             )
 
-            validator.workingMethod() shouldBe DiffyAuthenticationMethod.ApiToken
+            validator.workingMethod() shouldBe DiffyAuthenticationMethod.None
+            provider.markedNotWorking shouldBe true
         }
 
     @Test
-    fun `workingMethod - both invalid maps to None`(): Unit =
+    fun `workingMethod - no stored OAuth login maps to None`(): Unit =
         runBlocking {
-            val store = FakeStore(apiToken = "api", oauth = tokens(access = "at"))
-            val provider = FakeProvider(oauthToken = "at", refreshedToken = "at")
+            val store = FakeStore()
+            val provider = FakeProvider(oauthToken = null)
             val validator = validator(
                 store = store,
                 provider = provider,
-                check = checkClient(
-                    mapOf(
-                        "at" to CredentialCheckResult.Unauthorized,
-                        "api" to CredentialCheckResult.Unauthorized
-                    )
-                ),
+                check = checkClient(emptyMap()),
                 clock = MutableClock(base)
             )
 

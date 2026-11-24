@@ -413,7 +413,7 @@ class OkHttpBitbucketPullRequestClient(private val httpClient: OkHttpClient = sh
 
     private fun executeCreate(request: Request): CreatePullRequestResult {
         if (!BitbucketApiUrlPolicy.isTrustedApiUrl(request.url.toString())) {
-            LOG.warn("Refusing to send the API token to an untrusted URL (${BitbucketApiUrlPolicy.describeRejected(request.url.toString())})")
+            LOG.warn("Refusing to send the access token to an untrusted URL (${BitbucketApiUrlPolicy.describeRejected(request.url.toString())})")
             return CreatePullRequestResult.Failed(message = null)
         }
         val description = "${request.method} ${request.url}"
@@ -696,7 +696,7 @@ class OkHttpBitbucketPullRequestClient(private val httpClient: OkHttpClient = sh
 
     private fun executeAction(request: Request): PullRequestActionResult {
         if (!BitbucketApiUrlPolicy.isTrustedApiUrl(request.url.toString())) {
-            LOG.warn("Refusing to send the API token to an untrusted URL (${BitbucketApiUrlPolicy.describeRejected(request.url.toString())})")
+            LOG.warn("Refusing to send the access token to an untrusted URL (${BitbucketApiUrlPolicy.describeRejected(request.url.toString())})")
             return PullRequestActionResult.Failed(message = null)
         }
         val description = "${request.method} ${request.url}"
@@ -804,14 +804,14 @@ class OkHttpBitbucketPullRequestClient(private val httpClient: OkHttpClient = sh
     }
 
     /**
-     * Runs one authenticated GET and hands the response to [onResponse]. Refuses to attach the API token to a URL that
+     * Runs one authenticated GET and hands the response to [onResponse]. Refuses to attach the access token to a URL that
      * [BitbucketApiUrlPolicy] does not trust (for example a tampered pagination `next` link) and returns
      * [onFailure] with no cause instead. Exceptions thrown while executing the call or inside [onResponse] are logged
      * at `debug` and mapped through [onFailure].
      */
     private fun <T> executeGet(url: String, apiToken: String, onFailure: (Exception?) -> T, onResponse: (Response) -> T): T {
         if (!BitbucketApiUrlPolicy.isTrustedApiUrl(url)) {
-            LOG.warn("Refusing to send the API token to an untrusted URL (${BitbucketApiUrlPolicy.describeRejected(url)})")
+            LOG.warn("Refusing to send the access token to an untrusted URL (${BitbucketApiUrlPolicy.describeRejected(url)})")
             return onFailure(null)
         }
         val request = buildGetRequest(url = url, apiToken = apiToken)

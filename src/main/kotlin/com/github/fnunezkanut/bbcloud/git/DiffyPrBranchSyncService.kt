@@ -9,7 +9,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.intellij.util.messages.Topic
-import git4idea.repo.GitRemote
 import git4idea.repo.GitRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -154,7 +153,7 @@ class DiffyPrBranchSyncService(private val project: Project) {
         return SyncContext(
             repository = repository,
             root = repository.root.toNioPath(),
-            remoteName = remote?.name ?: GitRemote.ORIGIN,
+            remoteName = PrRemoteResolver.remoteName(repository = repository),
             remoteUrl = remote?.urls?.firstOrNull()
         )
     }

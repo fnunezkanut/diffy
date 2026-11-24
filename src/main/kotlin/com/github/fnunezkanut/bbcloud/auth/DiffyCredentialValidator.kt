@@ -12,7 +12,7 @@ import kotlin.time.Instant
 /**
  * Determines which authentication method actually works online, by calling `GET /2.0/user`. The result is cached for
  * [ttl] (a short window when the check could not reach Bitbucket) behind a [Mutex] so concurrent tab switches cause a
- * single check. OAuth is preferred (with one forced refresh on a 401); the API token is the fallback.
+ * single check. Only the OAuth login is checked (with one forced refresh on a 401).
  */
 class DiffyCredentialValidator(
     private val credentialStore: DiffyCredentialStore,
@@ -61,27 +61,12 @@ class DiffyCredentialValidator(
             }
         }
 
-        val apiToken = credentialStore.getToken()
-        if (apiToken != null) {
-            return when (val result = checkClient.check(bearerToken = apiToken)) {
-                is CredentialCheckResult.Valid -> {
-                    methodChange(DiffyAuthenticationMethod.ApiToken) to true
-                }
-                is CredentialCheckResult.Unauthorized, is CredentialCheckResult.Forbidden -> {
-                    methodChange(DiffyAuthenticationMethod.None) to true
-                }
-                is CredentialCheckResult.Unavailable -> {
-                    offlineFallback(stored = DiffyAuthenticationMethod.ApiToken)
-                }
-            }
-        }
-
         return methodChange(DiffyAuthenticationMethod.None) to true
     }
 
     /**
-     * Checks OAuth, returning the resolved outcome, or null when OAuth is not working so the caller continues with the
-     * API token. The access token is fetched through the provider so it is refreshed proactively.
+     * Checks OAuth, returning the resolved outcome, or null when OAuth is not working so the caller reports
+     * [DiffyAuthenticationMethod.None]. The access token is fetched through the provider so it is refreshed proactively.
      */
     private suspend fun checkOAuth(): Pair<DiffyAuthenticationMethod, Boolean>? {
         val bearer = accessTokenProvider.oauthAccessTokenOrNull()
@@ -111,7 +96,7 @@ class DiffyCredentialValidator(
                 }
             }
             is CredentialCheckResult.Forbidden -> {
-                // Missing consumer scopes: OAuth cannot serve the plugin, so fall back to the API token.
+                // Missing consumer scopes: OAuth cannot serve the plugin.
                 accessTokenProvider.markOAuthNotWorking()
                 null
             }

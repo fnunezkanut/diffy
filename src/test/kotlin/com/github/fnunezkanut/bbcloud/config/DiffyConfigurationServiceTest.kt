@@ -13,6 +13,7 @@ import com.github.fnunezkanut.bbcloud.project.DiffyWatchedProjectsDiscoveryServi
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectsDiscoveryResult
 import com.github.fnunezkanut.bbcloud.settings.DiffySettings
+import com.github.fnunezkanut.bbcloud.ui.otherprojects.WatchedProjectsViewModel
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -34,32 +35,32 @@ class DiffyConfigurationServiceTest {
     lateinit var projectsDir: Path
 
     @Test
-    fun `isConfigured - should be false when slug or token missing`(): Unit =
+    fun `isConfigured - should be false when slug or login missing`(): Unit =
         runBlocking {
             val settings = settings()
-            val store = FakeCredentialStore(hasToken = false)
+            val store = FakeCredentialStore(hasLogin = false)
             val service = service(settings, store)
 
             service.isConfigured() shouldBe false
 
-            // Slug + a valid projects directory, but still no token, is not configured.
+            // Slug + a valid projects directory, but still no OAuth login, is not configured.
             settings.workspaceSlug = "my-workspace"
             settings.projectsDirectory = projectsDir.toString()
             service.isConfigured() shouldBe false
 
-            // Token stored but a blank slug is not configured.
-            store.saveToken("token")
+            // OAuth login stored but a blank slug is not configured.
+            store.saveOAuthTokens(oauthTokens())
             settings.workspaceSlug = "  "
             service.isConfigured() shouldBe false
         }
 
     @Test
-    fun `isConfigured - should be true when slug token and projects directory are set and valid`(): Unit =
+    fun `isConfigured - should be true when slug login and projects directory are set and valid`(): Unit =
         runBlocking {
-            // GIVEN slug, token, and a valid projects directory (the work tree root is derived, not required to exist).
+            // GIVEN slug, OAuth login, and a valid projects directory (the work tree root is derived, not required to exist).
             val settings = settings(workspaceSlug = "my-workspace")
             settings.projectsDirectory = projectsDir.toString()
-            val store = FakeCredentialStore(hasToken = true)
+            val store = FakeCredentialStore(hasLogin = true)
             val service = service(settings, store)
 
             // WHEN / THEN
@@ -71,7 +72,7 @@ class DiffyConfigurationServiceTest {
         runBlocking {
             // GIVEN slug and token, but no projects directory
             val settings = settings(workspaceSlug = "my-workspace")
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN / THEN
             service.isConfigured() shouldBe false
@@ -83,19 +84,19 @@ class DiffyConfigurationServiceTest {
             // GIVEN a projects directory pointing at a path that is not a directory on disk
             val settings = settings(workspaceSlug = "my-workspace")
             settings.projectsDirectory = projectsDir.resolve("missing").toString()
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN / THEN
             service.isConfigured() shouldBe false
         }
 
     @Test
-    fun `isConfigured - should be false when no token is stored`(): Unit =
+    fun `isConfigured - should be false when no OAuth login is stored`(): Unit =
         runBlocking {
             // GIVEN slug and a valid projects directory, but no stored token
             val settings = settings(workspaceSlug = "my-workspace")
             settings.projectsDirectory = projectsDir.toString()
-            val service = service(settings, FakeCredentialStore(hasToken = false))
+            val service = service(settings, FakeCredentialStore(hasLogin = false))
 
             // WHEN / THEN
             service.isConfigured() shouldBe false
@@ -107,7 +108,7 @@ class DiffyConfigurationServiceTest {
             // GIVEN token and a valid projects directory, but no workspace slug
             val settings = settings()
             settings.projectsDirectory = projectsDir.toString()
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN / THEN
             service.isConfigured() shouldBe false
@@ -116,26 +117,14 @@ class DiffyConfigurationServiceTest {
     @Test
     fun `isConfigured - should be true with working OAuth and a valid directory`(): Unit =
         runBlocking {
-            // GIVEN slug, a valid directory, OAuth tokens but no API token
+            // GIVEN slug, a valid directory, and OAuth tokens
             val settings = settings(workspaceSlug = "my-workspace")
             settings.projectsDirectory = projectsDir.toString()
-            val store = FakeCredentialStore(hasToken = false)
+            val store = FakeCredentialStore(hasLogin = false)
             store.oauthTokens = oauthTokens()
             val service = service(settings, store)
 
             // WHEN / THEN
-            service.isConfigured() shouldBe true
-        }
-
-    @Test
-    fun `isConfigured - should be true with both OAuth and an API token`(): Unit =
-        runBlocking {
-            val settings = settings(workspaceSlug = "my-workspace")
-            settings.projectsDirectory = projectsDir.toString()
-            val store = FakeCredentialStore(hasToken = true, storedToken = "token")
-            store.oauthTokens = oauthTokens()
-            val service = service(settings, store)
-
             service.isConfigured() shouldBe true
         }
 
@@ -145,7 +134,7 @@ class DiffyConfigurationServiceTest {
             // GIVEN no slug, a valid directory, and a check client that would fail the test if called
             val settings = settings()
             settings.projectsDirectory = projectsDir.toString()
-            val store = FakeCredentialStore(hasToken = true, storedToken = "token")
+            val store = FakeCredentialStore(hasLogin = true)
             var checkCalls = 0
             val countingCheckClient = object : BitbucketCredentialCheckClient {
                 override suspend fun check(bearerToken: String): CredentialCheckResult {
@@ -172,7 +161,7 @@ class DiffyConfigurationServiceTest {
     fun `saveOAuthSetup - should reject an invalid workspace slug`(): Unit =
         runBlocking {
             val settings = settings()
-            val store = FakeCredentialStore(hasToken = false)
+            val store = FakeCredentialStore(hasLogin = false)
             val service = service(settings, store)
 
             val result = service.saveOAuthSetup(workspaceSlug = "https://bitbucket.org/x/", tokens = oauthTokens())
@@ -185,10 +174,11 @@ class DiffyConfigurationServiceTest {
         }
 
     @Test
-    fun `saveOAuthSetup - should store the tokens and slug and keep the API token`(): Unit =
+    fun `saveOAuthSetup - should store the tokens and slug and delete the legacy API token`(): Unit =
         runBlocking {
             val settings = settings()
-            val store = FakeCredentialStore(hasToken = true, storedToken = "api-token")
+            val store = FakeCredentialStore(hasLogin = false)
+            store.legacyApiTokenPresent = true
             val service = service(settings, store)
             val tokens = oauthTokens()
 
@@ -198,8 +188,8 @@ class DiffyConfigurationServiceTest {
                 result.isSuccess shouldBe true
                 settings.workspaceSlug shouldBe "my-workspace"
                 store.oauthTokens shouldBe tokens
-                // The API token is kept so both credentials can coexist.
-                store.savedToken shouldBe "api-token"
+                // A token stored by an older plugin version is no longer used, so it is removed.
+                store.legacyApiTokenPresent shouldBe false
             }
         }
 
@@ -208,7 +198,7 @@ class DiffyConfigurationServiceTest {
         runBlocking {
             val settings = settings(workspaceSlug = "old")
             settings.projectsDirectory = projectsDir.toString()
-            val store = FakeCredentialStore(hasToken = false)
+            val store = FakeCredentialStore(hasLogin = false)
             val discoveryService = FakeDiscoveryService(
                 result = WatchedProjectsDiscoveryResult.Success(mappings = emptyList(), avatarUrlBySlug = emptyMap())
             )
@@ -230,7 +220,7 @@ class DiffyConfigurationServiceTest {
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(workspace = "same", remoteRepoSlug = "repo", watched = true, localFolderPath = ""))
             )
-            val store = FakeCredentialStore(hasToken = false)
+            val store = FakeCredentialStore(hasLogin = false)
             val discoveryService = FakeDiscoveryService()
             val service = service(settings, store, discoveryService = discoveryService)
 
@@ -247,8 +237,8 @@ class DiffyConfigurationServiceTest {
     fun `resetAll - should clear the OAuth tokens`(): Unit =
         runBlocking {
             val settings = settings(workspaceSlug = "my-workspace")
-            val store = FakeCredentialStore(hasToken = true, storedToken = "token")
-            store.oauthTokens = oauthTokens()
+            val store = FakeCredentialStore(hasLogin = true)
+            store.legacyApiTokenPresent = true
             val service = service(settings, store)
 
             service.resetAll()
@@ -256,6 +246,7 @@ class DiffyConfigurationServiceTest {
             assertSoftly {
                 store.oauthTokens shouldBe null
                 store.clearOAuthInvocations shouldBe 1
+                store.legacyApiTokenPresent shouldBe false
                 settings.workspaceSlug shouldBe ""
             }
         }
@@ -269,84 +260,10 @@ class DiffyConfigurationServiceTest {
     }
 
     @Test
-    fun `hasStoredToken - should follow the credential store`(): Unit =
-        runBlocking {
-            val store = FakeCredentialStore(hasToken = false, storedToken = "")
-            val service = service(settings(workspaceSlug = "my-workspace"), store)
-
-            service.hasStoredToken() shouldBe false
-
-            store.saveToken("secret-token")
-
-            service.hasStoredToken() shouldBe true
-        }
-
-    @Test
-    fun `saveSetup - should require a token on first setup`(): Unit =
-        runBlocking {
-            val settings = settings()
-            val store = FakeCredentialStore(hasToken = false)
-            val service = service(settings, store)
-
-            val result = service.saveSetup(workspaceSlug = "my-workspace", apiTokenInput = "")
-
-            result.isFailure shouldBe true
-            result.exceptionOrNull().shouldBeInstanceOf<DiffyConfigurationService.SaveException.TokenRequired>()
-            settings.workspaceSlug shouldBe ""
-        }
-
-    @Test
-    fun `saveSetup - should reject an invalid workspace slug`(): Unit =
-        runBlocking {
-            val settings = settings()
-            val store = FakeCredentialStore(hasToken = false)
-            val service = service(settings, store)
-
-            val result = service.saveSetup(workspaceSlug = "https://bitbucket.org/x/", apiTokenInput = "new-token")
-
-            result.isFailure shouldBe true
-            result.exceptionOrNull().shouldBeInstanceOf<DiffyConfigurationService.SaveException.WorkspaceRequired>()
-            store.savedToken shouldBe ""
-        }
-
-    @Test
-    fun `saveSetup - should persist slug and token on first setup`(): Unit =
-        runBlocking {
-            val settings = settings()
-            val store = FakeCredentialStore(hasToken = false)
-            val service = service(settings, store)
-
-            val result = service.saveSetup(workspaceSlug = "  my-workspace  ", apiTokenInput = "new-token")
-
-            assertSoftly {
-                result.isSuccess shouldBe true
-                settings.workspaceSlug shouldBe "my-workspace"
-                store.savedToken shouldBe "new-token"
-            }
-        }
-
-    @Test
-    fun `saveSetup - should keep the token when the update leaves it blank`(): Unit =
-        runBlocking {
-            val settings = settings(workspaceSlug = "old")
-            val store = FakeCredentialStore(hasToken = true, storedToken = "existing-token")
-            val service = service(settings, store)
-
-            val result = service.saveSetup(workspaceSlug = "new", apiTokenInput = "")
-
-            assertSoftly {
-                result.isSuccess shouldBe true
-                settings.workspaceSlug shouldBe "new"
-                store.savedToken shouldBe "existing-token"
-                store.saveInvocations shouldBe 0
-            }
-        }
-
-    @Test
     fun `organizationUrlOrNull - should derive the URL from the slug`(): Unit =
         runBlocking {
             val settings = settings(workspaceSlug = "my-workspace")
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             service.organizationUrlOrNull() shouldBe "https://bitbucket.org/my-workspace/"
         }
@@ -354,14 +271,14 @@ class DiffyConfigurationServiceTest {
     @Test
     fun `organizationUrlOrNull - should be null without a slug`(): Unit =
         runBlocking {
-            service(settings(), FakeCredentialStore(hasToken = true)).organizationUrlOrNull() shouldBe null
+            service(settings(), FakeCredentialStore(hasLogin = true)).organizationUrlOrNull() shouldBe null
         }
 
     @Test
     fun `workspaceSlugOrNull - should migrate a legacy organization url once`(): Unit =
         runBlocking {
             val settings = settings(organizationUrl = "https://bitbucket.org/legacy-workspace/")
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             assertSoftly {
                 service.workspaceSlugOrNull() shouldBe "legacy-workspace"
@@ -378,14 +295,14 @@ class DiffyConfigurationServiceTest {
                 organizationUrl = "https://bitbucket.org/legacy/"
             )
 
-            service(settings, FakeCredentialStore(hasToken = true)).workspaceSlugOrNull() shouldBe "current"
+            service(settings, FakeCredentialStore(hasLogin = true)).workspaceSlugOrNull() shouldBe "current"
         }
 
     @Test
     fun `saveProjectsDirectory - should store the normalized absolute path`(): Unit =
         runBlocking {
             val settings = settings()
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             service.saveProjectsDirectory(absolutePath = "  ${RELATIVE_ROOT}/bbcloud/../bbcloud  ")
 
@@ -404,7 +321,7 @@ class DiffyConfigurationServiceTest {
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace", watched = true))
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN a new projects directory is chosen
             service.saveProjectsDirectory(absolutePath = projectsDir.toString())
@@ -417,7 +334,7 @@ class DiffyConfigurationServiceTest {
     fun `projectsDirectoryOrNull - should be null when unset or blank`(): Unit =
         runBlocking {
             val settings = settings()
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             service.projectsDirectoryOrNull() shouldBe null
 
@@ -426,35 +343,7 @@ class DiffyConfigurationServiceTest {
         }
 
     @Test
-    fun `resetApiToken - should clear the stored token and the watched projects, keeping slug and directory`(): Unit =
-        runBlocking {
-            // GIVEN
-            val settings = settings(workspaceSlug = "my-workspace")
-            val expectedDirectory = Paths.get(RELATIVE_ROOT, "bbcloud").toAbsolutePath().normalize().toString()
-            settings.projectsDirectory = expectedDirectory
-            settings.replaceWatchedProjects(
-                listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace", watched = true))
-            )
-            val store = FakeCredentialStore(hasToken = true, storedToken = "token")
-            val service = service(settings, store)
-
-            // WHEN
-            service.resetApiToken()
-
-            // THEN the token and the watched map are cleared, but the slug and directory are kept.
-            assertSoftly {
-                store.hasToken() shouldBe false
-                store.clearInvocations shouldBe 1
-                settings.workspaceSlug shouldBe "my-workspace"
-                service.projectsDirectoryOrNull() shouldBe expectedDirectory
-                settings.watchedProjects shouldBe emptyList()
-                service.isConfigured() shouldBe false
-                service.organizationUrlOrNull() shouldBe "https://bitbucket.org/my-workspace/"
-            }
-        }
-
-    @Test
-    fun `resetAll - should clear the token slug organization url projects directory and watched projects`(): Unit =
+    fun `resetAll - should clear the login slug organization url projects directory and watched projects`(): Unit =
         runBlocking {
             // GIVEN
             val settings = settings(
@@ -465,7 +354,7 @@ class DiffyConfigurationServiceTest {
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace"))
             )
-            val store = FakeCredentialStore(hasToken = true, storedToken = "token")
+            val store = FakeCredentialStore(hasLogin = true)
             val service = service(settings, store)
 
             // WHEN
@@ -473,8 +362,8 @@ class DiffyConfigurationServiceTest {
 
             // THEN
             assertSoftly {
-                store.hasToken() shouldBe false
-                store.clearInvocations shouldBe 1
+                store.getOAuthTokens() shouldBe null
+                store.clearOAuthInvocations shouldBe 1
                 settings.workspaceSlug shouldBe ""
                 settings.organizationUrl shouldBe ""
                 service.workspaceSlugOrNull() shouldBe null
@@ -503,7 +392,7 @@ class DiffyConfigurationServiceTest {
                     avatarUrlBySlug = mapOf("repo-a" to "https://cdn.example.com/a.png")
                 )
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN a clear-first rescan runs
             service.rescanWatchedProjects(clearFirst = true)
@@ -528,7 +417,7 @@ class DiffyConfigurationServiceTest {
                     avatarUrlBySlug = mapOf("repo-a" to "https://cdn.example.com/a.png")
                 )
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN a manual Sync (clearFirst = false) runs
             service.rescanWatchedProjects()
@@ -548,7 +437,7 @@ class DiffyConfigurationServiceTest {
             settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
             settings.replaceRepoAvatarUrls(mapOf("repo-a" to "https://cdn.example.com/a.png"))
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.VerifyFailed)
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN a manual Sync (clearFirst = false) hits a transient verify failure
             service.rescanWatchedProjects().shouldBeInstanceOf<WatchedProjectsDiscoveryResult.VerifyFailed>()
@@ -564,7 +453,7 @@ class DiffyConfigurationServiceTest {
             val settings = settings(workspaceSlug = "my-workspace")
             settings.replaceRepoAvatarUrls(mapOf("repo-a" to "https://cdn.example.com/a.png"))
             val discoveryService = FakeDiscoveryService()
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN
             val urls = service.repoAvatarUrlsForCurrentWorkspace()
@@ -583,7 +472,7 @@ class DiffyConfigurationServiceTest {
             val settings = settings(workspaceSlug = "my-workspace")
             settings.projectsDirectory = projectsDir.toString()
             val discoveryService = FakeDiscoveryService(resolvedLocalFolderPath = "/projects/repo-a")
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN
             val path = service.localCheckoutPathForRepo(repoSlug = "repo-a")
@@ -604,7 +493,7 @@ class DiffyConfigurationServiceTest {
         runBlocking {
             // GIVEN no workspace slug and no projects directory
             val discoveryService = FakeDiscoveryService(resolvedLocalFolderPath = "/projects/repo-a")
-            val service = service(settings(), FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings(), FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN
             val withoutSlug = service.localCheckoutPathForRepo(repoSlug = "repo-a")
@@ -618,7 +507,7 @@ class DiffyConfigurationServiceTest {
             // AND with a slug but still no projects directory it also returns empty without consulting the resolver
             val settingsWithSlug = settings(workspaceSlug = "my-workspace")
             val resolverGuard = FakeDiscoveryService(resolvedLocalFolderPath = "/projects/repo-a")
-            val serviceWithSlug = service(settingsWithSlug, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = resolverGuard)
+            val serviceWithSlug = service(settingsWithSlug, FakeCredentialStore(hasLogin = true), discoveryService = resolverGuard)
 
             assertSoftly {
                 serviceWithSlug.localCheckoutPathForRepo(repoSlug = "repo-a") shouldBe ""
@@ -633,7 +522,7 @@ class DiffyConfigurationServiceTest {
             val settings = settings(workspaceSlug = "my-workspace")
             settings.projectsDirectory = projectsDir.toString()
             val discoveryService = FakeDiscoveryService(resolvedLocalFolderPath = "")
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN
             val path = service.localCheckoutPathForRepo(repoSlug = "repo-a")
@@ -646,28 +535,13 @@ class DiffyConfigurationServiceTest {
         }
 
     @Test
-    fun `resetApiToken - should leave the persisted avatar URL map empty`(): Unit =
-        runBlocking {
-            // GIVEN a stored avatar URL map
-            val settings = settings(workspaceSlug = "my-workspace")
-            settings.replaceRepoAvatarUrls(mapOf("repo-a" to "https://cdn.example.com/a.png"))
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"))
-
-            // WHEN
-            service.resetApiToken()
-
-            // THEN clearWatchedProjects wiped the avatar URLs too
-            settings.repoAvatarUrls shouldBe emptyMap()
-        }
-
-    @Test
     fun `clearProjectsDirectory - should leave the persisted avatar URL map empty`(): Unit =
         runBlocking {
             // GIVEN a stored avatar URL map and a projects directory
             val settings = settings(workspaceSlug = "my-workspace")
             settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
             settings.replaceRepoAvatarUrls(mapOf("repo-a" to "https://cdn.example.com/a.png"))
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN
             service.clearProjectsDirectory()
@@ -683,7 +557,7 @@ class DiffyConfigurationServiceTest {
             val settings = settings()
             val projectsDirectory = Paths.get(RELATIVE_ROOT, "bbcloud").toAbsolutePath().normalize().toString()
             settings.projectsDirectory = projectsDirectory
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN / THEN the work tree root is derived as $projectsDirectory/.worktrees, normalized.
             val expected = Paths.get(projectsDirectory).resolve(".worktrees").toAbsolutePath().normalize().toString()
@@ -695,7 +569,7 @@ class DiffyConfigurationServiceTest {
         runBlocking {
             // GIVEN no projects directory
             val settings = settings()
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN / THEN there is nothing to derive from.
             service.workTreeDirectoryOrNull() shouldBe null
@@ -709,7 +583,7 @@ class DiffyConfigurationServiceTest {
         runBlocking {
             // GIVEN
             val settings = settings()
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN a projects directory is saved
             service.saveProjectsDirectory(absolutePath = projectsDir.toString())
@@ -728,18 +602,10 @@ class DiffyConfigurationServiceTest {
         runBlocking {
             val workspaces = listOf(BitbucketWorkspace(slug = "my-workspace", uuid = null))
             val client = FakeWorkspaceClient(WorkspaceListResult.Success(workspaces))
-            val service = service(settings(), FakeCredentialStore(hasToken = true), client)
+            val service = service(settings(), FakeCredentialStore(hasLogin = true), client)
 
             service.listWorkspaces(apiToken = "token") shouldBe WorkspaceListResult.Success(workspaces)
             client.requestedToken shouldBe "token"
-        }
-
-    @Test
-    fun `storedTokenOrNull - should return the stored token`(): Unit =
-        runBlocking {
-            val service = service(settings(), FakeCredentialStore(hasToken = true, storedToken = "token"))
-
-            service.storedTokenOrNull() shouldBe "token"
         }
 
     @Test
@@ -752,7 +618,7 @@ class DiffyConfigurationServiceTest {
                     WatchedProjectMapping(localFolderPath = "/local/b", remoteRepoSlug = "repo-b", workspace = "my-workspace")
                 )
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // THEN the flat map holds only the current configuration's repositories; the configured slug is attached.
             assertSoftly {
@@ -768,7 +634,7 @@ class DiffyConfigurationServiceTest {
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace"))
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             service.watchedProjectsForCurrentWorkspace() shouldBe emptyList()
         }
@@ -783,7 +649,7 @@ class DiffyConfigurationServiceTest {
                     WatchedProjectMapping(localFolderPath = "", remoteRepoSlug = "repo-%02d".format(index), workspace = "my-workspace", watched = true)
                 }
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN the watched projects are read
             val watchedSlugs = service.watchedProjectsForCurrentWorkspace().filter { it.watched }.map { it.remoteRepoSlug }
@@ -805,7 +671,7 @@ class DiffyConfigurationServiceTest {
                     WatchedProjectMapping(localFolderPath = "", remoteRepoSlug = "repo-%02d".format(index), workspace = "my-workspace", watched = true)
                 }
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN the watched projects are read
             // THEN all 20 stay watched
@@ -822,7 +688,7 @@ class DiffyConfigurationServiceTest {
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(localFolderPath = "/local/old", remoteRepoSlug = "old-repo", workspace = "my-workspace"))
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
             val newMappings = listOf(
                 WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace")
             )
@@ -842,7 +708,7 @@ class DiffyConfigurationServiceTest {
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace"))
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             service.clearWatchedProjects()
 
@@ -858,7 +724,7 @@ class DiffyConfigurationServiceTest {
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace"))
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN
             service.clearProjectsDirectory()
@@ -874,7 +740,7 @@ class DiffyConfigurationServiceTest {
     @Test
     fun `rescanWatchedProjects - should return NotConfigured when not configured`(): Unit =
         runBlocking {
-            val service = service(settings(), FakeCredentialStore(hasToken = false))
+            val service = service(settings(), FakeCredentialStore(hasLogin = false))
 
             val result = service.rescanWatchedProjects()
 
@@ -890,7 +756,7 @@ class DiffyConfigurationServiceTest {
                 WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace")
             )
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.Success(mappings))
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             val result = service.rescanWatchedProjects()
 
@@ -914,7 +780,7 @@ class DiffyConfigurationServiceTest {
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace"))
             )
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.VerifyFailed)
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN a manual Sync (clearFirst = false) hits a transient verify failure
             service.rescanWatchedProjects().shouldBeInstanceOf<WatchedProjectsDiscoveryResult.VerifyFailed>()
@@ -935,7 +801,7 @@ class DiffyConfigurationServiceTest {
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace"))
             )
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.ProjectsDirectoryUnreadable)
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN a manual Sync (clearFirst = false) hits the unreadable directory
             service.rescanWatchedProjects().shouldBeInstanceOf<WatchedProjectsDiscoveryResult.ProjectsDirectoryUnreadable>()
@@ -956,7 +822,7 @@ class DiffyConfigurationServiceTest {
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace", watched = true))
             )
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.VerifyFailed)
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN a clear-first rescan (a config change) hits a verify failure
             service.rescanWatchedProjects(clearFirst = true).shouldBeInstanceOf<WatchedProjectsDiscoveryResult.VerifyFailed>()
@@ -978,7 +844,7 @@ class DiffyConfigurationServiceTest {
                 WatchedProjectMapping(localFolderPath = "/projects/repo-a", remoteRepoSlug = "repo-a", workspace = "my-workspace")
             )
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.Success(scanned))
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN a clear-first rescan runs
             service.rescanWatchedProjects(clearFirst = true)
@@ -996,7 +862,7 @@ class DiffyConfigurationServiceTest {
             val settings = settings(workspaceSlug = "my-workspace")
             settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
             val discoveryService = OverlapDetectingDiscoveryService()
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN two rescans run concurrently
             val first = async { service.rescanWatchedProjects() }
@@ -1012,18 +878,18 @@ class DiffyConfigurationServiceTest {
         }
 
     @Test
-    fun `saveSetup - should empty and rebuild watched projects when workspace slug changes and directory is set`(): Unit =
+    fun `saveOAuthSetup - should empty and rebuild watched projects when workspace slug changes and directory is set`(): Unit =
         runBlocking {
             val settings = settings(workspaceSlug = "old-slug")
             settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "old-slug", watched = true))
             )
-            val store = FakeCredentialStore(hasToken = true, storedToken = "token")
+            val store = FakeCredentialStore(hasLogin = true)
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.Success(emptyList()))
             val service = service(settings, store, discoveryService = discoveryService)
 
-            service.saveSetup(workspaceSlug = "new-slug", apiTokenInput = "")
+            service.saveOAuthSetup(workspaceSlug = "new-slug", tokens = oauthTokens())
 
             assertSoftly {
                 settings.workspaceSlug shouldBe "new-slug"
@@ -1035,19 +901,19 @@ class DiffyConfigurationServiceTest {
         }
 
     @Test
-    fun `saveSetup - should not touch watched projects when neither slug nor token changes`(): Unit =
+    fun `saveOAuthSetup - should not touch watched projects when the slug is unchanged`(): Unit =
         runBlocking {
             val settings = settings(workspaceSlug = "my-workspace")
             settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace", watched = true))
             )
-            val store = FakeCredentialStore(hasToken = true, storedToken = "token")
+            val store = FakeCredentialStore(hasLogin = true)
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.Success(emptyList()))
             val service = service(settings, store, discoveryService = discoveryService)
 
-            // A blank token field keeps the stored token, so this is neither a slug nor a token change.
-            service.saveSetup(workspaceSlug = "my-workspace", apiTokenInput = "")
+            // The slug is unchanged, so signing in again keeps the watched choices.
+            service.saveOAuthSetup(workspaceSlug = "my-workspace", tokens = oauthTokens())
 
             assertSoftly {
                 discoveryService.discoverInvocations shouldBe 0
@@ -1059,71 +925,22 @@ class DiffyConfigurationServiceTest {
         }
 
     @Test
-    fun `saveSetup - should empty watched projects on a slug change even when no projects directory is set`(): Unit =
+    fun `saveOAuthSetup - should empty watched projects on a slug change even when no projects directory is set`(): Unit =
         runBlocking {
             val settings = settings(workspaceSlug = "old-slug")
             settings.replaceWatchedProjects(
                 listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "old-slug", watched = true))
             )
-            val store = FakeCredentialStore(hasToken = true, storedToken = "token")
+            val store = FakeCredentialStore(hasLogin = true)
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.Success(emptyList()))
             val service = service(settings, store, discoveryService = discoveryService)
 
-            service.saveSetup(workspaceSlug = "new-slug", apiTokenInput = "")
+            service.saveOAuthSetup(workspaceSlug = "new-slug", tokens = oauthTokens())
 
             assertSoftly {
                 // With no directory there is nothing to rebuild, so no discovery runs, but the map is still emptied.
                 discoveryService.discoverInvocations shouldBe 0
                 settings.watchedProjects shouldBe emptyList()
-            }
-        }
-
-    @Test
-    fun `saveSetup - should empty and rebuild watched projects when the API token changes`(): Unit =
-        runBlocking {
-            // GIVEN a stored token and watched entries, with the slug left unchanged
-            val settings = settings(workspaceSlug = "my-workspace")
-            settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
-            settings.replaceWatchedProjects(
-                listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace", watched = true))
-            )
-            val store = FakeCredentialStore(hasToken = true, storedToken = "old-token")
-            val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.Success(emptyList()))
-            val service = service(settings, store, discoveryService = discoveryService)
-
-            // WHEN a different, non-empty token is saved (same slug)
-            service.saveSetup(workspaceSlug = "my-workspace", apiTokenInput = "new-token")
-
-            // THEN the token is updated and the map is emptied then rebuilt (the empty scan leaves it empty).
-            assertSoftly {
-                store.savedToken shouldBe "new-token"
-                discoveryService.discoverInvocations shouldBe 1
-                settings.watchedProjects shouldBe emptyList()
-            }
-        }
-
-    @Test
-    fun `saveSetup - should not touch watched projects when the token is unchanged`(): Unit =
-        runBlocking {
-            // GIVEN a stored token and watched entries
-            val settings = settings(workspaceSlug = "my-workspace")
-            settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
-            settings.replaceWatchedProjects(
-                listOf(WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace", watched = true))
-            )
-            val store = FakeCredentialStore(hasToken = true, storedToken = "token")
-            val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.Success(emptyList()))
-            val service = service(settings, store, discoveryService = discoveryService)
-
-            // WHEN the same token is re-entered (not a change) and the slug is unchanged
-            service.saveSetup(workspaceSlug = "my-workspace", apiTokenInput = "token")
-
-            // THEN nothing is rescanned and the map is intact.
-            assertSoftly {
-                discoveryService.discoverInvocations shouldBe 0
-                settings.watchedProjects shouldBe listOf(
-                    WatchedProjectMapping(localFolderPath = "", remoteRepoSlug = "repo-a", workspace = "", watched = true)
-                )
             }
         }
 
@@ -1135,7 +952,7 @@ class DiffyConfigurationServiceTest {
             settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
             val scanned = WatchedProjectMapping(localFolderPath = "/projects/repo-a", remoteRepoSlug = "repo-a", workspace = "my-workspace")
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.Success(listOf(scanned)))
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN
             service.rescanWatchedProjects()
@@ -1160,7 +977,7 @@ class DiffyConfigurationServiceTest {
                     WatchedProjectMapping(localFolderPath = "/local/c", remoteRepoSlug = "repo-c", workspace = "my-workspace", watched = true)
                 )
             )
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN
             val slugs = service.watchedRepoSlugsForCurrentWorkspace()
@@ -1177,7 +994,7 @@ class DiffyConfigurationServiceTest {
             val repoA = WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace", watched = true)
             val repoB = WatchedProjectMapping(localFolderPath = "/local/b", remoteRepoSlug = "repo-b", workspace = "my-workspace", watched = true)
             settings.replaceWatchedProjects(listOf(repoA, repoB))
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN
             service.setWatched(mapping = repoA, watched = false)
@@ -1197,7 +1014,7 @@ class DiffyConfigurationServiceTest {
             val repoA = WatchedProjectMapping(localFolderPath = "/local/a", remoteRepoSlug = "repo-a", workspace = "my-workspace", watched = true)
             val repoB = WatchedProjectMapping(localFolderPath = "/local/b", remoteRepoSlug = "repo-b", workspace = "my-workspace", watched = false)
             settings.replaceWatchedProjects(listOf(repoA, repoB))
-            val service = service(settings, FakeCredentialStore(hasToken = true))
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
 
             // WHEN
             service.setAllWatched(watched = false)
@@ -1221,7 +1038,7 @@ class DiffyConfigurationServiceTest {
             val scannedRepoA = WatchedProjectMapping(localFolderPath = "/projects/repo-a", remoteRepoSlug = "repo-a", workspace = "my-workspace")
             val scannedRepoB = WatchedProjectMapping(localFolderPath = "/projects/repo-b", remoteRepoSlug = "repo-b", workspace = "my-workspace")
             val discoveryService = FakeDiscoveryService(result = WatchedProjectsDiscoveryResult.Success(listOf(scannedRepoA, scannedRepoB)))
-            val service = service(settings, FakeCredentialStore(hasToken = true, storedToken = "token"), discoveryService = discoveryService)
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
 
             // WHEN a manual Sync (clearFirst = false) runs
             service.rescanWatchedProjects()
@@ -1231,6 +1048,100 @@ class DiffyConfigurationServiceTest {
                 WatchedProjectMapping(localFolderPath = "", remoteRepoSlug = "repo-a", workspace = "", watched = true),
                 WatchedProjectMapping(localFolderPath = "", remoteRepoSlug = "repo-b", workspace = "", watched = false)
             )
+        }
+
+    @Test
+    fun `registerCheckedOutProject - should store a resolvable folder as watched with its avatar`(): Unit =
+        runBlocking {
+            // GIVEN a resolvable checkout below the watched limit
+            val settings = settings(workspaceSlug = "my-workspace")
+            settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
+            val discoveryService = FakeDiscoveryService(resolvedLocalFolderPath = "/projects/repo-a")
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
+
+            // WHEN
+            val result = service.registerCheckedOutProject(repoSlug = "repo-a", avatarUrl = "https://cdn.example.com/a.png")
+
+            // THEN
+            assertSoftly {
+                result shouldBe CheckedOutProjectRegistration.Watched
+                settings.watchedProjects.map { mapping -> mapping.remoteRepoSlug to mapping.watched } shouldBe listOf("repo-a" to true)
+                settings.repoAvatarUrls["repo-a"] shouldBe "https://cdn.example.com/a.png"
+            }
+        }
+
+    @Test
+    fun `registerCheckedOutProject - should store the entry unwatched when the watched limit is reached`(): Unit =
+        runBlocking {
+            // GIVEN twenty watched projects
+            val settings = settings(workspaceSlug = "my-workspace")
+            settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
+            val watched = (1..WatchedProjectsViewModel.MAX_WATCHED_PROJECTS).map { index ->
+                WatchedProjectMapping(localFolderPath = "", remoteRepoSlug = "watched-%02d".format(index), workspace = "my-workspace", watched = true)
+            }
+            settings.replaceWatchedProjects(watched)
+            val discoveryService = FakeDiscoveryService(resolvedLocalFolderPath = "/projects/new-repo")
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
+
+            // WHEN
+            val result = service.registerCheckedOutProject(repoSlug = "new-repo", avatarUrl = null)
+
+            // THEN
+            assertSoftly {
+                result shouldBe CheckedOutProjectRegistration.AddedUnwatchedLimitReached
+                settings.watchedProjects.single { mapping -> mapping.remoteRepoSlug == "new-repo" }.watched shouldBe false
+            }
+        }
+
+    @Test
+    fun `registerCheckedOutProject - should replace an existing unwatched entry instead of duplicating it`(): Unit =
+        runBlocking {
+            // GIVEN an unwatched entry for the slug
+            val settings = settings(workspaceSlug = "my-workspace")
+            settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
+            settings.replaceWatchedProjects(
+                listOf(WatchedProjectMapping(localFolderPath = "", remoteRepoSlug = "repo-a", workspace = "my-workspace", watched = false))
+            )
+            val discoveryService = FakeDiscoveryService(resolvedLocalFolderPath = "/projects/repo-a")
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = discoveryService)
+
+            // WHEN
+            service.registerCheckedOutProject(repoSlug = "repo-a", avatarUrl = null)
+
+            // THEN
+            settings.watchedProjects.map { mapping -> mapping.remoteRepoSlug to mapping.watched } shouldBe listOf("repo-a" to true)
+        }
+
+    @Test
+    fun `registerCheckedOutProject - should store nothing when the folder cannot be resolved`(): Unit =
+        runBlocking {
+            // GIVEN a folder that is not a Bitbucket checkout
+            val settings = settings(workspaceSlug = "my-workspace")
+            settings.projectsDirectory = Paths.get("target/test-projects").toAbsolutePath().normalize().toString()
+            val service = service(settings, FakeCredentialStore(hasLogin = true), discoveryService = FakeDiscoveryService(resolvedLocalFolderPath = ""))
+
+            // WHEN
+            val result = service.registerCheckedOutProject(repoSlug = "repo-a", avatarUrl = null)
+
+            // THEN
+            assertSoftly {
+                result shouldBe CheckedOutProjectRegistration.NotResolvable
+                settings.watchedProjects shouldBe emptyList()
+            }
+        }
+
+    @Test
+    fun `registerCheckedOutProject - should report NotConfigured without a projects directory`(): Unit =
+        runBlocking {
+            // GIVEN no projects directory
+            val settings = settings(workspaceSlug = "my-workspace")
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
+
+            // WHEN
+            val result = service.registerCheckedOutProject(repoSlug = "repo-a", avatarUrl = null)
+
+            // THEN
+            result shouldBe CheckedOutProjectRegistration.NotConfigured
         }
 
     private fun service(
@@ -1258,10 +1169,10 @@ class DiffyConfigurationServiceTest {
         )
     }
 
-    /** A provider that mirrors the fake store: an OAuth token wins, otherwise the stored API token. */
+    /** A provider that mirrors the fake store: the stored OAuth access token, or null. */
     private class FakeAccessTokenProvider(private val store: FakeCredentialStore) : DiffyAccessTokenProvider {
         override suspend fun bearerTokenOrNull(): String? {
-            return store.getOAuthTokens()?.accessToken ?: store.getToken()
+            return store.getOAuthTokens()?.accessToken
         }
 
         override suspend fun oauthAccessTokenOrNull(): String? {
@@ -1304,36 +1215,16 @@ class DiffyConfigurationServiceTest {
         }
     }
 
-    private class FakeCredentialStore(private var hasToken: Boolean, storedToken: String? = null) : DiffyCredentialStore {
-        // When a token is present but no explicit value was given, use a non-blank default so isConfigured (which now
-        // verifies a usable credential through the validator) sees a working token. A store with no token keeps an
-        // empty value so an early-failing save leaves nothing behind.
-        var savedToken: String = storedToken ?: if (hasToken) DEFAULT_STORED_TOKEN else ""
-        var saveInvocations: Int = 0
-        var clearInvocations: Int = 0
-
-        var oauthTokens: OAuthTokens? = null
+    private class FakeCredentialStore(hasLogin: Boolean) : DiffyCredentialStore {
+        var oauthTokens: OAuthTokens? = if (hasLogin) defaultOAuthTokens() else null
         var saveOAuthInvocations: Int = 0
         var clearOAuthInvocations: Int = 0
 
-        override suspend fun hasToken(): Boolean {
-            return hasToken
-        }
+        /** Whether an API token left behind by an older plugin version is still in the store. */
+        var legacyApiTokenPresent: Boolean = false
 
-        override suspend fun getToken(): String? {
-            return savedToken.takeIf { hasToken && it.isNotBlank() }
-        }
-
-        override suspend fun saveToken(token: String) {
-            saveInvocations++
-            savedToken = token
-            hasToken = true
-        }
-
-        override suspend fun clearToken() {
-            clearInvocations++
-            savedToken = ""
-            hasToken = false
+        override suspend fun clearLegacyApiToken() {
+            legacyApiTokenPresent = false
         }
 
         override suspend fun getOAuthTokens(): OAuthTokens? {
@@ -1350,10 +1241,12 @@ class DiffyConfigurationServiceTest {
             oauthTokens = null
         }
 
-        companion object {
-            // A non-blank default so hasToken=true implies a usable token, matching what isConfigured now verifies
-            // through the credential validator (a blank token is treated as not present).
-            private const val DEFAULT_STORED_TOKEN = "token"
+        private fun defaultOAuthTokens(): OAuthTokens {
+            return OAuthTokens(
+                accessToken = "oauth-access",
+                refreshToken = "oauth-refresh",
+                expiresAt = Clock.System.now() + kotlin.time.Duration.parse("2h")
+            )
         }
     }
 

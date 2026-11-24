@@ -20,12 +20,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.review.WorktreeTodoBannerUiState
@@ -44,14 +40,8 @@ import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import javax.swing.Icon
 
-private val ROW_HORIZONTAL_PADDING = 12.dp
-private val ROW_VERTICAL_PADDING = 6.dp
-private val BORDER_WIDTH = 1.dp
 private val SEGMENT_GAP = 6.dp
 private val REPO_ICON_SIZE = 16.dp
-
-/** The gap drawn below the blue bordered box so the bar is separated from the review bar or editor below it. */
-private val BANNER_BOTTOM_GAP = 5.dp
 
 /** The placeholder a branch chip shows while the work tree binding has not resolved the branch names yet. */
 private const val BRANCH_PLACEHOLDER = "\u2026"
@@ -226,30 +216,6 @@ private fun RowScope.WorktreePrViewBranchSection(sourceBranch: String?, destinat
         BranchChip(
             text = destinationBranch ?: BRANCH_PLACEHOLDER,
             modifier = Modifier.weight(weight = 1f, fill = false)
-        )
-    }
-}
-
-/**
- * Draws a [width]-thick [color] line along the top and bottom edges of the element, leaving the left and right edges
- * open, so the bar reads as a horizontal band rather than a four-sided boxed card. The line is drawn centered on each
- * edge, mirroring how [androidx.compose.foundation.border] strokes a full box.
- */
-private fun Modifier.topAndBottomBorder(width: Dp, color: Color): Modifier {
-    return drawBehind {
-        val strokeWidth = width.toPx()
-        val halfStroke = strokeWidth / 2
-        drawLine(
-            color = color,
-            start = Offset(x = 0f, y = halfStroke),
-            end = Offset(x = size.width, y = halfStroke),
-            strokeWidth = strokeWidth
-        )
-        drawLine(
-            color = color,
-            start = Offset(x = 0f, y = size.height - halfStroke),
-            end = Offset(x = size.width, y = size.height - halfStroke),
-            strokeWidth = strokeWidth
         )
     }
 }

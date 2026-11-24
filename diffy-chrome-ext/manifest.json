@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Diffy - Bitbucket PR Review",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "Adds an Open in IntelliJ icon to Bitbucket pull requests and opens them in a git worktree in a running IntelliJ IDE.",
   "minimum_chrome_version": "116",
   "background": {

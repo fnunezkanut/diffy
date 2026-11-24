@@ -35,7 +35,8 @@ import javax.swing.JComponent
  * bar of that file. The editor notification providers skip the diff tabs so the bars do not appear twice.
  *
  * The bars are added to the request once per kind, because the platform renders the providers of a request for every
- * viewer it creates. The blue bar is added first, so it renders above the review bar.
+ * viewer it creates. The platform orders them by weight: the blue bar, then the orange "not in the pull request yet"
+ * bar (shown for a file with unpushed commits or uncommitted changes, with Commit and Push links), then the review bar.
  *
  * The diff review bar also offers previous and next unviewed-file navigation within the diff chain, in chain order.
  * Checking "Viewed" in the diff review bar moves the chain to the next unviewed file.
@@ -59,11 +60,31 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
                 request
             )
         }
+        if (request.getUserData(UNPUSHED_BAR_ATTACHED_KEY) != true) {
+            request.putUserData(UNPUSHED_BAR_ATTACHED_KEY, true)
+            val relativePath = relativePathOf(project = project, request = request)
+            DiffUtil.addNotification(
+                DiffNotificationProvider { diffViewer ->
+                    WorktreeUnpushedChangesBarDiffNotification.create(project = project, viewer = diffViewer, relativePath = relativePath)
+                },
+                request
+            )
+        }
         if (request.getUserData(REVIEW_BAR_ATTACHED_KEY) != true) {
             val provider = reviewBarProviderFor(project = project, request = request, diffContext = context) ?: return
             request.putUserData(REVIEW_BAR_ATTACHED_KEY, true)
             DiffUtil.addNotification(provider, request)
         }
+    }
+
+    /** The normalized project-relative path of the change of [request], or null when the request has no change. */
+    private fun relativePathOf(project: Project, request: DiffRequest): String? {
+        val change = request.getUserData(ChangeDiffRequestProducer.CHANGE_KEY) ?: return null
+        val relativePath = PullRequestPathMatcher.relativeProjectPath(
+            projectBasePath = project.basePath,
+            absoluteOrRelativePath = ChangesUtil.getFilePath(change).path
+        )
+        return PullRequestPathMatcher.normalize(relativePath)
     }
 
     /**
@@ -283,6 +304,7 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
     companion object {
         private val LOG = logger<PullRequestDiffBarsDiffExtension>()
         private val BLUE_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.BlueBarAttached")
+        private val UNPUSHED_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.UnpushedBarAttached")
         private val REVIEW_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.ReviewBarAttached")
     }
 }

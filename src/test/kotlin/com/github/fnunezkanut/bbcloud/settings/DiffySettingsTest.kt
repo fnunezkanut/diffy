@@ -352,4 +352,36 @@ class DiffySettingsTest {
             missing shouldBe DiffyToolWindowTab.PullRequests
         }
     }
+
+    @Test
+    fun `editableSourceSideInDiffs - should default to true and round-trip`() {
+        // GIVEN
+        val settings = DiffySettings()
+        val initial = settings.editableSourceSideInDiffs
+
+        // WHEN
+        settings.editableSourceSideInDiffs = false
+
+        // THEN
+        assertSoftly {
+            initial shouldBe true
+            settings.editableSourceSideInDiffs shouldBe false
+        }
+    }
+
+    @Test
+    fun `notificationsFilterOutBots - should default to false and round-trip`() {
+        // GIVEN
+        val settings = DiffySettings()
+        val initial = settings.notificationsFilterOutBots
+
+        // WHEN
+        settings.notificationsFilterOutBots = true
+
+        // THEN
+        assertSoftly {
+            initial shouldBe false
+            settings.notificationsFilterOutBots shouldBe true
+        }
+    }
 }

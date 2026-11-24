@@ -12,11 +12,7 @@ Atlassian does not currently offer a public notification API. Instead, a browser
 
 ### Chrome
 
-The extension is still in development and is not yet on the Chrome Web Store. Until it is published, load it manually:
-
-1. Open `chrome://extensions`.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and select the `diffy-chrome-ext/` directory of the [Diffy repository](https://github.com/fnunezkanut/diffy/tree/main/diffy-chrome-ext).
+[Install the extension from Chrome Web Store](https://chromewebstore.google.com/detail/diffy-bitbucket-pr-review/pkeoedpgepmldoikeedkchmhkgjpelln).
 
 ## How it works
 
@@ -26,4 +22,12 @@ The extension syncs notifications in two ways:
 
 * **Manually:** click the **Diffy sync** button in the bottom left corner of any Bitbucket page.
 * **Automatically:** every 15 minutes.
+
+### Why not use a notifications API?
+Atlassian do not provide a public Notifications for Bitbucket at this time :(
+
+
+## Filters
+
+The toolbar of the Notifications tab has two remembered checkboxes: **Filter out bots** hides notifications from bots, and **Show only Unread** lists only unread notifications. The unread counter in the tab title ignores both filters.
 

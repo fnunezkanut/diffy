@@ -19,7 +19,7 @@ import org.jetbrains.io.response
  * The `GET /api/diffy/open` ping cannot do this on its own: Chrome omits the `Origin` header on GET requests from an
  * extension that holds host permissions for the target, so the ping cannot tell the diffy extension apart and withholds
  * the workspace. Chrome does send `Origin` on POST, so this endpoint answers the same body as [DiffyPingBody], with
- * `workspace` included only for [DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN].
+ * `workspace` included only for [DiffyExternalOrigins.ALLOWED_CHROME_EXTENSION_ORIGINS].
  */
 class DiffyWorkspaceRestService : RestService() {
     override fun getServiceName(): String {
@@ -50,7 +50,7 @@ class DiffyWorkspaceRestService : RestService() {
             LOG.info("Answering the workspace request from the diffy extension: workspaceConfigured=${workspace != null}")
         } else {
             LOG.info(
-                "Workspace request from origin $origin, expected ${DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN}; " +
+                "Workspace request from origin $origin, expected ${DiffyExternalOrigins.expectedOriginsDescription()}; " +
                     "the workspace is not disclosed"
             )
         }

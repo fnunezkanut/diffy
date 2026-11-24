@@ -37,8 +37,16 @@ data class WatchedProjectsUiState(
     /** Session-only filter text for the table; [rows] stays complete and [visibleRows] applies this query. */
     val searchQuery: String = "",
     /** Persisted "Show only watched" checkbox; seeded by the ViewModel from the data source. */
-    val showOnlyWatched: Boolean = false
+    val showOnlyWatched: Boolean = false,
+    /** True while a Checkout Project flow runs; Sync, prune, and another checkout are disabled meanwhile. */
+    val checkoutInProgress: Boolean = false
 ) {
+    /** Checkout Project is offered while no Sync, prune, or other checkout runs. */
+    val checkoutEnabled: Boolean
+        get() {
+            return !checkoutInProgress && syncEnabled && pruneEnabled
+        }
+
     /** The rows that are watched (when [showOnlyWatched]) and match [searchQuery], in the same order as [rows]. */
     val visibleRows: List<WatchedProjectRow>
         get() {

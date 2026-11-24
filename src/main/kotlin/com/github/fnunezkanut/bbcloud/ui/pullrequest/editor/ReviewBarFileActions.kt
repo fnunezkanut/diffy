@@ -3,6 +3,7 @@ package com.github.fnunezkanut.bbcloud.ui.pullrequest.editor
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestPathMatcher
 import com.github.fnunezkanut.bbcloud.git.BranchDiffResult
 import com.github.fnunezkanut.bbcloud.git.DiffyPullRequestBranchDiffService
+import com.github.fnunezkanut.bbcloud.review.DiffyLocalBranchStateService
 import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestChangeDiffOpener
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestCommentFileOpener
@@ -35,10 +36,12 @@ internal object ReviewBarFileActions {
         }
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
+                val branchStateService = DiffyLocalBranchStateService.getInstance(project)
                 val result = DiffyPullRequestBranchDiffService().loadPullRequestChanges(
                     project = project,
                     destinationBranch = binding.destinationBranch,
-                    sourceBranch = binding.sourceBranch
+                    sourceBranch = binding.sourceBranch,
+                    editableSourceSide = branchStateService.editableSourceSideFor(localBranchState = branchStateService.state.value)
                 )
                 if (result !is BranchDiffResult.Success) {
                     LOG.info("Cannot show the diff of '$relativePath': the changes of the pull request could not be loaded")
