@@ -15,7 +15,6 @@ internal object AuthenticationStatusText {
     fun build(method: DiffyAuthenticationMethod, workspaceSlug: String?): String {
         val methodName = when (method) {
             DiffyAuthenticationMethod.None -> return DiffyBundle.message("setup.authentication.status.none")
-            DiffyAuthenticationMethod.ApiToken -> DiffyBundle.message("setup.authentication.method.apiToken")
             DiffyAuthenticationMethod.OAuth -> DiffyBundle.message("setup.authentication.method.oauth")
         }
         return if (workspaceSlug.isNullOrBlank()) {

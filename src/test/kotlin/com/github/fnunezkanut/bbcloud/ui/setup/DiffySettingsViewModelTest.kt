@@ -62,94 +62,6 @@ class DiffySettingsViewModelTest {
     }
 
     @Nested
-    inner class DialogLifecycle {
-        @Test
-        fun `onApiTokenDialogOpened - should clear token text, error and success message`() {
-            // GIVEN
-            val viewModel = createViewModel()
-            viewModel.state.value = viewModel.state.value.copy(
-                tokenFieldText = "typed",
-                errorMessage = "boom",
-                successMessage = "ok"
-            )
-
-            // WHEN
-            viewModel.onApiTokenDialogOpened()
-
-            // THEN
-            assertSoftly {
-                viewModel.state.value.tokenFieldText shouldBe ""
-                viewModel.state.value.errorMessage shouldBe null
-                viewModel.state.value.successMessage shouldBe null
-            }
-        }
-
-        @Test
-        fun `onApiTokenDialogClosed - should clear token text and error`() {
-            // GIVEN
-            val viewModel = createViewModel()
-            viewModel.state.value = viewModel.state.value.copy(
-                tokenFieldText = "half-typed",
-                errorMessage = "boom"
-            )
-
-            // WHEN
-            viewModel.onApiTokenDialogClosed()
-
-            // THEN
-            assertSoftly {
-                viewModel.state.value.tokenFieldText shouldBe ""
-                viewModel.state.value.errorMessage shouldBe null
-            }
-        }
-    }
-
-    @Nested
-    inner class SaveListener {
-        @Test
-        fun `persist success - should invoke the api token save listener once`() {
-            // GIVEN
-            every { configurationService.workspaceSlugOrNull() } returns "acme"
-            coEvery { configurationService.storedTokenOrNull() } returns null
-            coEvery { configurationService.listWorkspaces(any()) } returns
-                WorkspaceListResult.Success(listOf(BitbucketWorkspace(slug = "acme", uuid = null)))
-            coEvery { configurationService.saveSetup(any(), any()) } returns Result.success(Unit)
-            val viewModel = createViewModel()
-            var invocations = 0
-            viewModel.setApiTokenSaveListener { invocations++ }
-            viewModel.setTokenFieldText("a-token")
-
-            // WHEN
-            viewModel.onSaveClicked()
-
-            // THEN
-            invocations shouldBe 1
-        }
-
-        @Test
-        fun `persist success after dialog closed - should not invoke a cleared listener`() {
-            // GIVEN
-            every { configurationService.workspaceSlugOrNull() } returns "acme"
-            coEvery { configurationService.storedTokenOrNull() } returns null
-            coEvery { configurationService.listWorkspaces(any()) } returns
-                WorkspaceListResult.Success(listOf(BitbucketWorkspace(slug = "acme", uuid = null)))
-            coEvery { configurationService.saveSetup(any(), any()) } returns Result.success(Unit)
-            val viewModel = createViewModel()
-            var invocations = 0
-            viewModel.setApiTokenSaveListener { invocations++ }
-            // The dialog closed before the save completed, clearing the listener.
-            viewModel.onApiTokenDialogClosed()
-            viewModel.setTokenFieldText("a-token")
-
-            // WHEN
-            viewModel.onSaveClicked()
-
-            // THEN
-            invocations shouldBe 0
-        }
-    }
-
-    @Nested
     inner class WorkspaceSlug {
         @Test
         fun `bindSettingsState - should populate workspaceSlug and working method from configuration service`() {
@@ -160,15 +72,14 @@ class DiffySettingsViewModelTest {
 
             // WHEN
             viewModel.bindSettingsState(
-                hasStoredToken = true,
-                hasOAuthTokens = false,
-                workingMethod = DiffyAuthenticationMethod.ApiToken
+                hasOAuthTokens = true,
+                workingMethod = DiffyAuthenticationMethod.OAuth
             )
 
             // THEN
             assertSoftly {
                 viewModel.state.value.workspaceSlug shouldBe "acme"
-                viewModel.state.value.authenticationMethod shouldBe DiffyAuthenticationMethod.ApiToken
+                viewModel.state.value.authenticationMethod shouldBe DiffyAuthenticationMethod.OAuth
             }
         }
 
@@ -182,9 +93,8 @@ class DiffySettingsViewModelTest {
 
             // WHEN
             viewModel.bindSettingsState(
-                hasStoredToken = true,
-                hasOAuthTokens = false,
-                workingMethod = DiffyAuthenticationMethod.ApiToken
+                hasOAuthTokens = true,
+                workingMethod = DiffyAuthenticationMethod.OAuth
             )
 
             // THEN
@@ -195,33 +105,13 @@ class DiffySettingsViewModelTest {
         }
 
         @Test
-        fun `persist success - should set workspaceSlug to the saved workspace`() {
-            // GIVEN
-            every { configurationService.workspaceSlugOrNull() } returns "acme"
-            coEvery { configurationService.storedTokenOrNull() } returns null
-            coEvery { configurationService.listWorkspaces(any()) } returns
-                WorkspaceListResult.Success(listOf(BitbucketWorkspace(slug = "acme", uuid = null)))
-            coEvery { configurationService.saveSetup(any(), any()) } returns Result.success(Unit)
-            val viewModel = createViewModel()
-            viewModel.setTokenFieldText("a-token")
-
-            // WHEN
-            viewModel.onSaveClicked()
-
-            // THEN
-            assertSoftly {
-                viewModel.state.value.workspaceSlug shouldBe "acme"
-                viewModel.state.value.hasStoredToken shouldBe true
-            }
-        }
-
-        @Test
         fun `onResetClicked - should set authenticationMethod to None and clear workspaceSlug`() {
             // GIVEN
             coEvery { configurationService.resetAll() } returns Unit
             val viewModel = createViewModel(confirmReset = { true })
             viewModel.state.value = viewModel.state.value.copy(
-                hasStoredToken = true,
+                hasOAuthTokens = true,
+                workingMethod = DiffyAuthenticationMethod.OAuth,
                 workspaceSlug = "acme"
             )
 
@@ -231,7 +121,7 @@ class DiffySettingsViewModelTest {
             // THEN
             assertSoftly {
                 viewModel.state.value.workspaceSlug shouldBe null
-                viewModel.state.value.hasStoredToken shouldBe false
+                viewModel.state.value.hasOAuthTokens shouldBe false
                 viewModel.state.value.authenticationMethod shouldBe DiffyAuthenticationMethod.None
             }
             verify { oauthLoginService.cancel() }

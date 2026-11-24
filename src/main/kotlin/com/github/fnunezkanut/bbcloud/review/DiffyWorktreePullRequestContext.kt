@@ -23,6 +23,7 @@ import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.BranchDiffResult
 import com.github.fnunezkanut.bbcloud.git.DiffyPrBranchSyncService
 import com.github.fnunezkanut.bbcloud.git.DiffyPullRequestBranchDiffService
+import com.github.fnunezkanut.bbcloud.git.EditableSourceSide
 import com.github.fnunezkanut.bbcloud.git.FileLineCount
 import com.github.fnunezkanut.bbcloud.git.WorktreeHead
 import com.github.fnunezkanut.bbcloud.project.PullRequestWorktreeLayout
@@ -769,7 +770,8 @@ class DiffyWorktreePullRequestContext(private val project: Project, private val 
             branchDiffService.loadPullRequestChanges(
                 project = project,
                 destinationBranch = destinationBranch,
-                sourceBranch = sourceBranch
+                sourceBranch = sourceBranch,
+                editableSourceSide = EditableSourceSide.DISABLED
             )
         }
         if (result !is BranchDiffResult.Success) {

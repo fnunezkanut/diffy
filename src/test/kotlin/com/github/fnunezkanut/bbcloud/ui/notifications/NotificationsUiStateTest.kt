@@ -391,6 +391,81 @@ class NotificationsUiStateTest {
         }
     }
 
+    @Nested
+    inner class BotFilter {
+        private fun stateOf(filterOutBots: Boolean, showOnlyUnread: Boolean = false): NotificationsUiState {
+            val notifications = listOf(
+                DiffyStoredNotification(event = browserEvent(id = "bot-unread", actorIsBot = true), unread = true),
+                DiffyStoredNotification(event = browserEvent(id = "human-read"), unread = false),
+                DiffyStoredNotification(event = browserEvent(id = "human-unread"), unread = true)
+            )
+            val rows = buildNotificationRows(
+                notifications = notifications,
+                pullRequests = emptyList(),
+                timeZone = TimeZone.UTC,
+                labels = labels
+            )
+            return NotificationsUiState(
+                rows = rows,
+                hasData = true,
+                lastUpdatedText = "",
+                showOnlyUnread = showOnlyUnread,
+                filterOutBots = filterOutBots
+            )
+        }
+
+        @Test
+        fun `visibleRows - should hide bot rows when the filter is on`() {
+            // GIVEN / WHEN
+            val state = stateOf(filterOutBots = true)
+
+            // THEN
+            state.visibleRows.map { row -> row.id }.toSet() shouldBe setOf("human-read", "human-unread")
+        }
+
+        @Test
+        fun `visibleRows - should show every row when the filter is off`() {
+            // GIVEN / WHEN
+            val state = stateOf(filterOutBots = false)
+
+            // THEN
+            state.visibleRows.size shouldBe 3
+        }
+
+        @Test
+        fun `visibleRows - should combine with the unread filter`() {
+            // GIVEN / WHEN
+            val state = stateOf(filterOutBots = true, showOnlyUnread = true)
+
+            // THEN
+            state.visibleRows.map { row -> row.id } shouldBe listOf("human-unread")
+        }
+
+        @Test
+        fun `unreadCount - should still count hidden bot rows`() {
+            // GIVEN / WHEN
+            val state = stateOf(filterOutBots = true)
+
+            // THEN
+            state.unreadCount shouldBe 2
+        }
+
+        @Test
+        fun `buildNotificationRows - should mirror actorIsBot in isBot`() {
+            // GIVEN / WHEN
+            val rows = rowsOf(
+                browserEvent(id = "bot", actorIsBot = true),
+                browserEvent(id = "human", actorIsBot = false)
+            ).associateBy { row -> row.id }
+
+            // THEN
+            assertSoftly {
+                rows.getValue("bot").isBot shouldBe true
+                rows.getValue("human").isBot shouldBe false
+            }
+        }
+    }
+
     @Test
     fun `categoryBundleKey - should cover every category`() {
         // GIVEN every category

@@ -11,13 +11,19 @@ import git4idea.commands.Git
 import git4idea.commands.GitCommand
 import git4idea.commands.GitHandlerInputProcessorUtil
 import git4idea.commands.GitLineHandler
-import git4idea.repo.GitRemote
 import git4idea.repo.GitRepository
 import java.nio.charset.StandardCharsets
 import kotlin.time.TimeSource
 
 class DiffyPullRequestBranchDiffService {
-    fun loadPullRequestChanges(project: Project, destinationBranch: String, sourceBranch: String): BranchDiffResult {
+    /**
+     * Loads the changes of the pull request as the three-dot diff between [destinationBranch] and [sourceBranch].
+     *
+     * With [editableSourceSide] allowed, and when `HEAD` is at or ahead of the source commit, the after-revision of
+     * each change is the work tree file, so the right side of the diff is editable. This function blocks and must be
+     * called on [kotlinx.coroutines.Dispatchers.IO].
+     */
+    fun loadPullRequestChanges(project: Project, destinationBranch: String, sourceBranch: String, editableSourceSide: EditableSourceSide): BranchDiffResult {
         val repository = ProjectGitRepositoryLookup.awaitRepository(project) ?: run {
             LOG.info("Cannot load pull request file changes: no Git repository for project ${project.name}")
             return BranchDiffResult.NoRepository
@@ -55,8 +61,15 @@ class DiffyPullRequestBranchDiffService {
                 "Loaded ${changes.size} pull request file changes between $resolvedDestination and $resolvedSource " +
                     "in ${repository.root.path}"
             )
+            val resultChanges = if (usesWorkingTreeSourceSide(project, repository, resolvedSource, editableSourceSide)) {
+                WorkingTreeSourceChanges.withWorkingTreeSourceSide(changes = changes).also { mapped ->
+                    LOG.debug("Mapped ${mapped.size} change(s) to the work tree source side")
+                }
+            } else {
+                changes
+            }
             BranchDiffResult.Success(
-                changes = changes,
+                changes = resultChanges,
                 destinationRef = resolvedDestination,
                 sourceRef = resolvedSource
             )
@@ -64,6 +77,29 @@ class DiffyPullRequestBranchDiffService {
             LOG.debug("Git three-dot diff failed between $resolvedDestination and $resolvedSource", exception)
             BranchDiffResult.Failed(message = exception.message.orEmpty(), cause = exception)
         }
+    }
+
+    private fun usesWorkingTreeSourceSide(
+        project: Project,
+        repository: GitRepository,
+        resolvedSource: String,
+        editableSourceSide: EditableSourceSide
+    ): Boolean {
+        if (!editableSourceSide.allowed) {
+            return false
+        }
+        val sourceRevision = resolveRevision(project = project, refName = resolvedSource) ?: return false
+        val state = editableSourceSide.localBranchState
+        val allowed = if (state != null) {
+            state.allowsEditableSourceSide(diffSourceRevision = sourceRevision)
+        } else {
+            // No remote ref to compare with: editing stays possible when HEAD is exactly the source commit.
+            repository.currentRevision.equals(sourceRevision, ignoreCase = true)
+        }
+        if (!allowed) {
+            LOG.info("The source side of the pull request diffs stays read-only: HEAD is behind or diverged from the source commit")
+        }
+        return allowed
     }
 
     /**
@@ -414,28 +450,13 @@ class DiffyPullRequestBranchDiffService {
      * compared the way Bitbucket does, against the remote).
      */
     private fun resolveBranchRefFetchingIfMissing(project: Project, repository: GitRepository, branchName: String, preferRemote: Boolean): String? {
-        val existing = resolveBranchRef(repository = repository, branchName = branchName, preferRemote = preferRemote)
+        val existing = GitBranchRefResolver.resolve(repository = repository, branchName = branchName, preferRemote = preferRemote)
         if (existing != null) {
             return existing
         }
         fetchBranch(project = project, repository = repository, branchName = branchName)
         repository.update()
-        return resolveBranchRef(repository = repository, branchName = branchName, preferRemote = preferRemote)
-    }
-
-    private fun resolveBranchRef(repository: GitRepository, branchName: String, preferRemote: Boolean): String? {
-        val remoteName = ProjectGitRepositoryLookup.selectRemote(repository)?.name ?: GitRemote.ORIGIN
-        val candidates = GitBranchRefCandidates.candidates(
-            branchName = branchName,
-            remoteName = remoteName,
-            preferRemote = preferRemote
-        )
-        for (candidate in candidates) {
-            if (repository.branches.findBranchByName(candidate) != null) {
-                return candidate
-            }
-        }
-        return null
+        return GitBranchRefResolver.resolve(repository = repository, branchName = branchName, preferRemote = preferRemote)
     }
 
     private fun fetchBranch(project: Project, repository: GitRepository, branchName: String) {

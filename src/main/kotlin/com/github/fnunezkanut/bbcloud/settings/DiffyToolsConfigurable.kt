@@ -34,7 +34,7 @@ import javax.swing.SwingUtilities
  * The Settings > Tools > Diffy - Bitbucket PR Review page. It hosts the plugin settings screen: projects directory,
  * authentication, a link to the Watched Projects tab, and reset.
  *
- * Every control persists its change immediately (the API token Save, the OAuth login, the directory chooser, and
+ * Every control persists its change immediately (the OAuth login, the directory chooser, and
  * Reset), so the page never reports itself modified and [apply] has nothing to do. Each change, and closing the page,
  * refreshes the tool window tab that is currently shown.
  *
@@ -93,17 +93,15 @@ class DiffyToolsConfigurable(private val project: Project) :
         refreshToolWindow()
     }
 
-    /** Reloads the page from the stored state: the token outline, OAuth status, and projects-directory status. */
+    /** Reloads the page from the stored state: the OAuth status and projects-directory status. */
     private fun bindSettingsState() {
         val scope = coroutineScope ?: return
         val settingsViewModel = viewModel ?: return
         scope.launch {
-            val hasStoredToken = configurationService.hasStoredToken()
             val hasOAuthTokens = configurationService.hasStoredOAuthTokens()
             val workingMethod = configurationService.authenticationMethod()
             ApplicationManager.getApplication().invokeLater {
                 settingsViewModel.bindSettingsState(
-                    hasStoredToken = hasStoredToken,
                     hasOAuthTokens = hasOAuthTokens,
                     workingMethod = workingMethod
                 )

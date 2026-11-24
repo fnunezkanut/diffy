@@ -5,6 +5,7 @@ import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestFileCommentCounts
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestPathMatcher
 import com.github.fnunezkanut.bbcloud.git.BranchDiffResult
 import com.github.fnunezkanut.bbcloud.git.DiffyPullRequestBranchDiffService
+import com.github.fnunezkanut.bbcloud.review.DiffyLocalBranchStateService
 import com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedFiles
 import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestChangeDiffOpener
@@ -27,6 +28,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.time.TimeSource
@@ -77,6 +81,25 @@ class WorktreePullRequestChangesToolWindowService(private val project: Project, 
             GitRepository.GIT_REPO_CHANGE,
             GitRepositoryChangeListener { repository -> onRepositoryChanged(repository = repository) }
         )
+        observeUncommittedPaths()
+    }
+
+    /**
+     * Reloads the tree when the set of uncommitted files changes, so the right side of the diffs follows the work tree.
+     * The reload itself refreshes the branch state, and an unchanged set emits nothing, so this cannot loop.
+     */
+    private fun observeUncommittedPaths() {
+        coroutineScope.launch {
+            DiffyLocalBranchStateService.getInstance(project).state
+                .map { state -> state?.uncommittedPaths }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect {
+                    if (!sourceBranch.isNullOrBlank() && !destinationBranch.isNullOrBlank()) {
+                        reload(reason = "uncommitted files changed")
+                    }
+                }
+        }
     }
 
     /** Shows the changed files of the pull request between [destinationBranch] and [sourceBranch] and reloads them. */
@@ -85,6 +108,7 @@ class WorktreePullRequestChangesToolWindowService(private val project: Project, 
         this.currentPullRequestId = pullRequestId
         this.destinationBranch = destinationBranch
         this.sourceBranch = sourceBranch
+        DiffyLocalBranchStateService.getInstance(project).ensureStarted()
         updateTabTitle()
         reload(reason = "show changed files")
     }
@@ -111,11 +135,16 @@ class WorktreePullRequestChangesToolWindowService(private val project: Project, 
                 val result = withContext(Dispatchers.IO) {
                     // Load the diff and the per-file line counts in parallel, so the tree shows the +N -N badges without
                     // waiting on two sequential Git commands.
+                    // Refresh the local branch state first, so the editable-diff decision never reads a stale state.
+                    val branchStateService = DiffyLocalBranchStateService.getInstance(project)
+                    val localBranchState = branchStateService.refreshNow(reason = reason)
+                    val editableSourceSide = branchStateService.editableSourceSideFor(localBranchState = localBranchState)
                     val changesDeferred = async {
                         diffService.loadPullRequestChanges(
                             project = project,
                             destinationBranch = destination,
-                            sourceBranch = source
+                            sourceBranch = source,
+                            editableSourceSide = editableSourceSide
                         )
                     }
                     val lineCountsDeferred = async {

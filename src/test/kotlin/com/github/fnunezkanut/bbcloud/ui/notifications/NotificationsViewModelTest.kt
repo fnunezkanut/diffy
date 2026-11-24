@@ -32,6 +32,7 @@ class NotificationsViewModelTest {
     private var zone: TimeZone = TimeZone.UTC
     private val labelRequests = AtomicInteger(0)
     private val publishedUnreadCounts = mutableListOf<Int>()
+    private val savedFilterOutBots = mutableListOf<Boolean>()
 
     private val viewModel = NotificationsViewModel(
         stored = stored,
@@ -55,6 +56,7 @@ class NotificationsViewModelTest {
             )
         },
         ioDispatcher = Dispatchers.Unconfined,
+        saveFilterOutBots = { value -> savedFilterOutBots.add(value) },
         onUnreadCountChanged = { count -> publishedUnreadCounts.add(count) }
     )
 
@@ -366,5 +368,87 @@ class NotificationsViewModelTest {
             afterNeutralChanges shouldBe emptyList()
             publishedUnreadCounts shouldBe listOf(1, 2)
         }
+    }
+
+    private fun contentWithBot(): DiffyNotificationsContent {
+        return DiffyNotificationsContent(
+            lastSyncedAt = Instant.parse("2026-11-08T10:00:00.000Z"),
+            notifications = listOf(
+                DiffyStoredNotification(event = browserEvent(id = "bot", actorIsBot = true)),
+                DiffyStoredNotification(event = browserEvent(id = "human"))
+            ),
+            loaded = true
+        )
+    }
+
+    @Test
+    fun `onFilterOutBotsChanged - should hide bot rows, save the value and drop hidden rows from the selection`() {
+        // GIVEN a bot row and a human row, both selected
+        viewModel.start()
+        stored.value = contentWithBot()
+        viewModel.onRowSelectionChanged(rowId = "bot", selected = true)
+        viewModel.onRowSelectionChanged(rowId = "human", selected = true)
+
+        // WHEN
+        viewModel.onFilterOutBotsChanged(filterOutBots = true)
+
+        // THEN
+        val state = viewModel.state.value
+        assertSoftly {
+            state.filterOutBots shouldBe true
+            state.visibleRows.map { row -> row.id } shouldBe listOf("human")
+            state.selectedIds shouldBe setOf("human")
+            savedFilterOutBots shouldBe listOf(true)
+        }
+    }
+
+    @Test
+    fun `onFilterOutBotsChanged - should keep the filter when a new snapshot arrives`() {
+        // GIVEN the filter is on
+        viewModel.start()
+        stored.value = contentWithBot()
+        viewModel.onFilterOutBotsChanged(filterOutBots = true)
+
+        // WHEN
+        stored.value = contentWithBot().copy(lastSyncedAt = Instant.parse("2026-11-08T11:00:00.000Z"))
+
+        // THEN
+        viewModel.state.value.visibleRows.map { row -> row.id } shouldBe listOf("human")
+    }
+
+    @Test
+    fun `onFilterOutBotsChanged - should not change the published unread count`() {
+        // GIVEN
+        viewModel.start()
+        stored.value = contentWithBot()
+        publishedUnreadCounts.clear()
+
+        // WHEN
+        viewModel.onFilterOutBotsChanged(filterOutBots = true)
+
+        // THEN
+        publishedUnreadCounts shouldBe emptyList()
+    }
+
+    @Test
+    fun `initialFilterOutBots - should start with the filter on`() {
+        // GIVEN / WHEN
+        val filtered = NotificationsViewModel(
+            stored = stored,
+            latestPullRequests = { emptyList() },
+            setUnread = { _, _ -> },
+            coroutineScope = scope,
+            runOnEdt = { block -> block() },
+            openSetupHelp = {},
+            openForReview = {},
+            openOnWeb = {},
+            openRepository = {},
+            avatarIcon = { ImageIcon() },
+            timeZone = { zone },
+            initialFilterOutBots = true
+        )
+
+        // THEN
+        filtered.state.value.filterOutBots shouldBe true
     }
 }

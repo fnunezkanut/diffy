@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## *1.14.0* - 2026-11-25
+* Fixed: the Chrome Web Store extension could not sync, open pull requests, or deliver notifications because the plugin accepted only the development extension ID; the Sync button also reported this as a missing workspace
+* Removed: Bitbucket API token sign-in. The plugin now signs in with Bitbucket OAuth only. If you used an API token, open Settings > Tools > Diffy - Bitbucket PR Review and authenticate with Bitbucket oauth login; the old token is deleted when you do
+* Added: Notifications tab has a Filter out bots checkbox that hides notifications from bots; the choice is remembered
+* Changed: PR diffs in a work tree show the editable, fully navigable work tree file on the right side when the work tree is at or ahead of the pull request source commit (Settings > Tools > Diffy)
+* Added: an orange bar under the blue bar marks files with changes that are not in the pull request yet (unpushed commits or uncommitted edits), with Commit… and Push… links
+
 ## *1.13.0* - 2026-11-14
 * Added: the Pull Requests and Notifications tabs show the number of open PRs and unread notifications in their titles
 * Changed: the Current Project and Workspace tabs are merged into one PR Overview tab that lists PRs of the current project, PRs you opened, and PRs of watched projects, open PRs first. It has an In any project / In current project dropdown and a Create new PR button. Watched projects now list all their PRs; use Assigned to me to narrow

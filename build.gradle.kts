@@ -14,7 +14,7 @@ plugins {
 }
 
 group = "com.github.fnunezkanut"
-version = "1.13.0"
+version = "1.14.0"
 
 val isLocalBuild = providers.environmentVariable("CI").orNull.isNullOrEmpty()
 
@@ -84,8 +84,9 @@ tasks.processResources {
 }
 
 intellijPlatform {
+    buildSearchableOptions = false
     pluginConfiguration {
-        id = "com.github.fnunezkanut.bbcloud" // initial project name was bbcloud, now its diffy
+        id = "com.github.fnunezkanut.bbcloud" // initial project name was bbcloud, now its diffy, cant change id
         name = "Diffy - Bitbucket PR Review"
         ideaVersion {
             sinceBuild = "263.7307.200"

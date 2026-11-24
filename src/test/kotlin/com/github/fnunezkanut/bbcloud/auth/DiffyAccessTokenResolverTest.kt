@@ -25,20 +25,11 @@ class DiffyAccessTokenResolverTest {
         override fun now(): Instant = now
     }
 
-    private class FakeStore(var apiToken: String? = null, var oauth: OAuthTokens? = null) : DiffyCredentialStore {
+    private class FakeStore(var oauth: OAuthTokens? = null) : DiffyCredentialStore {
         var savedOAuth: OAuthTokens? = oauth
         var clearedOAuth = false
 
-        override suspend fun hasToken() = apiToken != null
-
-        override suspend fun getToken() = apiToken
-
-        override suspend fun saveToken(token: String) {
-            apiToken = token
-        }
-
-        override suspend fun clearToken() {
-            apiToken = null
+        override suspend fun clearLegacyApiToken() {
         }
 
         override suspend fun getOAuthTokens() = oauth
@@ -123,9 +114,9 @@ class DiffyAccessTokenResolverTest {
         }
 
     @Test
-    fun `oauthAccessTokenOrNull - permanent failure clears tokens and falls back to the api token`(): Unit =
+    fun `oauthAccessTokenOrNull - permanent failure clears tokens and leaves no bearer token`(): Unit =
         runBlocking {
-            val store = FakeStore(apiToken = "api", oauth = tokens(access = "old", expiresInHours = 0))
+            val store = FakeStore(oauth = tokens(access = "old", expiresInHours = 0))
             val tokenClient = mockk<BitbucketOAuthTokenClient> {
                 coEvery { refresh("rt") } returns OAuthTokenResult.InvalidGrant(description = "revoked")
             }
@@ -143,8 +134,8 @@ class DiffyAccessTokenResolverTest {
             store.clearedOAuth shouldBe true
             expiredCalls shouldBe 1
             changedCalls shouldBe 1
-            // Bearer now falls back to the API token.
-            resolver.bearerTokenOrNull() shouldBe "api"
+            // There is no other credential to fall back to.
+            resolver.bearerTokenOrNull() shouldBe null
         }
 
     @Test
@@ -215,24 +206,37 @@ class DiffyAccessTokenResolverTest {
         }
 
     @Test
-    fun `refreshAfterUnauthorized - the rejected api token yields null`(): Unit =
+    fun `refreshAfterUnauthorized - without an oauth session yields null`(): Unit =
         runBlocking {
-            val store = FakeStore(apiToken = "api")
+            val store = FakeStore()
             val tokenClient = mockk<BitbucketOAuthTokenClient>()
             val resolver = resolver(store = store, tokenClient = tokenClient, clock = MutableClock(base))
 
-            resolver.refreshAfterUnauthorized(rejectedToken = "api") shouldBe null
+            resolver.refreshAfterUnauthorized(rejectedToken = "stale") shouldBe null
         }
 
     @Test
-    fun `markOAuthNotWorking - bearer falls back to api until onOAuthTokensChanged`(): Unit =
+    fun `refreshAfterUnauthorized - permanent refresh failure yields null and clears the session`(): Unit =
         runBlocking {
-            val store = FakeStore(apiToken = "api", oauth = tokens(access = "at"))
+            val store = FakeStore(oauth = tokens(access = "rejected"))
+            val tokenClient = mockk<BitbucketOAuthTokenClient> {
+                coEvery { refresh("rt") } returns OAuthTokenResult.InvalidGrant(description = "revoked")
+            }
+            val resolver = resolver(store = store, tokenClient = tokenClient, clock = MutableClock(base))
+
+            resolver.refreshAfterUnauthorized(rejectedToken = "rejected") shouldBe null
+            store.clearedOAuth shouldBe true
+        }
+
+    @Test
+    fun `markOAuthNotWorking - bearer is null until onOAuthTokensChanged`(): Unit =
+        runBlocking {
+            val store = FakeStore(oauth = tokens(access = "at"))
             val tokenClient = mockk<BitbucketOAuthTokenClient>()
             val resolver = resolver(store = store, tokenClient = tokenClient, clock = MutableClock(base))
 
             resolver.markOAuthNotWorking()
-            resolver.bearerTokenOrNull() shouldBe "api"
+            resolver.bearerTokenOrNull() shouldBe null
 
             resolver.onOAuthTokensChanged()
             resolver.bearerTokenOrNull() shouldBe "at"

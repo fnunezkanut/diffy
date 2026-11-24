@@ -48,10 +48,17 @@ class NotificationsViewModel internal constructor(
     private val openMessage: (NotificationRow) -> Unit = {},
     initialShowOnlyUnread: Boolean = false,
     private val saveShowOnlyUnread: (Boolean) -> Unit = {},
+    initialFilterOutBots: Boolean = false,
+    private val saveFilterOutBots: (Boolean) -> Unit = {},
     private val onUnreadCountChanged: (Int) -> Unit = {}
 ) {
     val state: MutableState<NotificationsUiState> =
-        mutableStateOf(NotificationsUiState.INITIAL.copy(showOnlyUnread = initialShowOnlyUnread))
+        mutableStateOf(
+            NotificationsUiState.INITIAL.copy(
+                showOnlyUnread = initialShowOnlyUnread,
+                filterOutBots = initialFilterOutBots
+            )
+        )
 
     private val started = AtomicBoolean(false)
     private val buildGeneration = AtomicInteger(0)
@@ -151,6 +158,15 @@ class NotificationsViewModel internal constructor(
         saveShowOnlyUnread(showOnlyUnread)
     }
 
+    /** Hides or shows the bot rows, and drops hidden rows from the selection so the mark actions never touch them. */
+    fun onFilterOutBotsChanged(filterOutBots: Boolean) {
+        LOG.info("User turned the Filter out bots filter ${if (filterOutBots) "on" else "off"}")
+        val next = state.value.copy(filterOutBots = filterOutBots)
+        val visibleIds = next.visibleRows.map { row -> row.id }.toSet()
+        state.value = next.copy(selectedIds = next.selectedIds.intersect(visibleIds))
+        saveFilterOutBots(filterOutBots)
+    }
+
     fun onTitleClicked(row: NotificationRow) {
         openForReview(row)
     }
@@ -199,7 +215,8 @@ class NotificationsViewModel internal constructor(
                     lastUpdatedText = lastUpdatedText,
                     selectedIds = current.selectedIds.intersect(rowIds),
                     avatarRevision = current.avatarRevision,
-                    showOnlyUnread = current.showOnlyUnread
+                    showOnlyUnread = current.showOnlyUnread,
+                    filterOutBots = current.filterOutBots
                 )
                 publishUnreadCount()
                 prefetchAvatars(rows.mapNotNull { row -> row.actorAvatarUrl }.distinct(), ::onAvatarLoaded)

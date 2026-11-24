@@ -24,7 +24,8 @@ import kotlin.time.Instant
  * rows is too slow for the event dispatch thread. Callers read watched repository slugs before they call in, because
  * settings access must not run under this lock.
  *
- * Clearing the cache also clears the stored notifications ([onCleared]), because both belong to one account.
+ * Clearing the cache also clears the stored notifications and the cached workspace repository list ([onCleared]),
+ * because all of them belong to one account and workspace.
  *
  * Constructor parameters have defaults so that IntelliJ can create the service and unit tests can inject a fake state, a
  * fake clock, and small limits.
@@ -34,8 +35,14 @@ class DiffyPullRequestCache(
     private val store: () -> DiffyPullRequestCacheState.State = { DiffyPullRequestCacheState.getInstance().state },
     private val clock: () -> Instant = { Clock.System.now() },
     private val limits: PullRequestCacheLimits = PullRequestCacheLimits(),
-    /** Runs after the cache was emptied by [clear] or an account change; production forgets the stored notifications. */
-    private val onCleared: () -> Unit = { DiffyNotificationsStore.clearInBackground() }
+    /**
+     * Runs after the cache was emptied by [clear] or an account change; production forgets the stored notifications and
+     * the cached workspace repository list.
+     */
+    private val onCleared: () -> Unit = {
+        DiffyNotificationsStore.clearInBackground()
+        DiffyWorkspaceRepositoryCache.clearIfAvailable()
+    }
 ) : PullRequestCacheStore {
     private val lock = Any()
 

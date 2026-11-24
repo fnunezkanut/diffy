@@ -905,7 +905,7 @@ class DiffyOpenPullRequestService(
      * Loads the details of a single pull request addressed directly by [workspace] and [repoSlug], without deriving
      * them from an open project's base path. The Workspace tabs already carry the workspace and repository slug on
      * each row, so this avoids depending on an open project when re-checking whether a pull request is still open.
-     * Returns null when the API token is unavailable or when Bitbucket returns no details.
+     * Returns null when the OAuth login is unavailable or when Bitbucket returns no details.
      */
     suspend fun pullRequestDetailsFor(workspace: String, repoSlug: String, organizationUrl: String, pullRequestId: Long): PullRequestDetails? {
         val apiToken = accessTokenProvider.bearerTokenOrNull()
@@ -936,7 +936,7 @@ class DiffyOpenPullRequestService(
      * Reads the repository's Bitbucket `mainbranch` name directly from the workspace and slug, without a project base
      * path. Mirrors [pullRequestDetailsFor]: it works from the row's known workspace and slug so it does not depend on
      * an open project, which the work-tree branch-collision flow needs because the colliding clone is not necessarily
-     * the current project. Returns null when the API token is unavailable, the lookup fails, or Bitbucket has no name.
+     * the current project. Returns null when the OAuth login is unavailable, the lookup fails, or Bitbucket has no name.
      */
     suspend fun mainBranchNameFor(workspace: String, repoSlug: String): String? {
         val apiToken = accessTokenProvider.bearerTokenOrNull()

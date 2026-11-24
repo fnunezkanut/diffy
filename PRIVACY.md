@@ -7,7 +7,7 @@ Diffy (the IntelliJ IDEA plugin and its companion Chrome and Firefox browser ext
 ## IntelliJ plugin
 
 - The plugin talks only to the Bitbucket Cloud API, directly from your IDE, to show your pull requests.
-- Your Bitbucket token is stored in the IntelliJ Platform Password Safe (the IDE's own encrypted store). It is never written to plain-text files or logs, and it is never sent anywhere except to Bitbucket.
+- Your Bitbucket OAuth tokens are stored in the IntelliJ Platform Password Safe (the IDE's own encrypted store). They are never written to plain-text files or logs, and they are never sent anywhere except to Bitbucket.
 
 ## Browser extensions
 

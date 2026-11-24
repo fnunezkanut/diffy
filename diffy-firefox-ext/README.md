@@ -49,7 +49,8 @@ From `about:debugging#/runtime/this-firefox`, click **Inspect** on the add-on, t
 | --- | --- |
 | `Host permissions not granted` | Grant access to `bitbucket.org` and `127.0.0.1` in `about:addons` |
 | `No diffy IDE answered on ports 63342-63361` | IDE closed, built-in server off, or the plugin is not installed |
-| `Ping reply has no workspace` | No workspace set in the plugin, or the plugin is older than 1.12.0 |
+| `Ping reply has no workspace` | Check the `originRecognized` field. `false`: the plugin did not recognize this extension, update the Diffy plugin. `true`: no workspace is set in the plugin |
+| `The Diffy plugin in IntelliJ is too old for this extension` (Sync message) | The plugin has no `/api/diffy/workspace` endpoint (404); update the Diffy plugin |
 | `Waiting for IntelliJ to report a workspace` | Set the workspace slug in the Diffy settings in IntelliJ |
 | `Not signed in to Bitbucket` | The Bitbucket session expired; sign in again |
 
@@ -68,15 +69,6 @@ plugin on `127.0.0.1`, plus the `workspace`, `repo` and `pr` values when you cli
 other server. Because it reads Bitbucket page data, the manifest declares the `websiteContent` data collection
 permission. Cookies, tokens, avatar URLs and comment text are never stored or sent.
 
-## Keeping in sync with the Chrome extension
-
-`content.js`, `capture.js`, `lib/` and `icons/` are identical copies of the files in `diffy-chrome-ext/`. Edit both
-directories together. Check from the repository root:
-
-```
-diff -r diffy-chrome-ext/lib diffy-firefox-ext/lib && diff -r diffy-chrome-ext/icons diffy-firefox-ext/icons \
-  && diff diffy-chrome-ext/content.js diffy-firefox-ext/content.js && diff diffy-chrome-ext/capture.js diffy-firefox-ext/capture.js
-```
 
 ## Files
 

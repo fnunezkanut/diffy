@@ -27,7 +27,7 @@ class OkHttpBitbucketWorkspaceClient(private val httpClient: OkHttpClient = shar
         return withContext(Dispatchers.IO) {
             val apiUrl = BitbucketWorkspaceResponseParser.buildListWorkspacesUrl()
             if (!BitbucketApiUrlPolicy.isTrustedApiUrl(apiUrl)) {
-                LOG.warn("Refusing to send the API token to an untrusted URL (${BitbucketApiUrlPolicy.describeRejected(apiUrl)})")
+                LOG.warn("Refusing to send the access token to an untrusted URL (${BitbucketApiUrlPolicy.describeRejected(apiUrl)})")
                 return@withContext WorkspaceListResult.Failed()
             }
             val request = Request.Builder()

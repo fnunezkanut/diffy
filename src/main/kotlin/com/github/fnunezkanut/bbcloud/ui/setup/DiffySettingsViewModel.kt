@@ -10,6 +10,7 @@ import com.github.fnunezkanut.bbcloud.auth.OAuthLoginResult
 import com.github.fnunezkanut.bbcloud.auth.OAuthLoginState
 import com.github.fnunezkanut.bbcloud.auth.OAuthTokens
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.settings.DiffySettings
 import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -25,6 +26,7 @@ class DiffySettingsViewModel(
     private val coroutineScope: CoroutineScope,
     private val oauthLoginService: DiffyOAuthLoginService,
     private val onSaveSuccess: () -> Unit,
+    /** Called after Reset Plugin has wiped the stored OAuth login and every other plugin setting. */
     private val onTokenReset: () -> Unit,
     private val onExternalAuthChanged: () -> Unit,
     private val onProjectsDirectoryChosenCallback: (String) -> Unit,
@@ -34,9 +36,6 @@ class DiffySettingsViewModel(
     val state: MutableState<SettingsUiState> = mutableStateOf(
         SettingsUiState(pluginVersionFooter = SetupFooterText.build(resolvePluginVersion()))
     )
-
-    // Set by the API token dialog while it is open so a successful Save can close it; null otherwise.
-    private var apiTokenSaveListener: (() -> Unit)? = null
 
     // True while this view model owns the active OAuth login, so it does not react to its own finish as "external".
     private var ownsLogin = false
@@ -77,100 +76,38 @@ class DiffySettingsViewModel(
     /**
      * Re-reads persisted Settings values when the settings page opens and after each change.
      *
-     * A successful Save re-binds the settings page (see DiffyToolsConfigurable),
-     * so the "Valid API Token..." success affordance set by [persist] must survive this re-bind; clearing it here
-     * wiped the message before the user could see it. The message is retained and only drops when the user edits the
-     * token field (see [setTokenFieldText]) or a later Save fails. The success message is now shown inside the API
-     * token dialog rather than on the main Settings page. The OAuth message is likewise retained across a re-bind.
+     * A successful OAuth login re-binds the settings page (see DiffyToolsConfigurable). The OAuth message is retained
+     * across a re-bind so the user can still read it.
      */
-    fun bindSettingsState(hasStoredToken: Boolean, hasOAuthTokens: Boolean, workingMethod: DiffyAuthenticationMethod) {
+    fun bindSettingsState(hasOAuthTokens: Boolean, workingMethod: DiffyAuthenticationMethod) {
         coroutineScope.launch {
             val projectsDirectory = configurationService.projectsDirectoryOrNull()
             val workspaceSlug = configurationService.workspaceSlugOrNull()
             state.value = state.value.copy(
-                hasStoredToken = hasStoredToken,
                 hasOAuthTokens = hasOAuthTokens,
                 workingMethod = workingMethod,
                 projectsDirectory = projectsDirectory,
                 workspaceSlug = workspaceSlug,
-                tokenFieldText = "",
-                errorMessage = null,
                 isBusy = false
             )
         }
     }
 
-    /** Registers (or clears with null) the one-shot close hook the API token dialog subscribes to while it is open. */
-    fun setApiTokenSaveListener(listener: (() -> Unit)?) {
-        apiTokenSaveListener = listener
+    /** Whether the source side of pull request diffs is the editable work tree file. */
+    fun isEditableSourceSideEnabled(): Boolean {
+        return DiffySettings.getInstance().editableSourceSideInDiffs
     }
 
-    /** Resets the transient token/error/success fields so the API token dialog opens clean (decision 9a). */
-    fun onApiTokenDialogOpened() {
-        LOG.info("User clicked Authenticate with a Bitbucket API Token on Settings")
-        state.value = state.value.copy(tokenFieldText = "", errorMessage = null, successMessage = null)
-    }
-
-    /** Clears the save listener and any half-typed token so it is not kept in memory after the dialog closes. */
-    fun onApiTokenDialogClosed() {
-        LOG.debug("API token dialog closed")
-        apiTokenSaveListener = null
-        state.value = state.value.copy(tokenFieldText = "", errorMessage = null, successMessage = null)
-    }
-
-    /** Mirrors the token field into the observable screen state. */
-    fun setTokenFieldText(text: String) {
-        if (state.value.tokenFieldText != text) {
-            // The user edited the token, so a prior "Valid API Token..." message is now stale.
-            state.value = state.value.copy(tokenFieldText = text, successMessage = null)
-        }
-    }
-
-    fun onSaveClicked() {
-        LOG.info("User clicked setup Save")
-        val currentState = state.value
-        val rawToken = currentState.tokenFieldText
-        val typedToken = rawToken.trim()
-        state.value = currentState.copy(
-            tokenFieldText = typedToken,
-            errorMessage = null,
-            successMessage = null
-        )
-        if (!currentState.hasStoredToken && typedToken.isEmpty()) {
-            LOG.info("Setup save aborted: no API token entered and none stored")
-            showError(DiffyBundle.message("setup.error.tokenRequired"))
-            return
-        }
-        setBusy(true)
-        coroutineScope.launch {
-            // A blank field with the mask showing means "keep the stored token", so the workspace can be switched
-            // without retyping it.
-            val effectiveToken = typedToken.ifEmpty { configurationService.storedTokenOrNull() }
-            if (effectiveToken == null) {
-                LOG.info("Setup save aborted: no API token entered and none stored")
-                state.value = state.value.copy(
-                    isBusy = false,
-                    errorMessage = DiffyBundle.message("setup.error.tokenRequired")
-                )
-                return@launch
-            }
-            val resolution = WorkspaceResolutionPolicy.resolve(
-                result = configurationService.listWorkspaces(apiToken = effectiveToken),
-                preferredSlug = configurationService.workspaceSlugOrNull()
-            )
-            applyResolution(
-                resolution = resolution,
-                onResolved = { slug -> persist(workspaceSlug = slug, apiTokenInput = typedToken) },
-                onError = { message -> showError(message) },
-                unauthorizedMessage = DiffyBundle.message("setup.workspaces.error.invalidToken")
-            )
-        }
+    /** Persists the "editable source side of pull request diffs" choice at once. */
+    fun onEditableSourceSideChanged(enabled: Boolean) {
+        LOG.info("User changed 'Edit the source side of pull request diffs' on Settings: enabled=$enabled")
+        DiffySettings.getInstance().editableSourceSideInDiffs = enabled
     }
 
     /**
      * Maps a resolve outcome to the matching bundle message, or delegates to the workspace chooser. [onResolved] runs
      * with the chosen workspace slug; [onError] shows a message; [unauthorizedMessage] is used for an Unauthorized
-     * outcome (the OAuth path uses the missing-scopes message, since its token is not saved; decision 18a).
+     * outcome (the missing-scopes message, since the OAuth tokens are not saved).
      */
     private suspend fun applyResolution(
         resolution: WorkspaceResolution,
@@ -197,50 +134,18 @@ class DiffySettingsViewModel(
             }
 
             WorkspaceResolution.NoneAccessible -> {
-                LOG.info("Setup aborted: the token has no accessible workspaces")
+                LOG.info("Setup aborted: the login has no accessible workspaces")
                 onError(DiffyBundle.message("setup.workspaces.empty"))
             }
 
             WorkspaceResolution.Unauthorized -> {
-                LOG.info("Setup aborted: the token was rejected by Bitbucket")
+                LOG.info("Setup aborted: the access token was rejected by Bitbucket")
                 onError(unauthorizedMessage)
             }
 
             is WorkspaceResolution.Failed -> {
                 LOG.warn("Failed to list Bitbucket workspaces", resolution.cause)
                 onError(DiffyBundle.message("setup.workspaces.error.failed"))
-            }
-        }
-    }
-
-    private suspend fun persist(workspaceSlug: String, apiTokenInput: String) {
-        // A blank input keeps the stored token, which is what makes the placeholder-only Save path work.
-        val result = configurationService.saveSetup(workspaceSlug = workspaceSlug, apiTokenInput = apiTokenInput)
-        when {
-            result.isSuccess -> {
-                LOG.info("Setup save succeeded: workspaceSlug=$workspaceSlug")
-                state.value = state.value.copy(
-                    hasStoredToken = true,
-                    workingMethod = DiffyAuthenticationMethod.ApiToken,
-                    workspaceSlug = workspaceSlug,
-                    tokenFieldText = "",
-                    errorMessage = null,
-                    successMessage = DiffyBundle.message("setup.save.success", workspaceSlug),
-                    isBusy = false
-                )
-                onSaveSuccess()
-                // persist() runs on Dispatchers.Default; the dialog marshals the close to the EDT itself.
-                apiTokenSaveListener?.invoke()
-            }
-
-            result.exceptionOrNull() is DiffyConfigurationService.SaveException.TokenRequired -> {
-                LOG.info("Setup save failed: API token required")
-                showError(DiffyBundle.message("setup.error.tokenRequired"))
-            }
-
-            else -> {
-                LOG.warn("Failed to save Diffy - Bitbucket PR Review setup", result.exceptionOrNull())
-                showError(DiffyBundle.message("setup.error.saveFailed"))
             }
         }
     }
@@ -338,22 +243,18 @@ class DiffySettingsViewModel(
         if (!confirmReset()) {
             return
         }
-        // Cancel any in-flight OAuth login first; the reset removes both credentials.
+        // Cancel any in-flight OAuth login first; the reset removes the stored login.
         oauthLoginService.cancel()
         setBusy(true)
-        // resetAll wipes every plugin setting: the API token, OAuth login, workspace slug, projects directory, and
+        // resetAll wipes every plugin setting: the OAuth login, workspace slug, projects directory, and
         // watched projects.
         coroutineScope.launch {
             configurationService.resetAll()
             state.value = state.value.copy(
-                hasStoredToken = false,
                 hasOAuthTokens = false,
                 workingMethod = DiffyAuthenticationMethod.None,
                 projectsDirectory = null,
                 workspaceSlug = null,
-                tokenFieldText = "",
-                errorMessage = null,
-                successMessage = null,
                 oauthMessage = null,
                 oauthMessageIsError = false,
                 isBusy = false
@@ -371,11 +272,6 @@ class DiffySettingsViewModel(
 
     private fun setBusy(isBusy: Boolean) {
         state.value = state.value.copy(isBusy = isBusy)
-    }
-
-    private fun showError(message: String) {
-        // Error and success are mutually exclusive on the row, so an error replaces any prior success.
-        state.value = state.value.copy(errorMessage = message, successMessage = null, isBusy = false)
     }
 
     private fun showOAuthError(message: String) {

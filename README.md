@@ -8,7 +8,7 @@
 
 Optionally there are a couple of browser extensions to enhance this plugin:
 * [Install Firefox Extension](https://addons.mozilla.org/addon/diffy-bitbucket-pr-review/) - [more info](diffy-chrome-ext/README.md)
-* Chrome Extension (under development) - [more info](diffy-chrome-ext/README.md) 
+* [Chrome Extension](https://chromewebstore.google.com/detail/diffy-bitbucket-pr-review/pkeoedpgepmldoikeedkchmhkgjpelln) - [more info](diffy-chrome-ext/README.md) 
 
 They permit one to launch PR reviews with Diffy in IntelliJ straight from Bitbucket.org and sync notifications.
 
@@ -22,7 +22,7 @@ Helps you review Bitbucket Cloud pull requests without leaving your Jetbrains ID
 * ![plugin icon](docs/icon16.png) **Diffy - Bitbucket PR Review tool window**: triage pull requests from the bottom tool window strip instead of the browser.
 * 🌳 **PR Work Trees**: each PR opens in its own project window backed by a separate git [work tree](docs/worktrees.md), so a review never touches your main checkout or other PRs.
 * 📋 **Pull Requests tab**: one list of PRs from the current repository, your own PRs across the workspace, and your watched projects, open PRs first. Filter by author, assignee, or project, or start a new PR.
-* 👀 **Watched Projects tab**: choose which repositories feed the Pull Requests tab. Search by slug, folder, PR number, or branch, and use the master checkbox to toggle every matching row.
+* 👀 **Watched Projects tab**: choose which repositories feed the Pull Requests tab. Search by slug, folder, PR number, or branch, and use the master checkbox to toggle every matching row. The Checkout Project button clones, over SSH, a workspace repository that is not in the Projects Directory yet and watches it.
 * 🕘 **Recent Projects tab**: your IDE recent projects and PR Work Tree projects in one list.
 * 🔖 **PR editor tab**: each PR opens as a **`<prNum>.pr`** tab with a blue header stripe that shows line-change stats and has buttons to refresh, show file changes, merge, approve, toggle draft, or decline.
 * 🕐 **Activity timeline**: commits, approvals, tasks, builds, and file and inline comment threads in time order. Add PR-level comments or reply in any thread.

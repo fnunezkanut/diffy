@@ -81,6 +81,7 @@ private data class NotificationRowActions(
     val onMarkReadClicked: () -> Unit,
     val onMarkUnreadClicked: () -> Unit,
     val onShowOnlyUnreadChanged: (Boolean) -> Unit,
+    val onFilterOutBotsChanged: (Boolean) -> Unit,
     val avatarIconFor: (String?) -> javax.swing.Icon
 )
 
@@ -98,6 +99,7 @@ fun NotificationsScreen(viewModel: NotificationsViewModel) {
             onMarkReadClicked = viewModel::onMarkReadClicked,
             onMarkUnreadClicked = viewModel::onMarkUnreadClicked,
             onShowOnlyUnreadChanged = viewModel::onShowOnlyUnreadChanged,
+            onFilterOutBotsChanged = viewModel::onFilterOutBotsChanged,
             avatarIconFor = viewModel::avatarIconFor
         )
     }
@@ -197,9 +199,10 @@ private fun NotificationsTable(state: NotificationsUiState, actions: Notificatio
     }
 }
 
-/** The last sync time on the left, the Show only Unread checkbox on the right. */
+/** The last sync time on the left, the Filter out bots and Show only Unread checkboxes on the right. */
 @Composable
 private fun NotificationsToolbar(state: NotificationsUiState, actions: NotificationRowActions) {
+    val filterOutBotsText = DiffyBundle.message("notifications.filter.filterOutBots")
     val showOnlyUnreadText = DiffyBundle.message("notifications.filter.showOnlyUnread")
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -211,6 +214,13 @@ private fun NotificationsToolbar(state: NotificationsUiState, actions: Notificat
             color = JewelTheme.globalColors.text.info,
             modifier = Modifier.weight(1f)
         )
+        CheckboxRow(
+            checked = state.filterOutBots,
+            onCheckedChange = actions.onFilterOutBotsChanged,
+            modifier = Modifier.semantics { contentDescription = filterOutBotsText }
+        ) {
+            Text(text = filterOutBotsText)
+        }
         CheckboxRow(
             checked = state.showOnlyUnread,
             onCheckedChange = actions.onShowOnlyUnreadChanged,

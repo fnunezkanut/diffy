@@ -5,6 +5,7 @@ import com.github.fnunezkanut.bbcloud.auth.DiffyAuthService
 import com.github.fnunezkanut.bbcloud.auth.DiffyAuthenticationMethod
 import com.github.fnunezkanut.bbcloud.auth.DiffyCredentialValidator
 import com.github.fnunezkanut.bbcloud.auth.OAuthTokens
+import com.github.fnunezkanut.bbcloud.bitbucket.AvatarUrlUpgrader
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketWorkspaceClient
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketRepositoryClient
@@ -41,8 +42,8 @@ class DiffyConfigurationService(
     private val pullRequestCache: PullRequestCacheStore = NoOpPullRequestCacheStore
 ) {
     /**
-     * Serializes [rescanWatchedProjects] so the scan triggers (a chosen projects directory, a workspace slug change or
-     * token change in [saveSetup], and the Sync button) queue instead of interleaving their discover-and-write critical
+     * Serializes [rescanWatchedProjects] and [registerCheckedOutProject] so the scan triggers (a chosen projects
+     * directory, a workspace slug change in [saveOAuthSetup], the Sync button) and a finished checkout queue instead of interleaving their discover-and-write critical
      * section. Without it two concurrent scans could interleave the state rebuild and lose or corrupt the persisted
      * watched map.
      */
@@ -50,7 +51,7 @@ class DiffyConfigurationService(
 
     /**
      * Whether the plugin is fully configured. True only when the workspace slug is set, the projects directory is set
-     * and resolves to an existing directory on disk, and at least one authentication method (OAuth or the API token) is
+     * and resolves to an existing directory on disk, and the Bitbucket OAuth login is
      * verified working online by [DiffyCredentialValidator]. "Valid directory" means the stored path points to an
      * existing directory (see [isExistingDirectory]), so a stored-but-deleted folder counts as not configured. This is
      * the single source of truth the tool window consults to gate every non-Settings tab behind the centered
@@ -79,7 +80,7 @@ class DiffyConfigurationService(
             return false
         }
         if (credentialValidator.workingMethod() == DiffyAuthenticationMethod.None) {
-            thisLogger().info("Not configured: no working Bitbucket credentials (OAuth or API token)")
+            thisLogger().info("Not configured: no working Bitbucket OAuth login")
             return false
         }
         return true
@@ -93,25 +94,20 @@ class DiffyConfigurationService(
         return Files.isDirectory(Paths.get(path))
     }
 
-    /** Whether an API token is stored; the Settings panel reports this through the token field's own state. */
-    suspend fun hasStoredToken(): Boolean {
-        return credentialStore.hasToken()
-    }
-
     /** The working authentication method as verified online (cached), used by the Settings status label. */
     suspend fun authenticationMethod(): DiffyAuthenticationMethod {
         return credentialValidator.workingMethod()
     }
 
-    /** Whether an OAuth login is stored; independent of the API token since both may coexist. */
+    /** Whether an OAuth login is stored. */
     suspend fun hasStoredOAuthTokens(): Boolean {
         return credentialStore.getOAuthTokens() != null
     }
 
     /**
-     * Persists an OAuth login: stores the [tokens] and sets the [workspaceSlug]. The API token (if any) is kept, since
-     * both credentials may coexist with OAuth preferred (decision 2a). The access-token provider and the credential
-     * validator are notified so the next request and configured check reflect the new session.
+     * Persists an OAuth login: stores the [tokens] and sets the [workspaceSlug]. A legacy API token stored by older
+     * plugin versions is deleted, since it is no longer used. The access-token provider and the credential validator
+     * are notified so the next request and configured check reflect the new session.
      *
      * The watched map is rebuilt only when the workspace slug actually changed (decision 6b): the stored entries are
      * scoped to a workspace, so a credential change on the same workspace keeps them. A slug change empties and rescans.
@@ -126,6 +122,7 @@ class DiffyConfigurationService(
         val oldSlug = storedWorkspaceSlug()
 
         credentialStore.saveOAuthTokens(tokens = tokens)
+        credentialStore.clearLegacyApiToken()
         settings.workspaceSlug = normalizedSlug
         accessTokenProvider.onOAuthTokensChanged()
         credentialValidator.invalidate()
@@ -141,59 +138,6 @@ class DiffyConfigurationService(
         // Only a workspace-slug change invalidates the watched map; a pure credential change on the same workspace
         // keeps the existing watched choices, which still refer to the same workspace's repositories.
         if (slugChanged) {
-            clearWatchedProjects()
-            if (projectsDirectoryOrNull() != null) {
-                rescanWatchedProjects(clearFirst = true)
-            }
-        }
-
-        return Result.success(Unit)
-    }
-
-    suspend fun saveSetup(workspaceSlug: String, apiTokenInput: String): Result<Unit> {
-        val normalizedSlug = BitbucketWorkspaceValidator.validate(workspaceSlug).getOrElse { error ->
-            thisLogger().info("Setup rejected: invalid workspace slug (${error::class.simpleName})")
-            return Result.failure(SaveException.WorkspaceRequired)
-        }
-
-        val tokenTrimmed = apiTokenInput.trim()
-        val hasStoredToken = credentialStore.hasToken()
-
-        if (!hasStoredToken && tokenTrimmed.isEmpty()) {
-            thisLogger().info("Setup rejected: API token required and none stored")
-            return Result.failure(SaveException.TokenRequired)
-        }
-
-        // A blank field means "keep the stored token", so it is not a token change. A non-empty field is a change only
-        // when it differs from what is already stored. The token value itself is never logged.
-        val previouslyStoredToken = credentialStore.getToken()
-        val tokenChanged = tokenTrimmed.isNotEmpty() && tokenTrimmed != previouslyStoredToken
-
-        val oldSlug = storedWorkspaceSlug()
-        settings.workspaceSlug = normalizedSlug
-
-        val tokenUpdated = tokenTrimmed.isNotEmpty()
-        if (tokenUpdated) {
-            credentialStore.saveToken(tokenTrimmed)
-        }
-
-        // The stored credential changed (or the workspace did), so a cached online check result is now stale.
-        credentialValidator.invalidate()
-
-        val slugChanged = oldSlug != normalizedSlug
-        if (slugChanged) {
-            pullRequestCache.clear()
-        }
-        thisLogger().info(
-            "Setup saved: workspaceSlug=$normalizedSlug, tokenUpdated=$tokenUpdated, tokenChanged=$tokenChanged, slugChanged=$slugChanged"
-        )
-
-        // A workspace-slug or API-token change invalidates the watched map: the previous entries referred to a
-        // different workspace or were verified with a different token. Empty it once, then rebuild from the current
-        // directory (when one is set) with a clear-first rescan so rediscovered repositories come in unwatched. When no
-        // directory is set there is nothing to rebuild, so the map is simply left empty.
-        if (slugChanged || tokenChanged) {
-            thisLogger().info("Workspace slug or API token changed; emptying and rebuilding watched projects")
             clearWatchedProjects()
             if (projectsDirectoryOrNull() != null) {
                 rescanWatchedProjects(clearFirst = true)
@@ -278,13 +222,8 @@ class DiffyConfigurationService(
         return Paths.get(projectsDirectory).resolve(WORK_TREE_FOLDER_NAME).toAbsolutePath().normalize().toString()
     }
 
-    /** The stored API token, or null; only the Settings panel fetches the workspace list with it. */
-    suspend fun storedTokenOrNull(): String? {
-        return credentialStore.getToken()
-    }
-
     /**
-     * Clears the stored projects directory and all watched project mappings. The workspace slug and API token are
+     * Clears the stored projects directory and all watched project mappings. The workspace slug and OAuth login are
      * kept.
      */
     fun clearProjectsDirectory() {
@@ -294,30 +233,15 @@ class DiffyConfigurationService(
     }
 
     /**
-     * Removes the stored API token and empties the watched map, since the map was verified with the now-removed token
-     * and the "token change empties the map" rule applies to a reset too. The workspace slug and the projects directory
-     * are kept, so the next Save and the Workspace - Watched Projects tab keep their values. The plugin is unconfigured
-     * afterwards, because [isConfigured] requires a token.
-     */
-    suspend fun resetApiToken() {
-        credentialStore.clearToken()
-        credentialValidator.invalidate()
-        clearWatchedProjects()
-        pullRequestCache.clear()
-        thisLogger().info("Diffy - Bitbucket PR Review API token reset")
-    }
-
-    /**
-     * Wipes every persisted plugin setting and the stored API token: the token, the workspace slug, the legacy
+     * Wipes every persisted plugin setting and the stored credentials: the OAuth login, any legacy API token, the workspace slug, the legacy
      * organization URL, the projects directory, and all watched project mappings. The plugin is unconfigured
      * afterwards, so the settings page must be filled in again before the plugin can be used. Called by the settings
-     * page's Reset Plugin button, which is a wider reset than [resetApiToken]. It also removes the stored OAuth login,
-     * which is the only way to sign out of OAuth (decision 4a). The derived work tree root is not deleted from disk
+     * page's Reset Plugin button, which is the only way to sign out of OAuth. The derived work tree root is not deleted from disk
      * (deleting user-adjacent directories is out of scope); clearing the projects directory is enough for
      * [workTreeDirectoryOrNull] to report null until a projects directory is saved again.
      */
     suspend fun resetAll() {
-        credentialStore.clearToken()
+        credentialStore.clearLegacyApiToken()
         credentialStore.clearOAuthTokens()
         accessTokenProvider.onOAuthTokensChanged()
         credentialValidator.invalidate()
@@ -479,6 +403,40 @@ class DiffyConfigurationService(
         return resolvedPath
     }
 
+    /**
+     * Adds a freshly cloned repository to the watched map, watched when fewer than
+     * [WatchedProjectsViewModel.MAX_WATCHED_PROJECTS] projects are watched, otherwise unwatched. Runs under
+     * [rescanMutex] so it cannot interleave with a Sync or a configuration change.
+     */
+    suspend fun registerCheckedOutProject(repoSlug: String, avatarUrl: String?): CheckedOutProjectRegistration {
+        return rescanMutex.withLock {
+            val slug = workspaceSlugOrNull()
+            val projectsDirectory = projectsDirectoryOrNull()
+            if (slug == null || projectsDirectory == null) {
+                thisLogger().info("Cannot add checked-out project $repoSlug: workspace or projects directory not configured")
+                return@withLock CheckedOutProjectRegistration.NotConfigured
+            }
+            if (localCheckoutPathForRepo(repoSlug = repoSlug).isEmpty()) {
+                thisLogger().info("Checked-out project $repoSlug is not a Bitbucket checkout of the workspace; not added to Watched Projects")
+                return@withLock CheckedOutProjectRegistration.NotResolvable
+            }
+            val stored = settings.watchedProjects
+            val alreadyWatched = stored.any { mapping -> mapping.remoteRepoSlug == repoSlug && mapping.watched }
+            val watched = alreadyWatched || stored.count { mapping -> mapping.watched } < WatchedProjectsViewModel.MAX_WATCHED_PROJECTS
+            val others = stored.filterNot { mapping -> mapping.remoteRepoSlug == repoSlug }
+            replaceWatchedProjects(
+                mappings = others + WatchedProjectMapping(localFolderPath = "", remoteRepoSlug = repoSlug, workspace = slug, watched = watched)
+            )
+            cacheRepoAvatarUrl(repoSlug = repoSlug, avatarUrl = AvatarUrlUpgrader.upgrade(avatarUrl) ?: avatarUrl)
+            thisLogger().info("Added checked-out project $repoSlug to Watched Projects (watched=$watched)")
+            if (watched) {
+                CheckedOutProjectRegistration.Watched
+            } else {
+                CheckedOutProjectRegistration.AddedUnwatchedLimitReached
+            }
+        }
+    }
+
     /** The repository slugs whose watched flag is on; these are the only ones whose PRs are listed. */
     fun watchedRepoSlugsForCurrentWorkspace(): List<String> {
         return watchedProjectsForCurrentWorkspace()
@@ -540,14 +498,14 @@ class DiffyConfigurationService(
      * Scans the projects directory and writes the result to the persisted flat watched map.
      *
      * The whole discover-and-write section runs under [rescanMutex] so overlapping triggers (a chosen directory, a
-     * workspace slug change, a token change, the Sync button) queue rather than interleave. [saveSetup] and
+     * workspace slug change, the Sync button) queue rather than interleave. [saveOAuthSetup] and
      * [saveProjectsDirectory]-driven flows call this once and never hold the mutex itself, so there is no re-entrancy
      * or deadlock.
      *
      * [clearFirst] selects between two modes:
-     * - `true` (a configuration change: the projects directory, workspace slug, or API token changed): the map is
+     * - `true` (a configuration change: the projects directory or workspace slug changed): the map is
      *   emptied BEFORE discovery and the scanned mappings are written with their default (unwatched) flags, because the
-     *   old watched choices referred to a different directory/workspace/token. On `VerifyFailed` or
+     *   old watched choices referred to a different directory or workspace. On `VerifyFailed` or
      *   `ProjectsDirectoryUnreadable` the map is left empty, since the user explicitly asked to empty first on a config
      *   change; there are no stale entries to preserve.
      * - `false` (a manual Sync with no configuration change): the previous watched flags are carried over for
@@ -647,8 +605,6 @@ class DiffyConfigurationService(
 
     sealed class SaveException : Exception() {
         data object WorkspaceRequired : SaveException()
-
-        data object TokenRequired : SaveException()
     }
 
     companion object {

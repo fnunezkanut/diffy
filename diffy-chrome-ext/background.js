@@ -41,13 +41,21 @@ async function pingInfo(port) {
       log.debug("ping", "Port is not the diffy plugin", { port });
       return null;
     }
-    if (!body.workspace) {
-      // Chrome omits the Origin header on GET requests covered by host
+    if (Object.prototype.hasOwnProperty.call(body, "workspace")) {
+      body.originRecognized = true;
+    } else {
+      // The browser may omit the Origin header on GET requests covered by host
       // permissions, so the ping cannot identify this extension. Ask again
       // over POST, which does carry the Origin header.
-      const workspace = await fetchWorkspace(port);
-      if (workspace) {
-        body.workspace = workspace;
+      const result = await fetchWorkspace(port);
+      if (result) {
+        if (result.workspace) {
+          body.workspace = result.workspace;
+        }
+        body.originRecognized = result.recognized;
+        if (result.endpointMissing) {
+          body.pluginOutdated = true;
+        }
       }
     }
     const workspaceReported = Boolean(body.workspace);
@@ -56,7 +64,11 @@ async function pingInfo(port) {
       log.warn("ping", "Ping reply has no workspace", {
         port,
         extensionId: chrome.runtime.id,
-        hint: "The IDE has no workspace configured, or this extension ID does not match the plugin's allowed ID",
+        originRecognized: body.originRecognized,
+        hint:
+          body.originRecognized === false
+            ? "IntelliJ did not recognize this extension ID; update the Diffy plugin"
+            : "No workspace is configured in the Diffy plugin settings",
       });
     }
     return body;
@@ -66,21 +78,35 @@ async function pingInfo(port) {
   }
 }
 
-// Returns the workspace slug from POST /api/diffy/workspace, or null when the
-// IDE has none configured, does not recognize this extension, or is an older
-// plugin without the endpoint.
+// Asks POST /api/diffy/workspace and returns
+//   { recognized: true, workspace: "<slug>" }  workspace configured,
+//   { recognized: true, workspace: null }      recognized, none configured,
+//   { recognized: false, workspace: null }     IDE did not recognize this extension,
+//   { endpointMissing: true, recognized: false, workspace: null }  plugin without the endpoint (404),
+// or null on any other HTTP error, timeout, or non-JSON reply.
 async function fetchWorkspace(port) {
   try {
     const response = await fetch(`http://127.0.0.1:${port}/api/diffy/workspace`, {
       method: "POST",
       signal: AbortSignal.timeout(PING_TIMEOUT_MS),
     });
+    if (response.status === 404) {
+      log.debug("ping", "Workspace endpoint is missing, the plugin is outdated", { port, status: response.status });
+      return { endpointMissing: true, recognized: false, workspace: null };
+    }
     if (!response.ok) {
       log.debug("ping", "Workspace request answered with an HTTP error", { port, status: response.status });
       return null;
     }
     const body = await response.json();
-    return body && typeof body.workspace === "string" && body.workspace ? body.workspace : null;
+    if (!body || body.plugin !== "diffy") {
+      return null;
+    }
+    if (!Object.prototype.hasOwnProperty.call(body, "workspace")) {
+      return { recognized: false, workspace: null };
+    }
+    const workspace = typeof body.workspace === "string" && body.workspace ? body.workspace : null;
+    return { recognized: true, workspace };
   } catch (error) {
     log.debug("ping", "Workspace request failed", { port, reason: error && error.name });
     return null;

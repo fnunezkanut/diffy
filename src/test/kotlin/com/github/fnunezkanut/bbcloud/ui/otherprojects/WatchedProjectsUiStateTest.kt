@@ -233,6 +233,26 @@ class WatchedProjectsUiStateTest {
         )
     }
 
+    @Test
+    fun `checkoutEnabled - is true only when no checkout, sync, or prune runs`() {
+        // GIVEN every combination of the three flags
+        val cases = listOf(false, true).flatMap { checkout ->
+            listOf(false, true).flatMap { sync ->
+                listOf(false, true).map { prune -> Triple(checkout, sync, prune) }
+            }
+        }
+
+        // WHEN
+        val results = cases.map { (checkout, sync, prune) ->
+            WatchedProjectsUiState(checkoutInProgress = checkout, syncEnabled = sync, pruneEnabled = prune).checkoutEnabled
+        }
+
+        // THEN
+        assertSoftly {
+            results shouldBe cases.map { (checkout, sync, prune) -> !checkout && sync && prune }
+        }
+    }
+
     private fun worktree(prNumber: Long, branchName: String?): WatchedProjectWorktreeRow {
         return WatchedProjectWorktreeRow(
             prNumber = prNumber,

@@ -18,7 +18,7 @@ fun isBrowserExtensionOrigin(origin: String?): Boolean {
 }
 
 /**
- * True when [origin] is the Diffy Chrome extension, or any Firefox extension.
+ * True when [origin] is the Diffy Chrome extension (store or unpacked copy), or any Firefox extension.
  *
  * A Firefox extension origin is `moz-extension://<uuid>` with a random UUID per browser profile, so it cannot be pinned
  * like the Chrome ID. A web page cannot forge an extension `Origin`, so only an installed add-on can pass this check.
@@ -27,7 +27,7 @@ fun isDiffyExtensionOrigin(origin: String?): Boolean {
     if (origin == null) {
         return false
     }
-    if (origin == DiffyExternalOrigins.ALLOWED_EXTENSION_ORIGIN) {
+    if (origin in DiffyExternalOrigins.ALLOWED_CHROME_EXTENSION_ORIGINS) {
         return true
     }
     return origin.startsWith(DiffyExternalOrigins.FIREFOX_EXTENSION_PREFIX) &&

@@ -2,16 +2,13 @@
 
 A Manifest V3 Chrome extension that adds an **Open in IntelliJ** icon (the diffy plugin glyph) next to each pull
 request on `bitbucket.org`. Clicking it opens that pull request in a git worktree in a running IntelliJ IDE that has
-the **diffy** plugin installed.
+the **diffy** plugin (1.12.0 or newer) installed. It has the same features as the Firefox extension in
+[`diffy-firefox-ext/`](../diffy-firefox-ext/README.md).
 
 
-## Install for your own use
+## Install
 
-1. Open `chrome://extensions`.
-2. Turn on **Developer mode** (top-right).
-3. Click **Load unpacked** and select this `diffy-chrome-ext/` directory.
-4. Open a pull request list or a pull request page on `bitbucket.org`. An **Open in IntelliJ** icon appears next to
-   each PR in a list, or beside the PR title on detail pages (`/overview`, `/diff`, `/commits`, and other sub-tabs).
+[Install Chrome Extension](https://chromewebstore.google.com/detail/diffy-bitbucket-pr-review/pkeoedpgepmldoikeedkchmhkgjpelln)
 
 
 ## How it works
@@ -86,11 +83,18 @@ Look for these entries in the log (all lines start with `[diffy]`):
 | Log line | Meaning |
 | --- | --- |
 | `No diffy IDE answered on ports 63342-63361` | IDE closed, built-in server off, or the plugin is not installed |
-| `Ping reply has no workspace` | No workspace set in the plugin, or this extension ID differs from the plugin's allowed ID |
+| `Ping reply has no workspace` | Check the `originRecognized` field. `false`: the plugin did not recognize this extension ID, update the Diffy plugin. `true`: no workspace is set in the plugin |
+| `IntelliJ did not recognize this extension` (Sync message) | The plugin is older than the extension, or the extension ID is not in the plugin's allowed list; update the Diffy plugin |
+| `The Diffy plugin in IntelliJ is too old for this extension` (Sync message) | The plugin has no `/api/diffy/workspace` endpoint (404); update the Diffy plugin |
 | `IntelliJ answered with an HTTP error status` (404) | Extension ID mismatch or an outdated plugin |
 | `Waiting for IntelliJ to report a workspace` | Capture cannot start until a ping reply carries the workspace. Set the workspace slug in the Diffy settings in IntelliJ; the Sync button then shows that message |
 | `Not signed in to Bitbucket` | The Bitbucket session expired; sign in again |
 | `Cycle skipped: another cycle holds the lock` | A cycle is running or died mid-run; the Sync button overrides the lock |
+
+The plugin accepts the Chrome Web Store ID `pkeoedpgepmldoikeedkchmhkgjpelln` and the unpacked copy loaded from
+`diffy-chrome-ext/` (`knninefpkpeielbdhlbhdheabjmkebpb`). Loading the unpacked copy from a different path produces a
+different ID, which the plugin rejects. If you run both the store and the unpacked copy, disable one: both would sync
+and double the Bitbucket API calls.
 
 The plugin logs the other side in `idea.log` (category `com.github.fnunezkanut.bbcloud.external`), including the origin
 it received and the one it expects.
@@ -109,10 +113,6 @@ every 15 minutes and caches the latest result in `chrome.storage.local`. It send
 IntelliJ plugin on `127.0.0.1`, plus the `workspace`, `repo` and `pr` values when you click Open in IntelliJ. It never
 sends anything to any other server. Cookies, tokens, avatar URLs and comment text are never stored or sent, and the
 diagnostic log never contains them or pull request titles.
-
-## Extension ID 
-
-`knninefpkpeielbdhlbhdheabjmkebpb`
 
 
 ## Files

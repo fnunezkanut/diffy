@@ -395,7 +395,7 @@
           port: found.port,
           status: httpStatus,
           elapsedMs: Date.now() - startedAt,
-          hint: "404 usually means the extension ID differs from the plugin's allowed ID, or the plugin is outdated",
+          hint: "A rejected origin or an outdated plugin returns an HTTP error from /api/diffy/snapshot; the extension ID may differ from the plugin's allowed IDs",
         });
       }
       reply = await response.json();
@@ -508,12 +508,33 @@
       }
       const workspace = await storage.get(WORKSPACE_KEY);
       if (!workspace) {
-        const message = ide
-          ? "IntelliJ has no Bitbucket workspace configured. Set the workspace slug in the Diffy settings in IntelliJ, then sync again."
-          : "No IntelliJ with the Diffy plugin was found. Start IntelliJ with the Diffy plugin, then sync again.";
+        const info = ide && ide.info ? ide.info : {};
+        const pluginOutdated = info.pluginOutdated === true;
+        const notRecognized = !pluginOutdated && info.originRecognized === false;
+        let message;
+        let hint;
+        if (!ide) {
+          message = "No IntelliJ with the Diffy plugin was found. Start IntelliJ with the Diffy plugin, then sync again.";
+          hint = "No IntelliJ with the Diffy plugin answered the ping";
+        } else if (pluginOutdated) {
+          message =
+            "The Diffy plugin in IntelliJ is too old for this extension. Update the Diffy plugin in IntelliJ, then sync again.";
+          hint = "The plugin answered 404 for /api/diffy/workspace; update the Diffy plugin";
+        } else if (notRecognized) {
+          const extensionId = globalThis.chrome && chrome.runtime && chrome.runtime.id;
+          const idText = extensionId ? ` (ID ${extensionId})` : "";
+          message = `IntelliJ did not recognize this extension${idText}. Update the Diffy plugin in IntelliJ, then sync again.`;
+          hint = "IntelliJ did not recognize this extension ID; update the Diffy plugin";
+        } else {
+          message =
+            "IntelliJ has no Bitbucket workspace configured. Set the workspace slug in the Diffy settings in IntelliJ, then sync again.";
+          hint = "No workspace is configured in the Diffy plugin settings";
+        }
         logger.warn("capture", "Waiting for IntelliJ to report a workspace", {
           idePresent: Boolean(ide),
-          hint: "No workspace in the ping reply: configure the workspace in the plugin, or check the extension ID",
+          originRecognized: info.originRecognized,
+          pluginOutdated,
+          hint,
         });
         await updateStatus({ lastCaptureError: message });
         return;

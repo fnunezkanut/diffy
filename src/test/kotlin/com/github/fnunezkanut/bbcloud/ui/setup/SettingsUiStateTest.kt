@@ -21,18 +21,6 @@ class SettingsUiStateTest {
     }
 
     @Test
-    fun `authenticationMethod - should mirror the working method ApiToken`() {
-        // GIVEN
-        val state = SettingsUiState(pluginVersionFooter = "x", workingMethod = DiffyAuthenticationMethod.ApiToken)
-
-        // WHEN
-        val method = state.authenticationMethod
-
-        // THEN
-        method shouldBe DiffyAuthenticationMethod.ApiToken
-    }
-
-    @Test
     fun `authenticationMethod - should mirror the working method OAuth`() {
         // GIVEN
         val state = SettingsUiState(pluginVersionFooter = "x", workingMethod = DiffyAuthenticationMethod.OAuth)
@@ -50,13 +38,6 @@ class SettingsUiStateTest {
             // Nothing stored: not a "stored but not working" state.
             SettingsUiState(pluginVersionFooter = "x").hasStoredButNotWorkingCredentials shouldBe false
 
-            // API token stored but nothing works online.
-            SettingsUiState(
-                pluginVersionFooter = "x",
-                hasStoredToken = true,
-                workingMethod = DiffyAuthenticationMethod.None
-            ).hasStoredButNotWorkingCredentials shouldBe true
-
             // OAuth stored but nothing works online.
             SettingsUiState(
                 pluginVersionFooter = "x",
@@ -67,8 +48,8 @@ class SettingsUiStateTest {
             // A working method means it is not in the warning state.
             SettingsUiState(
                 pluginVersionFooter = "x",
-                hasStoredToken = true,
-                workingMethod = DiffyAuthenticationMethod.ApiToken
+                hasOAuthTokens = true,
+                workingMethod = DiffyAuthenticationMethod.OAuth
             ).hasStoredButNotWorkingCredentials shouldBe false
         }
     }
