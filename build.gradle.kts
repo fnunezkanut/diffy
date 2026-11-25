@@ -53,7 +53,7 @@ dependencies {
         exclude(group = "org.jetbrains.kotlin")
     }
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
 
     testImplementation("io.kotest:kotest-assertions-core-jvm:6.2.6")
     testImplementation("io.mockk:mockk:1.14.11")
