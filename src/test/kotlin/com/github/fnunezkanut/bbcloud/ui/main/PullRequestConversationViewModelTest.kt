@@ -1,7 +1,10 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
+import com.github.fnunezkanut.bbcloud.bitbucket.CommentChange
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestComment
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestConversation
+import com.github.fnunezkanut.bbcloud.bitbucket.TimelineEntry
+import com.intellij.openapi.project.Project
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -265,6 +268,130 @@ class PullRequestConversationViewModelTest {
                 assertSoftly(viewModel.state.value) {
                     scrollRequest shouldBe before.scrollRequest
                     threads shouldBe before.threads
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+    }
+
+    @Nested
+    inner class OptimisticResolveTests {
+        private val scope = CoroutineScope(SupervisorJob())
+        private var finish: ((Boolean) -> Unit)? = null
+        private val commentEditor = object : CommentEditor {
+            override fun project(): Project? {
+                return null
+            }
+
+            override fun addComment(content: String, onResult: (Boolean) -> Unit) {
+                onResult(true)
+            }
+
+            override fun applyCommentChange(change: CommentChange, onResult: (Boolean) -> Unit) {
+                finish = onResult
+            }
+        }
+        private val viewModel = PullRequestConversationViewModel(pullRequestId = { 273L }, commentEditor = commentEditor)
+
+        private fun showOpenThread() {
+            val thread = TimelineEntry.CommentThread(root = comment(id = 5, raw = "hello"), replies = emptyList())
+            viewModel.showConversation(conversation = emptyConversation().copy(threads = listOf(thread)), coroutineScope = scope)
+        }
+
+        @Test
+        fun `applyCommentChange - should show the thread as resolved before the request finishes`() {
+            // GIVEN
+            showOpenThread()
+
+            try {
+                // WHEN
+                viewModel.applyCommentChange(change = CommentChange.Resolve(commentId = 5))
+
+                // THEN
+                assertSoftly {
+                    viewModel.state.value.threads.single().root.isResolved shouldBe true
+                    viewModel.isUpdating(commentId = 5) shouldBe true
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `applyCommentChange - should restore the thread when the request is rejected`() {
+            // GIVEN
+            showOpenThread()
+            viewModel.applyCommentChange(change = CommentChange.Resolve(commentId = 5))
+
+            try {
+                // WHEN
+                finish?.invoke(false)
+
+                // THEN
+                assertSoftly {
+                    viewModel.state.value.threads.single().root.isResolved shouldBe false
+                    viewModel.isUpdating(commentId = 5) shouldBe false
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `applyCommentChange - should keep the resolved thread when the request is accepted`() {
+            // GIVEN
+            showOpenThread()
+            viewModel.applyCommentChange(change = CommentChange.Resolve(commentId = 5))
+
+            try {
+                // WHEN
+                finish?.invoke(true)
+
+                // THEN
+                assertSoftly {
+                    viewModel.state.value.threads.single().root.isResolved shouldBe true
+                    viewModel.isUpdating(commentId = 5) shouldBe false
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `applyCommentChange - should not roll back over a newer conversation`() {
+            // GIVEN
+            showOpenThread()
+            viewModel.applyCommentChange(change = CommentChange.Resolve(commentId = 5))
+            val newerThread = TimelineEntry.CommentThread(root = comment(id = 5, raw = "newer"), replies = emptyList())
+            viewModel.showConversation(conversation = emptyConversation().copy(threads = listOf(newerThread)), coroutineScope = scope)
+
+            try {
+                // WHEN
+                finish?.invoke(false)
+
+                // THEN
+                viewModel.state.value.threads shouldBe listOf(newerThread)
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `applyCommentChange - should ignore a second change while the first is in flight`() {
+            // GIVEN
+            showOpenThread()
+            viewModel.applyCommentChange(change = CommentChange.Resolve(commentId = 5))
+            var secondResult: Boolean? = null
+
+            try {
+                // WHEN
+                viewModel.applyCommentChange(change = CommentChange.Unresolve(commentId = 5), onResult = { accepted -> secondResult = accepted })
+
+                // THEN
+                assertSoftly {
+                    secondResult shouldBe false
+                    viewModel.state.value.threads.single().root.isResolved shouldBe true
                 }
             } finally {
                 scope.cancel()

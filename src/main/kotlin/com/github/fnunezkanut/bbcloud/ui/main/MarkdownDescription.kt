@@ -25,6 +25,9 @@ import java.net.URISyntaxException
  * a link opens the image URL in the browser, where the user's session can resolve it. Raw HTML images remain sanitized
  * as plain text.
  *
+ * Bitbucket smart links (`{: data-inline-card='' }` and other kramdown attribute lists after a link) render as plain
+ * links, because Jewel has no attribute-list support and the plugin cannot fetch the card preview.
+ *
  * The rendered text is selectable, so users can copy descriptions, comment bodies and composer previews. Link clicks
  * still open in the browser.
  */
@@ -48,7 +51,7 @@ internal fun MarkdownDescription(markdown: String) {
 
 internal fun normalizeDescription(markdown: String): String {
     // Replace Bitbucket emoji markup (`:name:{: data-emoji-text='…' }`) with the emoji first, so the image attribute regex
-    // below never sees an emoji fragment.
+    // below never sees an emoji fragment (the link attribute regex runs after this).
     val withEmoji = CommentEmojiResolver.resolveEmoji(body = markdown)
     // The image and HTML rewrites apply to prose only. Inline code spans and fenced blocks are copied through unchanged,
     // so code such as `branch/<CID>-v<N>` keeps its angle brackets instead of being stripped as HTML tags.
@@ -66,11 +69,12 @@ internal fun normalizeDescription(markdown: String): String {
 }
 
 private fun normalizeProse(text: String): String {
-    // Strip the trailing `{: ... }` attribute fragment first so the image -> link transform sees a clean `![alt](url)`.
-    val withoutImageAttributes = text.replace(IMAGE_ATTRIBUTE_FRAGMENT) { it.groupValues[1] }
+    // Strip the trailing `{: ... }` attribute fragment after links and images first, so smart links render as plain links
+    // and the image -> link transform sees a clean `![alt](url)`.
+    val withoutAttributes = text.replace(LINK_ATTRIBUTE_FRAGMENT) { it.groupValues[1] }
     // Convert Markdown images into Markdown links; Bitbucket images are not fetchable by the plugin, so we never
     // render them inline.
-    val withLinks = imagesToLinks(withoutImageAttributes)
+    val withLinks = imagesToLinks(withoutAttributes)
     // HTML `<img>` tags are intentionally dropped (no reliable alt/label, and the Swing precedent
     // `ConversationThreadRules.removeImages` already removes them for the same authentication reason).
     return withLinks.replace(IMAGE_TAG, "")
@@ -138,4 +142,7 @@ private val LOG = logger<MarkdownDescriptionLogCategory>()
 private val HTML_TAG = Regex("<[^>]+>")
 private val IMAGE_TAG = Regex("(?is)<img\\b[^>]*>")
 private val MARKDOWN_IMAGE = Regex("!\\[([^]]*)]\\(([^)]*)\\)")
-private val IMAGE_ATTRIBUTE_FRAGMENT = Regex("(!\\[[^]]*]\\([^)]*\\))\\{:[^}]*}")
+
+// A Markdown link or image followed directly by a kramdown inline attribute list, for example
+// `[url](url){: data-inline-card='' }` (a Bitbucket smart link) or `![](url){: data-layout='center' }`.
+private val LINK_ATTRIBUTE_FRAGMENT = Regex("(!?\\[[^]]*]\\([^)]*\\))\\{:[^}]*}")

@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentChange
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestComment
+import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestCommentOptimisticChange
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestConversation
 import com.github.fnunezkanut.bbcloud.bitbucket.TimelineEntry
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
@@ -316,13 +317,45 @@ class PullRequestConversationViewModel(
             return
         }
         setUpdating(commentId = commentId, isUpdating = true)
+        val optimistic = showOptimisticChange(change = change)
         commentEditor.applyCommentChange(change = change) { isAccepted ->
             setUpdating(commentId = commentId, isUpdating = false)
             if (!isAccepted) {
                 LOG.info("The ${change::class.simpleName} action was rejected on comment $commentId of pull request #${pullRequestId()}")
+                if (optimistic != null) {
+                    rollBackOptimisticChange(optimistic = optimistic)
+                }
             }
             onResult(isAccepted)
         }
+    }
+
+    /** The threads before an optimistic change and the threads it showed; the latter is compared by reference on rollback. */
+    private class OptimisticChange(val previous: List<TimelineEntry.CommentThread>, val shown: List<TimelineEntry.CommentThread>)
+
+    /** Shows a resolve or unresolve at once, before Bitbucket answers. Returns null when the change is not optimistic. */
+    private fun showOptimisticChange(change: CommentChange): OptimisticChange? {
+        if (!PullRequestCommentOptimisticChange.isOptimistic(change = change)) {
+            return null
+        }
+        val previous = state.value.threads
+        val shown = PullRequestCommentOptimisticChange.applyToThreads(threads = previous, change = change)
+        if (shown === previous) {
+            return null
+        }
+        LOG.info("Showing ${change::class.simpleName} on comment ${change.commentId} before Bitbucket confirms it")
+        state.value = state.value.copy(threads = shown)
+        return OptimisticChange(previous = previous, shown = shown)
+    }
+
+    /** Restores the threads from before the change, unless a newer conversation replaced the optimistic one meanwhile. */
+    private fun rollBackOptimisticChange(optimistic: OptimisticChange) {
+        if (state.value.threads !== optimistic.shown) {
+            LOG.debug("Not rolling back the optimistic change; a newer conversation is shown")
+            return
+        }
+        LOG.info("Rolling back the optimistic change in pull request #${pullRequestId()}")
+        state.value = state.value.copy(threads = optimistic.previous)
     }
 
     /** Returns a root or reply from the currently rendered conversation. */

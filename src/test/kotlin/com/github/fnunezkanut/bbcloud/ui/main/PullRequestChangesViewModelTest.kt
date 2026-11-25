@@ -4,33 +4,19 @@ import com.github.fnunezkanut.bbcloud.git.BranchDiffResult
 import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.FileStatus
 import com.intellij.openapi.vcs.changes.Change
-import com.intellij.openapi.vcs.changes.ChangesUtil
+import com.intellij.openapi.vcs.changes.ContentRevision
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 @Tag("unit")
 class PullRequestChangesViewModelTest {
-    @BeforeEach
-    fun mockChangesUtil() {
-        mockkStatic(ChangesUtil::class)
-    }
-
-    @AfterEach
-    fun unmockChangesUtil() {
-        unmockkStatic(ChangesUtil::class)
-    }
-
     @Nested
     inner class OnFileOpened {
         @Test
@@ -330,7 +316,7 @@ class PullRequestChangesViewModelTest {
         )
     }
 
-    /** A [Change] whose file path (via the mocked [ChangesUtil]) is [absolutePath], the path the row mapping reads. */
+    /** A [Change] whose after revision points at [absolutePath], the path the row mapping reads via `ChangesUtil`. */
     private fun changeForPath(absolutePath: String): Change {
         val filePath = mockk<FilePath> {
             every { path } returns absolutePath
@@ -338,11 +324,13 @@ class PullRequestChangesViewModelTest {
         val fileStatus = mockk<FileStatus> {
             every { color } returns null
         }
-        val change = mockk<Change> {
-            every { this@mockk.fileStatus } returns fileStatus
+        val afterRevision = mockk<ContentRevision> {
+            every { file } returns filePath
         }
-        every { ChangesUtil.getFilePath(change) } returns filePath
-        return change
+        return mockk<Change> {
+            every { this@mockk.fileStatus } returns fileStatus
+            every { this@mockk.afterRevision } returns afterRevision
+        }
     }
 
     companion object {

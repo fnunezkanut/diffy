@@ -190,7 +190,8 @@ class DiffyPluginDescriptorTest {
         handlers.map { it.getAttribute("implementation") } shouldContainExactly listOf(
             "com.github.fnunezkanut.bbcloud.external.DiffyOpenPullRequestRestService",
             "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotRestService",
-            "com.github.fnunezkanut.bbcloud.external.DiffyWorkspaceRestService"
+            "com.github.fnunezkanut.bbcloud.external.DiffyWorkspaceRestService",
+            "com.github.fnunezkanut.bbcloud.external.DiffyOpenStatusRestService"
         )
     }
 

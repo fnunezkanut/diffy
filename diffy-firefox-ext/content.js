@@ -2,18 +2,20 @@
 //
 // On pull request list pages, finds pull request links by their URL structure
 // (never by CSS class, which Bitbucket changes between frontend releases) and
-// injects an icon-only link (the diffy plugin glyph) next to the first
+// injects an icon-only link (the diffy plugin glyph) to the left of the title
 // anchor for each pull request.
 //
 // On pull request detail and sub-tab pages (overview, diff, commits, etc.),
 // parses workspace, repo, and PR id from the browser URL and injects the same
-// icon beside the PR title in the page header.
+// icon to the left of the PR title in the page header.
 //
 // A floating "Diffy sync" button (bottom left, signed-in users only) runs a capture
 // and delivery now instead of waiting for the 15 minute timer.
 //
 // Clicking the icon asks the background service worker to forward the request
-// to a running IntelliJ IDE's built-in HTTP server.
+// to a running IntelliJ IDE's built-in HTTP server. The icon turns into a
+// spinner and goes back to the plugin glyph once the IDE window has opened; the
+// content script polls the plugin's open status through the service worker.
 
 // Matches /<workspace>/<repo>/pull-requests/<n> with an optional trailing
 // slash. Deliberately skips sub-pages such as /pull-requests/123/diff.
@@ -36,6 +38,22 @@ const LIST_PAGE_HEADING = "Pull requests";
 // web_accessible_resources so a content script can load it by extension URL.
 const ICON_URL = chrome.runtime.getURL("icons/icon48.png");
 const RETRY_RESET_MS = 4000;
+
+// Loading state of the icon after a click.
+const OPEN_POLL_INTERVAL_MS = 1000;
+const OPEN_TIMEOUT_MS = 60000;
+// A plugin without the open-status endpoint cannot report completion, so the
+// spinner runs for this long after the click and then goes away.
+const UNSUPPORTED_SPINNER_MS = 3000;
+const UNKNOWN_LIMIT = 3;
+const SPINNER_COLOR = "#2684ff";
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+// The title anchor of a pull request row on list pages. Bitbucket keeps this
+// testing attribute stable, unlike its generated css-* class names.
+const TITLE_ANCHOR_SELECTOR = 'a[data-qa="pull-request-row-link"]';
+const ROW_SELECTOR = '[data-qa="pull-request-row"]';
+const FALLBACK_ROW_SELECTOR = 'tr, li, [role="row"]';
 
 function parsePrFromPathname(pathname) {
   const match = pathname.match(PR_DETAIL_PATH);
@@ -84,6 +102,48 @@ function findPrTitleElement() {
   return null;
 }
 
+// A 16x16 inline SVG arc that rotates. An inline element needs no stylesheet
+// and no web-accessible resource, and the Web Animations API is not blocked by
+// Bitbucket's content security policy.
+function createSpinner() {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("aria-hidden", "true");
+  svg.style.display = "block";
+
+  // r = 6 gives a circumference of about 37.7; 28.3 of it is the 270 degree arc.
+  const arc = document.createElementNS(SVG_NS, "circle");
+  arc.setAttribute("cx", "8");
+  arc.setAttribute("cy", "8");
+  arc.setAttribute("r", "6");
+  arc.setAttribute("fill", "none");
+  arc.setAttribute("stroke", SPINNER_COLOR);
+  arc.setAttribute("stroke-width", "2");
+  arc.setAttribute("stroke-linecap", "round");
+  arc.setAttribute("stroke-dasharray", "28.3 9.4");
+  svg.appendChild(arc);
+
+  // Reduced motion slows the rotation instead of removing it, so the loading
+  // state stays visible.
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  svg.animate([{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }], {
+    duration: reduced ? 2400 : 800,
+    iterations: Infinity,
+  });
+  return svg;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function messageOf(error) {
+  const invalidated = error && /context invalidated/i.test(error.message || "");
+  return invalidated ? "Reload the page" : "Extension is not responding";
+}
+
 function createOpenLink(workspace, repo, pr) {
   const defaultTitle = `Open pull request #${pr} in IntelliJ (${workspace}/${repo})`;
 
@@ -93,7 +153,7 @@ function createOpenLink(workspace, repo, pr) {
   link.setAttribute("aria-label", defaultTitle);
   link.style.display = "inline-flex";
   link.style.alignItems = "center";
-  link.style.marginLeft = "8px";
+  link.style.marginRight = "8px";
   link.style.verticalAlign = "middle";
   link.style.lineHeight = "0";
   link.dataset.diffyInjected = "1";
@@ -109,17 +169,34 @@ function createOpenLink(workspace, repo, pr) {
 
   let inFlight = false;
 
-  link.addEventListener("click", async (event) => {
-    event.preventDefault();
-    if (inFlight) {
-      return;
-    }
-    inFlight = true;
-    // Dim the icon while the open is in flight; the title carries the state so
-    // the icon-only link stays accessible.
-    icon.style.opacity = "0.4";
+  function showSpinner() {
+    link.replaceChildren(createSpinner());
+    link.setAttribute("aria-busy", "true");
     link.title = `Opening pull request #${pr} in IntelliJ…`;
+  }
 
+  // The one place that takes the spinner off the screen, so no code path can
+  // leave it running.
+  function showIcon(title, opacity) {
+    link.replaceChildren(icon);
+    link.removeAttribute("aria-busy");
+    icon.style.opacity = opacity;
+    link.title = title;
+  }
+
+  // Lets the user click again right away and puts the default title back after
+  // a moment, unless a new open has started in the meantime.
+  function finish(resetTitleAfterMs) {
+    inFlight = false;
+    window.setTimeout(() => {
+      if (!inFlight) {
+        icon.style.opacity = "1";
+        link.title = defaultTitle;
+      }
+    }, resetTitleAfterMs);
+  }
+
+  async function requestOpen() {
     let result;
     try {
       result = await chrome.runtime.sendMessage({
@@ -131,24 +208,110 @@ function createOpenLink(workspace, repo, pr) {
     } catch (error) {
       result = { ok: false, message: "IntelliJ not running" };
     }
-
     if (!result) {
       // sendMessage can resolve to undefined when the worker closed the
       // channel without replying (e.g. it was terminated mid-flight).
       result = { ok: false, message: "IntelliJ not running" };
     }
+    return result;
+  }
 
-    icon.style.opacity = result.ok ? "1" : "0.5";
-    link.title = result.ok
-      ? `Opened pull request #${pr} in IntelliJ`
-      : result.message || "Could not open in IntelliJ";
+  // Polls the plugin through the service worker until the IDE window has
+  // opened. Every message also keeps the worker alive. Resolves to
+  // { state } with state one of opened, failed, unsupported, unknown, timeout,
+  // detached or error.
+  async function waitForOpen(clickedAt) {
+    let unknownCount = 0;
+    while (true) {
+      if (!link.isConnected) {
+        return { state: "detached" };
+      }
+      if (Date.now() - clickedAt >= OPEN_TIMEOUT_MS) {
+        return { state: "timeout" };
+      }
+      await sleep(OPEN_POLL_INTERVAL_MS);
 
-    // Re-enable after a short delay so the user can retry.
-    window.setTimeout(() => {
+      let reply;
+      try {
+        reply = await chrome.runtime.sendMessage({
+          type: "openStatus",
+          workspace,
+          repo,
+          pr: Number(pr),
+        });
+      } catch (error) {
+        console.warn("[diffy] open status got no reply", error && error.message);
+        return { state: "error", message: messageOf(error) };
+      }
+      if (!reply) {
+        return { state: "error", message: "Extension is not responding" };
+      }
+      console.debug("[diffy] open status", { pr, state: reply.state });
+
+      if (reply.state === "opened" || reply.state === "failed") {
+        return { state: reply.state };
+      }
+      if (reply.state === "unsupported") {
+        const remaining = UNSUPPORTED_SPINNER_MS - (Date.now() - clickedAt);
+        if (remaining > 0) {
+          await sleep(remaining);
+        }
+        return { state: "unsupported" };
+      }
+      if (reply.state === "unknown") {
+        unknownCount += 1;
+        if (unknownCount > UNKNOWN_LIMIT) {
+          return { state: "unknown" };
+        }
+      } else {
+        unknownCount = 0;
+      }
+    }
+  }
+
+  link.addEventListener("click", async (event) => {
+    event.preventDefault();
+    if (inFlight) {
+      return;
+    }
+    inFlight = true;
+    const clickedAt = Date.now();
+    showSpinner();
+    console.info("[diffy] open icon clicked", { pr });
+
+    const result = await requestOpen();
+    if (!result.ok) {
+      // The open was not accepted, so no IDE notification exists to explain it.
+      showIcon(result.message || "Could not open in IntelliJ", "0.5");
+      finish(RETRY_RESET_MS);
+      return;
+    }
+
+    const outcome = await waitForOpen(clickedAt);
+    console.info("[diffy] open finished", { pr, state: outcome.state });
+    if (outcome.state === "detached") {
       inFlight = false;
-      icon.style.opacity = "1";
-      link.title = defaultTitle;
-    }, RETRY_RESET_MS);
+      return;
+    }
+    if (outcome.state === "timeout") {
+      showIcon("Still opening. Check IntelliJ.", "1");
+      finish(RETRY_RESET_MS);
+      return;
+    }
+    if (outcome.state === "error") {
+      showIcon(outcome.message, "0.5");
+      finish(RETRY_RESET_MS);
+      return;
+    }
+    if (outcome.state === "failed") {
+      // IntelliJ shows a notification that explains the failure, so the icon
+      // just goes back to normal.
+      showIcon(defaultTitle, "1");
+      finish(0);
+      return;
+    }
+    showIcon(`Opened pull request #${pr} in IntelliJ`, "1");
+    finish(RETRY_RESET_MS);
   });
 
   return link;
@@ -178,7 +341,45 @@ function addPullRequestTitleLink() {
 
   const link = createOpenLink(workspace, repo, pr);
   link.dataset.diffyPrKey = key;
-  title.append(link);
+  title.prepend(link);
+}
+
+// Picks the anchor the icon goes in front of: the row's title anchor, else
+// the anchor with the most text that is not just "#123", else the first one.
+function pickTitleAnchor(anchors) {
+  const marked = anchors.find((anchor) => anchor.matches(TITLE_ANCHOR_SELECTOR));
+  if (marked) {
+    return marked;
+  }
+  let best = null;
+  let bestLength = 0;
+  for (const anchor of anchors) {
+    const text = anchor.textContent.replace(/\s+/g, " ").trim();
+    if (!text || /^#\d+$/.test(text)) {
+      continue;
+    }
+    if (text.length > bestLength) {
+      best = anchor;
+      bestLength = text.length;
+    }
+  }
+  return best || anchors[0];
+}
+
+// True when the row that holds the anchor already shows an icon for this PR,
+// for example when the title anchor was rendered after another anchor of the
+// same row had been handled in an earlier pass.
+function rowHasLink(anchor, key) {
+  const row = anchor.closest(ROW_SELECTOR) || anchor.closest(FALLBACK_ROW_SELECTOR) || anchor.parentElement;
+  if (!row) {
+    return false;
+  }
+  for (const existing of row.querySelectorAll('[data-diffy-injected="1"]')) {
+    if (existing.dataset.diffyPrKey === key) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function addLinks() {
@@ -186,10 +387,10 @@ function addLinks() {
     return;
   }
 
-  // De-duplicate per pull request within this pass: a single row can hold
-  // several anchors to the same PR (title, number, avatar). We inject next to
-  // the first matching anchor only.
-  const seen = new Set();
+  // Group the anchors of this pass per pull request: a single row can hold
+  // several anchors to the same PR (title, number, avatar), and the icon goes
+  // in front of one of them only.
+  const groups = new Map();
 
   for (const anchor of document.querySelectorAll('a[href*="/pull-requests/"]')) {
     if (anchor.dataset.diffy || anchor.dataset.diffyInjected) {
@@ -214,13 +415,22 @@ function addLinks() {
 
     const [, workspace, repo, pr] = match;
     const key = prKey(workspace, repo, pr);
-    if (seen.has(key)) {
+    let group = groups.get(key);
+    if (!group) {
+      group = { workspace, repo, pr, anchors: [] };
+      groups.set(key, group);
+    }
+    group.anchors.push(anchor);
+  }
+
+  for (const [key, group] of groups) {
+    const target = pickTitleAnchor(group.anchors);
+    if (rowHasLink(target, key)) {
       continue;
     }
-    seen.add(key);
-
-    const link = createOpenLink(workspace, repo, pr);
-    anchor.after(link);
+    const link = createOpenLink(group.workspace, group.repo, group.pr);
+    link.dataset.diffyPrKey = key;
+    target.before(link);
   }
 }
 

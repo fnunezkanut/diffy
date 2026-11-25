@@ -537,7 +537,11 @@ private fun ResolvedCardThread(thread: TimelineEntry.CommentThread, host: Commen
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(CARD_ACTION_GAP)
     ) {
-        Text(text = ConversationThreadRules.resolvedByText(thread.root.resolvedBy), color = JewelTheme.globalColors.text.info, modifier = Modifier.weight(1f))
+        Text(
+            text = ConversationThreadRules.resolvedNoticeText(comment = thread.root),
+            color = JewelTheme.globalColors.text.info,
+            modifier = Modifier.weight(1f)
+        )
         OutlinedButton(
             onClick = { host.setResolvedThreadExpanded(rootCommentId = thread.root.id, expanded = !expanded) }
         ) {

@@ -34,6 +34,45 @@ class ConversationThreadRulesTest {
     }
 
     @Nested
+    inner class ResolvedNoticeTextTests {
+        @Test
+        fun `resolvedNoticeText - should only say resolved while the resolve is pending`() {
+            // GIVEN
+            val pending = comment(author = author, isResolved = true).copy(isResolutionPending = true)
+
+            // WHEN
+            val result = ConversationThreadRules.resolvedNoticeText(comment = pending)
+
+            // THEN
+            result shouldBe "Resolved"
+        }
+
+        @Test
+        fun `resolvedNoticeText - should name the resolver once the resolve is confirmed`() {
+            // GIVEN
+            val confirmed = comment(author = author, isResolved = true).copy(resolvedBy = reviewer)
+
+            // WHEN
+            val result = ConversationThreadRules.resolvedNoticeText(comment = confirmed)
+
+            // THEN
+            result shouldBe "Resolved by Reviewer"
+        }
+
+        @Test
+        fun `resolvedNoticeText - should fall back to the unknown user without a resolver`() {
+            // GIVEN
+            val confirmed = comment(author = author, isResolved = true)
+
+            // WHEN
+            val result = ConversationThreadRules.resolvedNoticeText(comment = confirmed)
+
+            // THEN
+            result shouldBe "Resolved by Unknown user"
+        }
+    }
+
+    @Nested
     inner class ShowsThreadBodyTests {
         @Test
         fun `showsThreadBody - should be true for an unresolved thread`() {

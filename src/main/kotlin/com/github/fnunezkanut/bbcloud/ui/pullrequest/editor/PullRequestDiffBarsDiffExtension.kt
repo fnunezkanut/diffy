@@ -6,6 +6,7 @@ import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
 import com.github.fnunezkanut.bbcloud.settings.DiffySettings
 import com.github.fnunezkanut.bbcloud.ui.diff.DiffyPullRequestDiffCommentService
 import com.github.fnunezkanut.bbcloud.ui.diff.PullRequestReviewCommentTarget
+import com.github.fnunezkanut.bbcloud.ui.diffmain.DiffAgainstMainOpener
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestCommentFileOpener
 import com.github.fnunezkanut.bbcloud.ui.markdowndiff.MarkdownDiffFromDiffRequest
 import com.intellij.diff.DiffContext
@@ -52,6 +53,10 @@ import javax.swing.JComponent
 class PullRequestDiffBarsDiffExtension : DiffExtension() {
     override fun onViewerCreated(viewer: FrameDiffTool.DiffViewer, context: DiffContext, request: DiffRequest) {
         val project = context.project ?: return
+        if (request.getUserData(DiffAgainstMainOpener.DIFF_AGAINST_MAIN_KEY) == true) {
+            LOG.debug("Pull request bars skipped: the diff is a file against the main branch")
+            return
+        }
         collapseUnchangedFragments(project = project, context = context)
         if (request.getUserData(BLUE_BAR_ATTACHED_KEY) != true) {
             request.putUserData(BLUE_BAR_ATTACHED_KEY, true)

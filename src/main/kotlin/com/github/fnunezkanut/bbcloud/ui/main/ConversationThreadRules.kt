@@ -98,6 +98,14 @@ object ConversationThreadRules {
         return DiffyBundle.message("main.branch.history.resolvedBy", name)
     }
 
+    /** The notice of a resolved thread; a resolve Bitbucket has not confirmed yet has no resolver, so it only says "Resolved". */
+    fun resolvedNoticeText(comment: PullRequestComment): String {
+        if (comment.isResolutionPending) {
+            return DiffyBundle.message("main.branch.history.resolvedPending")
+        }
+        return resolvedByText(comment.resolvedBy)
+    }
+
     /** The name of a comment author; Bitbucket does not always report the author of a deleted comment. */
     fun authorName(author: ActivityUser?): String {
         return author?.displayName?.takeIf { displayName -> displayName.isNotBlank() }
