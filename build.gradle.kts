@@ -4,7 +4,7 @@ import org.gradle.api.tasks.testing.TestResult
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 
 plugins {
-    kotlin("jvm") version "2.4.20"
+    kotlin("jvm") version "2.4.21"
     kotlin("plugin.serialization") version "2.4.20"
     id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
     // Compose MP 1.12.1 matches Jewel 0.42, the first Jewel release whose min IJP is 2026.3.
