@@ -4,8 +4,8 @@ import org.gradle.api.tasks.testing.TestResult
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 
 plugins {
-    kotlin("jvm") version "2.4.20"
-    kotlin("plugin.serialization") version "2.4.20"
+    kotlin("jvm") version "2.4.21"
+    kotlin("plugin.serialization") version "2.4.21"
     id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
     // Compose MP 1.12.1 matches Jewel 0.42, the first Jewel release whose min IJP is 2026.3.
     id("org.jetbrains.compose") version "1.12.1"
@@ -53,10 +53,10 @@ dependencies {
         exclude(group = "org.jetbrains.kotlin")
     }
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
 
-    testImplementation("io.kotest:kotest-assertions-core-jvm:6.2.6")
-    testImplementation("io.mockk:mockk:1.14.11")
+    testImplementation("io.kotest:kotest-assertions-core-jvm:6.2.7")
+    testImplementation("io.mockk:mockk:1.14.12")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
 }

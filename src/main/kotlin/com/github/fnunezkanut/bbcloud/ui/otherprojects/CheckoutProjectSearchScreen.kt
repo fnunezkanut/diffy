@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(
+    org.jetbrains.jewel.foundation.ExperimentalJewelApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class
+)
 @file:Suppress("ktlint:standard:function-naming")
 
 package com.github.fnunezkanut.bbcloud.ui.otherprojects
