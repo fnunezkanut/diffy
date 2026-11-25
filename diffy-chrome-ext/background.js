@@ -248,6 +248,56 @@ async function openPullRequest(msg) {
   }
 }
 
+const OPEN_STATUS_TIMEOUT_MS = 2000;
+const OPEN_STATES = new Set(["opening", "opened", "failed", "unknown"]);
+
+// Asks the plugin how an accepted open is going (POST /api/diffy/open-status).
+// The content script polls this while the icon shows a spinner. Replies
+// { state } with state one of opening, opened, failed, unknown, or unsupported
+// for a plugin older than 1.15.0 that has no such endpoint (404).
+async function openStatus(msg) {
+  const port = await findPort();
+  if (!port) {
+    return { state: "failed", message: "IntelliJ not running" };
+  }
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/diffy/open-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Forward only the three contract fields, never the raw message.
+      body: JSON.stringify({
+        workspace: msg.workspace,
+        repo: msg.repo,
+        pr: msg.pr,
+      }),
+      signal: AbortSignal.timeout(OPEN_STATUS_TIMEOUT_MS),
+    });
+    if (response.status === 404) {
+      log.debug("open", "Open status endpoint is missing, the plugin is outdated", { port });
+      return { state: "unsupported" };
+    }
+    if (!response.ok) {
+      log.debug("open", "Open status answered with an HTTP error", { port, status: response.status });
+      return { state: "failed", message: "IntelliJ not reachable" };
+    }
+    const body = await response.json();
+    const state = body && OPEN_STATES.has(body.status) ? body.status : "unknown";
+    // The content script stops polling after opened or failed, so those log once per open.
+    if (state === "opened" || state === "failed") {
+      log.info("open", "Open finished", { port, pr: msg.pr, state });
+    } else {
+      log.debug("open", "Open status polled", { port, pr: msg.pr, state });
+    }
+    return { state, message: body && body.message ? body.message : null };
+  } catch (error) {
+    // The IDE may have been quit meanwhile; drop the cache so the next click rescans.
+    log.warn("open", "IntelliJ not reachable for the open status", { port, reason: error && error.name });
+    await clearCachedPort();
+    return { state: "failed", message: "IntelliJ not reachable" };
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   log.debug("message", "Received a message", { type: msg && msg.type });
   if (msg && msg.type === "syncNow") {
@@ -278,6 +328,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     })().catch((error) => {
       log.error("capture", "captureNow failed", { reason: error && error.message });
       reply(null);
+    });
+    return true;
+  }
+  if (msg && msg.type === "openStatus") {
+    // The icon spinner on bitbucket.org pages: has the IDE window opened yet?
+    (async () => {
+      reply(await openStatus(msg));
+    })().catch((error) => {
+      log.error("open", "Open status failed", { reason: error && error.message });
+      reply({ state: "failed", message: "IntelliJ not reachable" });
     });
     return true;
   }

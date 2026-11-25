@@ -193,6 +193,108 @@ class NormalizeDescriptionTest {
     }
 
     @Test
+    fun `normalizeDescription - should strip the inline card attribute list after a link`() {
+        // GIVEN
+        val link = "[https://example.com/browse/ABC-1](https://example.com/browse/ABC-1)"
+        val markdown = "See $link{: data-inline-card='' } for details"
+
+        // WHEN
+        val result = normalizeDescription(markdown)
+
+        // THEN
+        assertSoftly {
+            result shouldBe "See $link for details"
+            result shouldNotContain "{:"
+            result shouldNotContain "data-inline-card"
+        }
+    }
+
+    @Test
+    fun `normalizeDescription - should strip a block card attribute list after a link on its own line`() {
+        // GIVEN
+        val markdown = "Intro\n\n[https://example.com/x](https://example.com/x){: data-block-card='' }\n\nOutro"
+
+        // WHEN
+        val result = normalizeDescription(markdown)
+
+        // THEN
+        result shouldBe "Intro\n\n[https://example.com/x](https://example.com/x)\n\nOutro"
+    }
+
+    @Test
+    fun `normalizeDescription - should accept double-quoted attribute values after a link`() {
+        // GIVEN
+        val markdown = "[a](https://example.com){: data-inline-card=\"\" }"
+
+        // WHEN
+        val result = normalizeDescription(markdown)
+
+        // THEN
+        result shouldBe "[a](https://example.com)"
+    }
+
+    @Test
+    fun `normalizeDescription - should strip attribute lists after several links`() {
+        // GIVEN
+        val markdown = "[a](https://example.com/a){: data-inline-card='' } and [b](https://example.com/b){: data-inline-card='' }"
+
+        // WHEN
+        val result = normalizeDescription(markdown)
+
+        // THEN
+        result shouldBe "[a](https://example.com/a) and [b](https://example.com/b)"
+    }
+
+    @Test
+    fun `normalizeDescription - should keep a link attribute list inside inline code`() {
+        // GIVEN
+        val markdown = "`[a](b){: data-inline-card='' }`"
+
+        // WHEN
+        val result = normalizeDescription(markdown)
+
+        // THEN
+        result shouldBe markdown
+    }
+
+    @Test
+    fun `normalizeDescription - should keep a link attribute list inside a fenced code block`() {
+        // GIVEN
+        val markdown = "```\n[a](b){: data-inline-card='' }\n```"
+
+        // WHEN
+        val result = normalizeDescription(markdown)
+
+        // THEN
+        result shouldBe markdown
+    }
+
+    @Test
+    fun `normalizeDescription - should leave a brace group that is not an attribute list`() {
+        // GIVEN
+        val markdown = "[a](https://example.com){not an ial}"
+
+        // WHEN
+        val result = normalizeDescription(markdown)
+
+        // THEN
+        result shouldBe markdown
+    }
+
+    @Test
+    fun `normalizeDescription - should return the same result when a smart link is normalized twice`() {
+        // GIVEN
+        val markdown = "[a](https://example.com/a){: data-inline-card='' } :+1:{: data-emoji-text='👍' }"
+
+        // WHEN
+        val once = normalizeDescription(markdown)
+        val twice = normalizeDescription(once)
+
+        // THEN
+        twice shouldBe once
+    }
+
+    @Test
     fun `normalizeDescription - should return the same result when normalized twice`() {
         // GIVEN
         val markdown = "Done :+1:{: data-emoji-id='1f44d' data-emoji-text='👍' } and ![](https://example.com/y.png)"

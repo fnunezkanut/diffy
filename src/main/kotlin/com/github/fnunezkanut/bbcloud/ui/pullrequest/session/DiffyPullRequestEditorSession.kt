@@ -152,6 +152,11 @@ class DiffyPullRequestEditorSession(
     private var isReviewerUpdateInProgress = false
     private var isTaskUpdateInProgress = false
     private var isCommentUpdateInProgress = false
+
+    /** Counts started comment changes, so a reload that began before a change can tell its result may be older than the change. */
+    private var commentChangeGeneration = 0
+    private var overviewReloadQueuedDuringCommentChange = false
+    private var inlineReloadQueuedDuringCommentChange = false
     private var isDescriptionUpdateInProgress = false
     private var loadedInlineCommentsPullRequestId: Long? = null
     private var loadedInlineComments: List<PullRequestComment>? = null
@@ -861,6 +866,12 @@ class DiffyPullRequestEditorSession(
     private fun loadPullRequestOverview(summary: PullRequestSummary, inPlaceRefresh: Boolean = false, revealNewestActivity: Boolean = false) {
         val basePath = project.basePath ?: return
         val url = organizationUrl ?: configurationService.organizationUrlOrNull() ?: return
+        if (isCommentUpdateInProgress) {
+            LOG.debug("Postponing the overview reload of pull request #${summary.id} until the comment change finishes")
+            overviewReloadQueuedDuringCommentChange = true
+            return
+        }
+        val generation = commentChangeGeneration
         coroutineScope.launch {
             val overview = openPullRequestService.pullRequestOverview(
                 projectBasePath = basePath,
@@ -870,6 +881,11 @@ class DiffyPullRequestEditorSession(
             invokeOnEdt {
                 if (summary.id != displayedPullRequestId) {
                     LOG.debug("Ignoring overview for pull request #${summary.id}; this editor shows #$displayedPullRequestId")
+                    return@invokeOnEdt
+                }
+                if (generation != commentChangeGeneration || isCommentUpdateInProgress) {
+                    LOG.debug("Dropping the overview of pull request #${summary.id}; a comment change started after it was requested")
+                    overviewReloadQueuedDuringCommentChange = true
                     return@invokeOnEdt
                 }
                 checkedOutBranchPanel.showOverview(
@@ -936,6 +952,11 @@ class DiffyPullRequestEditorSession(
         val basePath = project.basePath ?: return
         val pullRequestId = displayedPullRequestId ?: return
         val url = organizationUrl ?: configurationService.organizationUrlOrNull() ?: return
+        if (isCommentUpdateInProgress) {
+            LOG.debug("Postponing the inline comment reload of pull request #$pullRequestId until the comment change finishes")
+            inlineReloadQueuedDuringCommentChange = true
+            return
+        }
         when (fileCommentCountsLoadState.request(pullRequestId = pullRequestId, force = force)) {
             PullRequestFileCommentCountsLoadState.Request.AlreadyInProgress -> {
                 LOG.debug("Skipping inline comment reload; request already in progress for pull request #$pullRequestId")
@@ -949,6 +970,7 @@ class DiffyPullRequestEditorSession(
                 // Proceed to load inline comments below.
             }
         }
+        val generation = commentChangeGeneration
         coroutineScope.launch {
             val comments = openPullRequestService.listPullRequestComments(
                 projectBasePath = basePath,
@@ -969,6 +991,11 @@ class DiffyPullRequestEditorSession(
                 )
                 if (!completion.isForDisplayedPullRequest) {
                     LOG.debug("Ignoring inline comments for pull request #$pullRequestId; this editor shows #$displayedPullRequestId")
+                    return@invokeOnEdt
+                }
+                if (generation != commentChangeGeneration || isCommentUpdateInProgress) {
+                    LOG.debug("Dropping the inline comments of pull request #$pullRequestId; a comment change started after they were requested")
+                    inlineReloadQueuedDuringCommentChange = true
                     return@invokeOnEdt
                 }
                 val index = commentItems?.let { items -> PullRequestInlineCommentIndex.from(comments = items) }
@@ -1481,6 +1508,10 @@ class DiffyPullRequestEditorSession(
             return
         }
         isCommentUpdateInProgress = true
+        commentChangeGeneration++
+        // The inlays in open editors follow the page at once; the page itself is updated by the conversation view model.
+        val worktreeContext = DiffyWorktreePullRequestContext.getInstance(project)
+        val optimisticInlays = worktreeContext.showOptimisticChange(pullRequestId = summary.id, change = change)
         coroutineScope.launch {
             val result = openPullRequestService.applyCommentChange(
                 projectBasePath = basePath,
@@ -1490,22 +1521,33 @@ class DiffyPullRequestEditorSession(
             )
             invokeOnEdt {
                 isCommentUpdateInProgress = false
+                val reloadsQueuedOverview = overviewReloadQueuedDuringCommentChange
+                val reloadsQueuedInline = inlineReloadQueuedDuringCommentChange
+                overviewReloadQueuedDuringCommentChange = false
+                inlineReloadQueuedDuringCommentChange = false
                 when (result) {
                     PullRequestActionResult.Success -> {
                         onResult(true)
                         if (summary.id == displayedPullRequestId) {
                             loadPullRequestOverview(summary)
-                            if (reloadsInlineComments) {
+                            if (reloadsInlineComments || reloadsQueuedInline) {
                                 loadPullRequestInlineComments(force = true)
                             }
                         }
                     }
                     is PullRequestActionResult.Failed -> {
                         onResult(false)
+                        if (optimisticInlays != null) {
+                            worktreeContext.rollBackOptimisticChange(optimistic = optimisticInlays)
+                        }
                         showFailureNotification(
                             title = commentChangeFailureTitle(change = change, pullRequestId = summary.id),
                             message = result.message
                         )
+                        if (summary.id == displayedPullRequestId && (reloadsQueuedOverview || reloadsQueuedInline)) {
+                            loadPullRequestOverview(summary)
+                            loadPullRequestInlineComments(force = true)
+                        }
                     }
                 }
             }

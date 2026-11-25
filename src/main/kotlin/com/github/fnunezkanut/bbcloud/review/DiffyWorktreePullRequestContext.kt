@@ -12,6 +12,7 @@ import com.github.fnunezkanut.bbcloud.bitbucket.MentionNames
 import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketPullRequestClient
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestActionResult
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestComment
+import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestCommentOptimisticChange
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestCommentThreads
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDetails
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestInlineCommentIndex
@@ -123,6 +124,9 @@ class DiffyWorktreePullRequestContext(private val project: Project, private val 
     private var mentionJob: Job? = null
     private var commentReloadQueued = false
     private var commentUpdateInProgress = false
+
+    /** Counts started comment changes, so a reload that began before a change can tell its result may be older than the change. */
+    private var commentChangeGeneration = 0
     private var loadedCommentsPullRequestId: Long? = null
     private var lastObservedHead: WorktreeHead? = null
 
@@ -231,6 +235,11 @@ class DiffyWorktreePullRequestContext(private val project: Project, private val 
         val pullRequestId = currentBinding.pullRequestId
         val organizationUrl = configurationService.organizationUrlOrNull() ?: return
         synchronized(commentLoadLock) {
+            if (commentUpdateInProgress) {
+                // A comment change is in flight; its completion asks for a fresh reload, so wait for it.
+                commentReloadQueued = true
+                return
+            }
             if (commentLoadJob?.isActive == true) {
                 commentReloadQueued = commentReloadQueued || force
                 return
@@ -238,6 +247,7 @@ class DiffyWorktreePullRequestContext(private val project: Project, private val 
             if (!force && loadedCommentsPullRequestId == pullRequestId) {
                 return
             }
+            val generation = commentChangeGeneration
             commentLoadJob = coroutineScope.launch {
                 val result = openPullRequestService.listPullRequestComments(
                     projectBasePath = project.basePath,
@@ -256,7 +266,14 @@ class DiffyWorktreePullRequestContext(private val project: Project, private val 
                 val knownNames = result?.items?.let { items -> openPullRequestService.knownMentionNames(comments = items) } ?: MentionNames.NONE
                 withContext(Dispatchers.EDT) {
                     val isCurrentBinding = binding?.pullRequestId == pullRequestId
-                    if (isCurrentBinding && result != null) {
+                    val isOutdatedByCommentChange = synchronized(commentLoadLock) {
+                        generation != commentChangeGeneration || commentUpdateInProgress
+                    }
+                    if (isOutdatedByCommentChange) {
+                        LOG.debug("Dropping the comments of pull request #$pullRequestId; a comment change started after they were requested")
+                        synchronized(commentLoadLock) { commentReloadQueued = true }
+                    }
+                    if (isCurrentBinding && result != null && !isOutdatedByCommentChange) {
                         publishComments(
                             pullRequestId = pullRequestId,
                             comments = result.items,
@@ -500,6 +517,59 @@ class DiffyWorktreePullRequestContext(private val project: Project, private val 
         }
     }
 
+    /** The comments before an optimistic change and the list it published; the latter is compared by reference on rollback. */
+    class OptimisticComments internal constructor(
+        internal val pullRequestId: Long,
+        internal val previous: List<PullRequestComment>,
+        internal val shown: List<PullRequestComment>
+    )
+
+    /**
+     * Publishes a resolve or unresolve before Bitbucket confirmed it, so the inlays follow at once. Returns null when the
+     * change is not optimistic or the comment is not in the snapshot. Call on the EDT.
+     */
+    fun showOptimisticChange(pullRequestId: Long, change: CommentChange): OptimisticComments? {
+        if (!PullRequestCommentOptimisticChange.isOptimistic(change = change)) {
+            return null
+        }
+        val previous = comments
+        val shown = PullRequestCommentOptimisticChange.apply(comments = previous, change = change)
+        if (shown === previous) {
+            return null
+        }
+        LOG.info("Showing ${change::class.simpleName} on comment ${change.commentId} in pull request #$pullRequestId before Bitbucket confirms it")
+        publishComments(pullRequestId = pullRequestId, comments = shown, mentionNames = mentionNames, mentionsPending = mentionsPending)
+        return OptimisticComments(pullRequestId = pullRequestId, previous = previous, shown = shown)
+    }
+
+    /** Restores the comments from before the change, unless a newer snapshot replaced the optimistic one. Call on the EDT. */
+    fun rollBackOptimisticChange(optimistic: OptimisticComments) {
+        if (comments !== optimistic.shown) {
+            LOG.debug("Not rolling back the optimistic change in pull request #${optimistic.pullRequestId}; a newer snapshot is shown")
+            requestCommentsReload(force = true)
+            return
+        }
+        LOG.info("Rolling back the optimistic change in pull request #${optimistic.pullRequestId}")
+        publishComments(
+            pullRequestId = optimistic.pullRequestId,
+            comments = optimistic.previous,
+            mentionNames = mentionNames,
+            mentionsPending = mentionsPending
+        )
+    }
+
+    /** Runs the reload that was postponed while a comment change was in flight, if there was one. */
+    private fun reloadIfQueued() {
+        val queued = synchronized(commentLoadLock) {
+            val wasQueued = commentReloadQueued
+            commentReloadQueued = false
+            wasQueued
+        }
+        if (queued) {
+            requestCommentsReload(force = true)
+        }
+    }
+
     /** Applies an existing-comment mutation and refreshes all editor inlays after success. */
     fun applyCommentChange(change: CommentChange, onResult: (Boolean) -> Unit = {}) {
         val currentBinding = binding
@@ -517,8 +587,10 @@ class DiffyWorktreePullRequestContext(private val project: Project, private val 
                 return
             }
             commentUpdateInProgress = true
+            commentChangeGeneration++
         }
         LOG.info("Applying ${change::class.simpleName} on pull request #$pullRequestId")
+        val optimistic = showOptimisticChange(pullRequestId = pullRequestId, change = change)
         coroutineScope.launch {
             val result = openPullRequestService.applyCommentChange(
                 projectBasePath = basePath,
@@ -536,6 +608,10 @@ class DiffyWorktreePullRequestContext(private val project: Project, private val 
                     }
                     is PullRequestActionResult.Failed -> {
                         onResult(false)
+                        if (optimistic != null) {
+                            rollBackOptimisticChange(optimistic = optimistic)
+                        }
+                        reloadIfQueued()
                         LOG.warn("Failed to apply ${change::class.simpleName} on pull request #$pullRequestId: ${result.message}")
                         NotificationGroupManager.getInstance()
                             .getNotificationGroup("Diffy")

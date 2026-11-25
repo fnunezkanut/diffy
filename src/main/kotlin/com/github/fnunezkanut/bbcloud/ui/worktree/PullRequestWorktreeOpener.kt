@@ -8,6 +8,7 @@ import com.github.fnunezkanut.bbcloud.bitbucket.OkHttpBitbucketPullRequestClient
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
 import com.github.fnunezkanut.bbcloud.cache.DiffyPullRequestCache
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.external.DiffyOpenProgressTracker
 import com.github.fnunezkanut.bbcloud.git.BitbucketGitRemoteReader
 import com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService
 import com.github.fnunezkanut.bbcloud.git.WorktreeSetupResult
@@ -209,29 +210,53 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
      * the user's checkout from a browser request.
      */
     fun openInBackground(workspace: String, repoSlug: String, prNumber: Long) {
+        val tracker = DiffyOpenProgressTracker.getInstance()
+        // Marked before the launch, so the first status poll of the browser never sees an unknown open.
+        tracker.markOpening(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)
         coroutineScope.launch {
             try {
-                openFromBrowserRequest(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)
+                val result = openFromBrowserRequest(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)
+                recordProgress(tracker = tracker, workspace = workspace, repoSlug = repoSlug, prNumber = prNumber, result = result)
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
                 LOG.warn("Opening pull request #$prNumber from the browser failed", exception)
+                val content = DiffyBundle.message("otherProjects.worktree.failed.generic")
+                tracker.markFailed(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber, message = content)
                 notifyFailure(
                     prNumber = prNumber,
-                    content = DiffyBundle.message("otherProjects.worktree.failed.generic"),
+                    content = content,
                     webUrl = pullRequestWebUrl(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)
                 )
             }
         }
     }
 
-    private suspend fun openFromBrowserRequest(workspace: String, repoSlug: String, prNumber: Long) {
+    private fun recordProgress(tracker: DiffyOpenProgressTracker, workspace: String, repoSlug: String, prNumber: Long, result: BrowserOpenResult) {
+        when (result) {
+            BrowserOpenResult.Opened -> {
+                LOG.info("Pull request #$prNumber opened from the browser")
+                tracker.markOpened(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)
+            }
+            is BrowserOpenResult.Failed -> {
+                LOG.info("Pull request #$prNumber could not be opened from the browser")
+                tracker.markFailed(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber, message = result.message)
+            }
+            // The earlier open of the same work tree owns the progress entry.
+            BrowserOpenResult.AlreadyInProgress -> {
+                LOG.debug("Pull request #$prNumber is already being opened; keeping the progress of the earlier open")
+            }
+        }
+    }
+
+    private suspend fun openFromBrowserRequest(workspace: String, repoSlug: String, prNumber: Long): BrowserOpenResult {
         val webUrl = pullRequestWebUrl(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)
         val organizationUrl = DiffyConfigurationService.getInstance().organizationUrlOrNull()
         if (organizationUrl == null) {
             LOG.info("Cannot open pull request #$prNumber from the browser: no organization URL configured")
-            notifyFailure(prNumber = prNumber, content = DiffyBundle.message("otherProjects.worktree.failed.noOrgUrl"), webUrl = webUrl)
-            return
+            val content = DiffyBundle.message("otherProjects.worktree.failed.noOrgUrl")
+            notifyFailure(prNumber = prNumber, content = content, webUrl = webUrl)
+            return BrowserOpenResult.Failed(message = content)
         }
         val resolved = when (val resolution = resolve(workspace = workspace, repoSlug = repoSlug, prNumber = prNumber)) {
             is PullRequestWorktreeResolution.Resolved -> {
@@ -239,29 +264,23 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
             }
             PullRequestWorktreeResolution.WorkTreeDirMissing -> {
                 LOG.info("Cannot open pull request #$prNumber from the browser: work tree directory is unavailable")
-                notifyFailure(
-                    prNumber = prNumber,
-                    content = DiffyBundle.message("otherProjects.worktree.failed.workTreeDirMissing"),
-                    webUrl = webUrl
-                )
-                return
+                val content = DiffyBundle.message("otherProjects.worktree.failed.workTreeDirMissing")
+                notifyFailure(prNumber = prNumber, content = content, webUrl = webUrl)
+                return BrowserOpenResult.Failed(message = content)
             }
             PullRequestWorktreeResolution.SourceCheckoutMissing -> {
                 LOG.info("Cannot open pull request #$prNumber from the browser: no local clone of $repoSlug")
-                notifyFailure(
-                    prNumber = prNumber,
-                    content = DiffyBundle.message("otherProjects.worktree.failed.sourceCheckoutMissing", repoSlug),
-                    webUrl = webUrl
-                )
-                return
+                val content = DiffyBundle.message("otherProjects.worktree.failed.sourceCheckoutMissing", repoSlug)
+                notifyFailure(prNumber = prNumber, content = content, webUrl = webUrl)
+                return BrowserOpenResult.Failed(message = content)
             }
         }
         if (!tryBeginOpen(worktreePath = resolved.worktreePath)) {
             LOG.info("Opening pull request #$prNumber from the browser is already in progress")
-            return
+            return BrowserOpenResult.AlreadyInProgress
         }
         try {
-            when (
+            return when (
                 val outcome = prepareWorktree(
                     workspace = workspace,
                     repoSlug = repoSlug,
@@ -279,21 +298,22 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
                         worktreePath = outcome.worktreePath
                     )
                     if (opened == null) {
-                        notifyFailure(
-                            prNumber = prNumber,
-                            content = DiffyBundle.message("otherProjects.worktree.failed.openProjectFailed"),
-                            webUrl = outcome.summary.webUrl
-                        )
+                        val content = DiffyBundle.message("otherProjects.worktree.failed.openProjectFailed")
+                        notifyFailure(prNumber = prNumber, content = content, webUrl = outcome.summary.webUrl)
+                        BrowserOpenResult.Failed(message = content)
                     } else {
                         focusProject(project = opened.project)
+                        BrowserOpenResult.Opened
                     }
                 }
                 is WorktreeOpenOutcome.Failed -> {
                     notifyFailure(prNumber = prNumber, content = outcome.content, webUrl = webUrl)
+                    BrowserOpenResult.Failed(message = outcome.content)
                 }
                 is WorktreeOpenOutcome.BranchCollision -> {
                     LOG.info("Pull request #$prNumber from the browser needs its branch off the source clone; reporting only")
                     notifyBranchCollision(prNumber = prNumber, outcome = outcome, webUrl = webUrl)
+                    BrowserOpenResult.Failed(message = branchCollisionMessage(outcome = outcome))
                 }
             }
         } finally {
@@ -373,14 +393,18 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
         )
     }
 
+    private fun branchCollisionMessage(outcome: WorktreeOpenOutcome.BranchCollision): String {
+        return DiffyBundle.message(
+            "rest.open.branchCollision",
+            outcome.branchName,
+            outcome.sourceCheckoutPath.toString()
+        )
+    }
+
     private fun notifyBranchCollision(prNumber: Long, outcome: WorktreeOpenOutcome.BranchCollision, webUrl: String?) {
         notify(
             title = DiffyBundle.message("otherProjects.worktree.branchCheckedOut.title", prNumber),
-            content = DiffyBundle.message(
-                "rest.open.branchCollision",
-                outcome.branchName,
-                outcome.sourceCheckoutPath.toString()
-            ),
+            content = branchCollisionMessage(outcome = outcome),
             webUrl = webUrl,
             prNumber = prNumber
         )
@@ -415,6 +439,15 @@ class PullRequestWorktreeOpener(private val coroutineScope: CoroutineScope) {
 
     private fun normalized(path: Path): Path {
         return path.toAbsolutePath().normalize()
+    }
+
+    /** How a browser-triggered open ended, for the progress the extension polls. */
+    private sealed interface BrowserOpenResult {
+        data object Opened : BrowserOpenResult
+
+        data class Failed(val message: String) : BrowserOpenResult
+
+        data object AlreadyInProgress : BrowserOpenResult
     }
 
     companion object {

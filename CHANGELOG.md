@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## *1.15.0* - 2026-11-25
+* Changed: in the Chrome and Firefox extensions the Open in IntelliJ icon now sits to the left of the pull request title instead of the right
+* Added: the Open in IntelliJ icon turns into a loading spinner after you click it and goes back to the plugin icon when the IntelliJ window has opened (needs this plugin version; older plugins show the spinner for 3 seconds)
+* Fixed: Explain this PR with AI and Send to Air no longer insert the prompt into the Air chat of another open project window
+* Fixed: links in pull-request descriptions and comments no longer show Bitbucket markup such as `{: data-inline-card='' }` after them
+
 ## *1.14.0* - 2026-11-25
 * Fixed: the Chrome Web Store extension could not sync, open pull requests, or deliver notifications because the plugin accepted only the development extension ID; the Sync button also reported this as a missing workspace
 * Removed: Bitbucket API token sign-in. The plugin now signs in with Bitbucket OAuth only. If you used an API token, open Settings > Tools > Diffy - Bitbucket PR Review and authenticate with Bitbucket oauth login; the old token is deleted when you do

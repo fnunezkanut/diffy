@@ -10,6 +10,7 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.wm.IdeFocusManager
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.wm.WindowManager
@@ -20,13 +21,17 @@ import java.awt.Container
 import java.awt.Window
 import java.awt.datatransfer.StringSelection
 import java.util.concurrent.TimeUnit
+import javax.swing.JComponent
+import javax.swing.JRootPane
+import javax.swing.SwingUtilities
 
 /**
  * The only code that touches the JetBrains Air plugin.
  *
  * Air is an optional dependency with no public API, so nothing here is compiled against it. Air is detected by its global
- * prompt action, the chat is found by its tool window id, and the prompt input is matched by its class name. When a step
- * fails, the text is copied to the clipboard without a notification.
+ * prompt action, the chat is found by its tool window id, and the prompt input is matched by its class name. Only inputs
+ * and actions of the project that triggered the request are used, because several project windows share one JVM. When a
+ * step fails, the text is copied to the clipboard without a notification.
  */
 internal object AirChatBridge {
     private const val CHAT_TOOL_WINDOW_ID = "air.chat"
@@ -36,6 +41,8 @@ internal object AirChatBridge {
     private const val EXPLAIN_LABEL = "explain prompt"
     private const val PROMPT_INPUT_CLASS_NAME = "com.intellij.air.frontend.prompt.AirPromptEditorTextField"
     private const val RETRY_ATTEMPTS = 10
+    private const val NEW_THREAD_RETRY_ATTEMPTS = 20
+    private const val ACTIVATION_TIMEOUT_MS = 300L
     private const val RETRY_DELAY_MS = 50L
 
     private val LOG = logger<AirChatBridge>()
@@ -49,8 +56,9 @@ internal object AirChatBridge {
     }
 
     /**
-     * Puts [text] into the Air chat input. It activates the chat tool window first, and opens the global prompt when the chat
-     * has no input. Call it on the EDT. Air builds its UI asynchronously, so the insertion happens after a short wait.
+     * Puts [text] into the Air chat input of [project]. It activates the chat tool window first, and opens the global prompt
+     * when the chat has no input. Inputs of other projects are never used; without an input of [project], [text] is copied
+     * to the clipboard. Call it on the EDT. Air builds its UI asynchronously, so the insertion happens after a short wait.
      */
     fun sendToChatInput(project: Project, text: String) {
         activateChatToolWindow(project = project)
@@ -67,24 +75,66 @@ internal object AirChatBridge {
     }
 
     /**
-     * Starts a new Air thread when Air offers the action, puts [text] into the new thread's input, and focuses it. The
-     * prompt is never submitted; the user presses Enter. If the new-thread action is missing, [text] is appended after
-     * any draft in the current input. If no input is found, [text] is copied to the clipboard. [onResult] receives the
-     * outcome on the EDT. Call it on the EDT.
+     * Starts a new Air thread in [project] when Air offers the action, puts [text] into the new thread's input, and focuses
+     * it. The prompt is never submitted; the user presses Enter. If the new-thread action is missing, [text] is appended
+     * after any draft in the current input. Only inputs of [project] are used; if none is found, [text] is copied to the
+     * clipboard. [onResult] receives the outcome on the EDT. Call it on the EDT.
      */
     fun sendToNewChatInput(project: Project, text: String, onResult: (AirSendOutcome) -> Unit) {
-        activateChatToolWindow(project = project)
-        val startedNewThread = startNewThread()
-        awaitPromptInput(project = project, attemptsLeft = RETRY_ATTEMPTS, preferEmpty = startedNewThread) { chatInput ->
-            if (chatInput != null) {
-                finishExplain(project = project, input = chatInput, text = text, onResult = onResult)
-            } else {
-                openGlobalPrompt(project = project)
-                awaitPromptInput(project = project, attemptsLeft = RETRY_ATTEMPTS, preferEmpty = false) { paletteInput ->
-                    finishExplain(project = project, input = paletteInput, text = text, onResult = onResult)
+        activateThenStartNewThread(project = project) { startedNewThread ->
+            awaitPromptInput(project = project, attemptsLeft = NEW_THREAD_RETRY_ATTEMPTS, preferEmpty = startedNewThread) { chatInput ->
+                if (chatInput != null) {
+                    finishExplain(project = project, input = chatInput, text = text, onResult = onResult)
+                } else {
+                    openGlobalPrompt(project = project)
+                    awaitPromptInput(project = project, attemptsLeft = RETRY_ATTEMPTS, preferEmpty = false) { paletteInput ->
+                        finishExplain(project = project, input = paletteInput, text = text, onResult = onResult)
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Activates the chat tool window of [project], then starts a new thread exactly once and reports whether it started.
+     * The thread starts from the activation callback; if that does not run within [ACTIVATION_TIMEOUT_MS], it starts anyway
+     * with the project's own context component. Call it on the EDT.
+     */
+    private fun activateThenStartNewThread(project: Project, onStarted: (Boolean) -> Unit) {
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(CHAT_TOOL_WINDOW_ID)
+        if (toolWindow == null) {
+            LOG.info("Air chat tool window is not registered")
+            onStarted(startNewThread(project = project))
+            return
+        }
+        var started = false
+        var startedByTimeout = false
+
+        fun startOnce() {
+            if (started || project.isDisposed) {
+                return
+            }
+            started = true
+            if (startedByTimeout) {
+                LOG.debug("Air chat tool window activation did not finish in time; starting the new thread anyway")
+            }
+            onStarted(startNewThread(project = project))
+        }
+        toolWindow.activate(Runnable { startOnce() })
+        AppExecutorUtil.getAppScheduledExecutorService().schedule(
+            Runnable {
+                ApplicationManager.getApplication().invokeLater(
+                    {
+                        startedByTimeout = true
+                        startOnce()
+                    },
+                    ModalityState.nonModal(),
+                    project.disposed
+                )
+            },
+            ACTIVATION_TIMEOUT_MS,
+            TimeUnit.MILLISECONDS
+        )
     }
 
     private fun finishExplain(project: Project, input: Editor?, text: String, onResult: (AirSendOutcome) -> Unit) {
@@ -101,16 +151,19 @@ internal object AirChatBridge {
         onResult(AirSendOutcome.CopiedToClipboard)
     }
 
-    /** True when the new-thread action ran. A missing action or a failure is logged and the current thread is used. */
-    private fun startNewThread(): Boolean {
+    /**
+     * True when the new-thread action ran. The action runs with a component of [project] as context, so it resolves the
+     * chat of that project. A missing action or a failure is logged and the current thread is used.
+     */
+    private fun startNewThread(project: Project): Boolean {
         val action = ActionManager.getInstance().getAction(NEW_THREAD_ACTION_ID)
-        val frame = frameRootPane(project = null)
-        if (action == null || frame == null) {
+        val contextComponent = chatToolWindowComponent(project = project) ?: frameRootPane(project = project)
+        if (action == null || contextComponent == null) {
             LOG.info("Air new thread action is not available; using the current thread input")
             return false
         }
         return try {
-            ActionManager.getInstance().tryToExecute(action, null, frame, ActionPlaces.UNKNOWN, true)
+            ActionManager.getInstance().tryToExecute(action, null, contextComponent, ActionPlaces.UNKNOWN, true)
             true
         } catch (e: RuntimeException) {
             LOG.warn("Could not start a new Air thread", e)
@@ -118,10 +171,12 @@ internal object AirChatBridge {
         }
     }
 
-    private fun frameRootPane(project: Project?): javax.swing.JRootPane? {
-        val windowManager = WindowManager.getInstance()
-        val frame = if (project != null) windowManager.getFrame(project) else windowManager.findVisibleFrame()
-        return frame?.rootPane
+    private fun frameRootPane(project: Project): JRootPane? {
+        return WindowManager.getInstance().getFrame(project)?.rootPane
+    }
+
+    private fun chatToolWindowComponent(project: Project): JComponent? {
+        return ToolWindowManager.getInstance(project).getToolWindow(CHAT_TOOL_WINDOW_ID)?.component
     }
 
     private fun activateChatToolWindow(project: Project) {
@@ -149,6 +204,9 @@ internal object AirChatBridge {
 
     /** Calls [onFound] with the first prompt input found, or with null once [attemptsLeft] polls have failed. */
     private fun awaitPromptInput(project: Project, attemptsLeft: Int, preferEmpty: Boolean = false, onFound: (Editor?) -> Unit) {
+        if (project.isDisposed) {
+            return
+        }
         val input = findPromptInput(project = project, preferEmpty = preferEmpty)
         val isAcceptable = input != null && (!preferEmpty || input.document.textLength == 0)
         if (isAcceptable || attemptsLeft <= 0) {
@@ -176,25 +234,55 @@ internal object AirChatBridge {
     }
 
     /**
-     * The visible, editable Air prompt input. It prefers the input of [project] when several are open. With [preferEmpty],
-     * an empty input of [project] comes first, then any empty input.
+     * The visible, editable Air prompt input that belongs to [project], or null. Inputs of other projects are never
+     * returned. With [preferEmpty], an empty input comes first. The caller copies to the clipboard when this is null.
      */
     private fun findPromptInput(project: Project, preferEmpty: Boolean = false): Editor? {
+        val chatComponent = chatToolWindowComponent(project = project)
         val candidates = Window.getWindows().asSequence()
             .flatMap { window -> componentTree(root = window) }
             .filterIsInstance<EditorTextField>()
             .filter { field -> field.isShowing && isPromptInput(field = field) }
-            .mapNotNull { field -> field.editor }
-            .filter { editor -> !editor.isViewer }
+            .mapNotNull { field -> toCandidate(field = field, project = project, chatComponent = chatComponent) }
+            .filter { candidate -> !candidate.input.isViewer }
             .toList()
-        if (preferEmpty) {
-            val empty = candidates.filter { editor -> editor.document.textLength == 0 }
-            val emptyMatch = empty.firstOrNull { editor -> editor.project == project } ?: empty.firstOrNull()
-            if (emptyMatch != null) {
-                return emptyMatch
-            }
+        LOG.debug("Air prompt inputs found: ${candidates.size}, of this project: ${candidates.count { it.belongsToProject }}")
+        return AirPromptInputSelector.select(candidates = candidates, preferEmpty = preferEmpty)
+    }
+
+    private fun toCandidate(field: EditorTextField, project: Project, chatComponent: JComponent?): AirPromptInputCandidate<Editor>? {
+        val editor = field.editor ?: return null
+        return AirPromptInputCandidate(
+            input = editor,
+            belongsToProject = belongsToProject(field = field, project = project, chatToolWindowComponent = chatComponent),
+            isEmpty = editor.document.textLength == 0,
+            isInChatToolWindow = chatComponent != null && SwingUtilities.isDescendingFrom(field, chatComponent)
+        )
+    }
+
+    /**
+     * Whether [field] is hosted by [project]. Swing ancestry decides first: the project's chat tool window, then the
+     * owner chain of the field's window up to the project frame (floating tool windows and the global prompt popup are
+     * owned by the frame). The editor's project is only a secondary signal, because Air may create the field without one.
+     */
+    private fun belongsToProject(field: EditorTextField, project: Project, chatToolWindowComponent: JComponent?): Boolean {
+        if (chatToolWindowComponent != null && SwingUtilities.isDescendingFrom(field, chatToolWindowComponent)) {
+            return true
         }
-        return candidates.firstOrNull { editor -> editor.project == project } ?: candidates.firstOrNull()
+        val windowChain = generateSequence(SwingUtilities.getWindowAncestor(field)) { window -> window.owner }.toList()
+        val projectFrame = WindowManager.getInstance().getFrame(project)
+        if (projectFrame != null && windowChain.any { window -> window === projectFrame }) {
+            return true
+        }
+        return field.editor?.project == project && !leadsToOtherProjectFrame(windowChain = windowChain, project = project)
+    }
+
+    private fun leadsToOtherProjectFrame(windowChain: List<Window>, project: Project): Boolean {
+        val windowManager = WindowManager.getInstance()
+        val otherFrames = ProjectManager.getInstance().openProjects
+            .filter { other -> other != project }
+            .mapNotNull { other -> windowManager.getFrame(other) }
+        return windowChain.any { window -> otherFrames.any { frame -> frame === window } }
     }
 
     private fun componentTree(root: Component): Sequence<Component> =

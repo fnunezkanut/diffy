@@ -19,6 +19,7 @@
             <li>📁 <b>PR Changes tool window</b>: lists every file in the diff. Open it with the stripe's <b>Show pull request file changes</b> button, then pick a file to view it in the editor or in a diff view.</li>
             <li>✏️ <b>Modified File View and Diff View</b>: see existing comments, add line comments from the gutter or context menu, check added and removed line counts, and mark files as reviewed.</li>
             <li>📝 <b>Rendered Markdown diff</b>: changed Markdown files render side by side, so you review documentation the way readers will see it. The <b>Wrap Lines</b> button in the review bar removes horizontal scrolling and remembers your choice.</li>
+            <li>🆚 <b>Diff this file against main</b>: on a feature branch, right-click a file in the editor or its tab to compare it with the main branch.</li>
             <li>🚀 <b>Create Pull Request</b>: set the title, description, source and destination branches, and reviewers (defaults included), choose whether to clean up the remote branch after merge, then open the new PR in a work tree window.</li>
             <li>🔔 <b>Notifications tab</b>: Bitbucket notifications captured by the <a href="https://github.com/fnunezkanut/diffy/tree/main/diffy-chrome-ext">Diffy Chrome extension</a> or <a href="https://github.com/fnunezkanut/diffy/tree/main/diffy-firefox-ext">Firefox extension</a>, newest first, with time, type, pull request, actor, and message.</li>
         </ul>
@@ -26,6 +27,7 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>Added: right-click a file in the editor, or its tab, on a branch other than main or master and choose Diff this file against main (or master) to compare it with the main branch; the branch is detected from the repository and its recent commits</li>
             <li>Fixed: the Chrome Web Store extension could not sync, open pull requests, or deliver notifications because the plugin accepted only the development extension ID; the Sync button also reported this as a missing workspace</li>
             <li>Removed: Bitbucket API token sign-in. The plugin now signs in with Bitbucket OAuth only. If you used an API token, open Settings &gt; Tools &gt; Diffy - Bitbucket PR Review and authenticate with Bitbucket oauth login; the old token is deleted when you do</li>
             <li>Added: Notifications tab has a Filter out bots checkbox that hides notifications from bots; the choice is remembered</li>
@@ -157,6 +159,8 @@
                 implementation="com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotRestService"/>
         <httpRequestHandler
                 implementation="com.github.fnunezkanut.bbcloud.external.DiffyWorkspaceRestService"/>
+        <httpRequestHandler
+                implementation="com.github.fnunezkanut.bbcloud.external.DiffyOpenStatusRestService"/>
     </extensions>
 
     <actions>
@@ -164,6 +168,12 @@
                 class="com.github.fnunezkanut.bbcloud.ui.diff.PullRequestAddReviewCommentAction">
             <add-to-group group-id="EditorGutterPopupMenu" anchor="first"/>
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
+        </action>
+        <action id="Diffy.DiffAgainstMain.ShowForFile"
+                class="com.github.fnunezkanut.bbcloud.ui.diffmain.DiffAgainstMainAction"
+                icon="AllIcons.Actions.Diff">
+            <add-to-group group-id="EditorPopupMenu" anchor="before" relative-to-action="Diffy.PullRequest.AddReviewComment"/>
+            <add-to-group group-id="EditorTabPopupMenu" anchor="first"/>
         </action>
         <action id="Diffy.MarkdownDiff.ShowForFile"
                 class="com.github.fnunezkanut.bbcloud.ui.markdowndiff.ShowMarkdownDiffAction"

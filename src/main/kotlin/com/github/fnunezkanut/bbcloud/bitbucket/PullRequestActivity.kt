@@ -40,7 +40,9 @@ data class PullRequestComment(
     /** The Markdown source, needed to seed the editor with what the author wrote; null when Bitbucket did not report it. */
     val raw: String? = null,
     /** The inclusive end line when Bitbucket reports a multi-line inline range; null for legacy single-line payloads. */
-    val inlineLineEnd: Int? = null
+    val inlineLineEnd: Int? = null,
+    /** True while a resolve is shown optimistically and Bitbucket has not confirmed it, so the resolver is not known yet. */
+    val isResolutionPending: Boolean = false
 )
 
 data class CommentPage(val comments: List<PullRequestComment>, val nextUrl: String?)

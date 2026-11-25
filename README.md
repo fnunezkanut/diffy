@@ -31,6 +31,7 @@ Helps you review Bitbucket Cloud pull requests without leaving your Jetbrains ID
 * 📁 **PR Changes tool window**: lists every file in the diff. Open it with the stripe's **Show pull request file changes** button, then pick a file to view it in the editor or in a diff view.
 * ✏️ **Modified File View and Diff View**: see existing comments, add line comments from the gutter or context menu, check added and removed line counts, and mark files as reviewed.
 * 📝 **Rendered Markdown diff**: changed Markdown files render side by side, so you review documentation the way readers will see it. The **Wrap Lines** button in the review bar removes horizontal scrolling and remembers your choice.
+* 🆚 **Diff this file against main**: on a feature branch, right-click a file in the editor or its tab to compare it with the main branch.
 * 🚀 **Create Pull Request**: set the title, description, source and destination branches, and reviewers (defaults included), choose whether to clean up the remote branch after merge, then open the new PR in a work tree window.
 * 🔔 **Notifications tab**: Bitbucket notifications captured by the [Diffy Chrome extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-chrome-ext) or [Firefox extension](https://github.com/fnunezkanut/diffy/tree/main/diffy-firefox-ext), newest first, with time, type, pull request, actor, and message.
 
