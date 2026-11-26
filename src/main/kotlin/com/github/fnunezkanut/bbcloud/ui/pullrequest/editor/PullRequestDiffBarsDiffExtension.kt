@@ -28,7 +28,8 @@ import com.intellij.openapi.vcs.changes.actions.diff.ChangeDiffRequestProducer
 import javax.swing.JComponent
 
 /**
- * Adds the pull-request blue bar and the review bar to every diff viewer of a pull-request worktree.
+ * Adds the pull-request blue bar, the red bar, the yellow bar and the review bar to every diff viewer of a pull-request
+ * worktree.
  *
  * The platform creates a diff viewer for every diff it shows: the diffs opened as an editor tab, the diff chains opened
  * from the PR Changes tool window, and the diffs the plugin opens in a diff window. Attaching the bars here
@@ -36,8 +37,10 @@ import javax.swing.JComponent
  * bar of that file. The editor notification providers skip the diff tabs so the bars do not appear twice.
  *
  * The bars are added to the request once per kind, because the platform renders the providers of a request for every
- * viewer it creates. The platform orders them by weight: the blue bar, then the orange "not in the pull request yet"
- * bar (shown for a file with unpushed commits or uncommitted changes, with Commit and Push links), then the review bar.
+ * viewer it creates. The platform orders them by weight: the blue bar, then the red "local branches are behind
+ * Bitbucket" bar (with a Sync local branch link), then the yellow "behind the destination branch" bar (with a Rebase
+ * onto latest with AI link), then the orange "not in the pull request yet" bar (shown for a file with unpushed commits
+ * or uncommitted changes, with Commit and Push links), then the review bar.
  *
  * The diff review bar also offers previous and next unviewed-file navigation within the diff chain, in chain order.
  * Checking "Viewed" in the diff review bar moves the chain to the next unviewed file.
@@ -62,6 +65,22 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
             request.putUserData(BLUE_BAR_ATTACHED_KEY, true)
             DiffUtil.addNotification(
                 DiffNotificationProvider { diffViewer -> WorktreePrViewBlueBarDiffNotification.create(project = project, viewer = diffViewer) },
+                request
+            )
+        }
+        if (request.getUserData(LOCAL_BEHIND_BAR_ATTACHED_KEY) != true) {
+            request.putUserData(LOCAL_BEHIND_BAR_ATTACHED_KEY, true)
+            DiffUtil.addNotification(
+                DiffNotificationProvider { diffViewer -> WorktreeLocalBehindRemoteBarDiffNotification.create(project = project, viewer = diffViewer) },
+                request
+            )
+        }
+        if (request.getUserData(BEHIND_DESTINATION_BAR_ATTACHED_KEY) != true) {
+            request.putUserData(BEHIND_DESTINATION_BAR_ATTACHED_KEY, true)
+            DiffUtil.addNotification(
+                DiffNotificationProvider { diffViewer ->
+                    WorktreeBehindDestinationBarDiffNotification.create(project = project, viewer = diffViewer)
+                },
                 request
             )
         }
@@ -309,6 +328,8 @@ class PullRequestDiffBarsDiffExtension : DiffExtension() {
     companion object {
         private val LOG = logger<PullRequestDiffBarsDiffExtension>()
         private val BLUE_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.BlueBarAttached")
+        private val LOCAL_BEHIND_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.LocalBehindBarAttached")
+        private val BEHIND_DESTINATION_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.BehindDestinationBarAttached")
         private val UNPUSHED_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.UnpushedBarAttached")
         private val REVIEW_BAR_ATTACHED_KEY = Key.create<Boolean>("Diffy.PullRequestDiffBarsDiffExtension.ReviewBarAttached")
     }

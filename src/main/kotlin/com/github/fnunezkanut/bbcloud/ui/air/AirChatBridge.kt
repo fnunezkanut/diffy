@@ -39,6 +39,7 @@ internal object AirChatBridge {
     private const val NEW_THREAD_ACTION_ID = "AgentThreads.MainToolbar.NewThread"
     private const val COMMENT_LABEL = "comment prompt"
     private const val EXPLAIN_LABEL = "explain prompt"
+    internal const val REBASE_LABEL = "rebase prompt"
     private const val PROMPT_INPUT_CLASS_NAME = "com.intellij.air.frontend.prompt.AirPromptEditorTextField"
     private const val RETRY_ATTEMPTS = 10
     private const val NEW_THREAD_RETRY_ATTEMPTS = 20
@@ -78,17 +79,17 @@ internal object AirChatBridge {
      * Starts a new Air thread in [project] when Air offers the action, puts [text] into the new thread's input, and focuses
      * it. The prompt is never submitted; the user presses Enter. If the new-thread action is missing, [text] is appended
      * after any draft in the current input. Only inputs of [project] are used; if none is found, [text] is copied to the
-     * clipboard. [onResult] receives the outcome on the EDT. Call it on the EDT.
+     * clipboard. [label] names the prompt in the logs. [onResult] receives the outcome on the EDT. Call it on the EDT.
      */
-    fun sendToNewChatInput(project: Project, text: String, onResult: (AirSendOutcome) -> Unit) {
+    fun sendToNewChatInput(project: Project, text: String, label: String = EXPLAIN_LABEL, onResult: (AirSendOutcome) -> Unit) {
         activateThenStartNewThread(project = project) { startedNewThread ->
             awaitPromptInput(project = project, attemptsLeft = NEW_THREAD_RETRY_ATTEMPTS, preferEmpty = startedNewThread) { chatInput ->
                 if (chatInput != null) {
-                    finishExplain(project = project, input = chatInput, text = text, onResult = onResult)
+                    finishNewThread(project = project, input = chatInput, text = text, label = label, onResult = onResult)
                 } else {
                     openGlobalPrompt(project = project)
                     awaitPromptInput(project = project, attemptsLeft = RETRY_ATTEMPTS, preferEmpty = false) { paletteInput ->
-                        finishExplain(project = project, input = paletteInput, text = text, onResult = onResult)
+                        finishNewThread(project = project, input = paletteInput, text = text, label = label, onResult = onResult)
                     }
                 }
             }
@@ -137,8 +138,8 @@ internal object AirChatBridge {
         )
     }
 
-    private fun finishExplain(project: Project, input: Editor?, text: String, onResult: (AirSendOutcome) -> Unit) {
-        val inserted = input != null && insertSafely(project = project, input = input, text = text, label = EXPLAIN_LABEL)
+    private fun finishNewThread(project: Project, input: Editor?, text: String, label: String, onResult: (AirSendOutcome) -> Unit) {
+        val inserted = input != null && insertSafely(project = project, input = input, text = text, label = label)
         if (inserted) {
             input.caretModel.moveToOffset(0)
             input.scrollingModel.scrollToCaret(ScrollType.RELATIVE)
@@ -146,7 +147,7 @@ internal object AirChatBridge {
             onResult(AirSendOutcome.Inserted)
             return
         }
-        LOG.info("Air chat input was not usable; the $EXPLAIN_LABEL was copied to the clipboard")
+        LOG.info("Air chat input was not usable; the $label was copied to the clipboard")
         copyToClipboard(text = text)
         onResult(AirSendOutcome.CopiedToClipboard)
     }

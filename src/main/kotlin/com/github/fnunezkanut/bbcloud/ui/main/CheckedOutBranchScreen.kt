@@ -19,9 +19,9 @@ import kotlinx.coroutines.CoroutineScope
 /**
  * The pull-request detail view: a single information row (avatar, title link, draft/state badges, author, updated/
  * created timestamps with an absolute-date tooltip) that hosts the action buttons (Merge, Approve / Unapprove, Mark as
- * draft / ready, Decline) on its trailing edge, followed by the commits-behind line, the local-behind-remote line, and
- * the pull-request page: the description, the Activity timeline with the comment composer, and the Builds, Checks,
- * Reviewers and Tasks cards.
+ * draft / ready, Decline) on its trailing edge, followed by the pull-request page: the description, the Activity
+ * timeline with the comment composer, and the Builds, Checks, Reviewers and Tasks cards. The commits-behind warning is
+ * the yellow bar above the editor (see `WorktreeBehindDestinationBar`).
  *
  * Whole-pull-request line totals are not shown here; they live in the work tree banner above the editor (see
  * `WorktreePrViewBlueBar`). There is no tab strip, and the whole view is one Compose tree.
@@ -33,10 +33,8 @@ internal fun CheckedOutBranchScreen(
     conversationViewModel: PullRequestConversationViewModel,
     historyViewModel: PullRequestHistoryViewModel,
     infoViewModel: PullRequestInfoViewModel,
-    headerViewModel: PullRequestHeaderViewModel,
     configurationService: DiffyConfigurationService,
-    coroutineScope: CoroutineScope,
-    onUpdateLocalBranch: () -> Unit
+    coroutineScope: CoroutineScope
 ) {
     val detailState by detailViewModel.state
     Column(modifier = Modifier.fillMaxSize()) {
@@ -50,9 +48,6 @@ internal fun CheckedOutBranchScreen(
             actionTooltips = detailState.actionTooltips,
             onAction = detailViewModel::onActionClicked
         )
-        // The orange "behind destination" line, then the red "local behind remote" line below it (decision 1a).
-        PullRequestCommitsBehindLine(viewModel = headerViewModel)
-        PullRequestLocalBehindRemoteLine(viewModel = headerViewModel, onUpdateLocalBranch = onUpdateLocalBranch)
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             PullRequestOverviewScreen(
                 viewModel = overviewViewModel,

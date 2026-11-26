@@ -17,6 +17,7 @@ import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentChange
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
+import com.github.fnunezkanut.bbcloud.bitbucket.ItemCount
 import com.github.fnunezkanut.bbcloud.bitbucket.MentionNames
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestAction
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestActionResult
@@ -38,28 +39,25 @@ import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.DiffyBranchCheckoutService
 import com.github.fnunezkanut.bbcloud.git.DiffyPrBranchSyncService
 import com.github.fnunezkanut.bbcloud.git.DiffyPullRequestBranchDiffService
-import com.github.fnunezkanut.bbcloud.git.GitBranchNames
-import com.github.fnunezkanut.bbcloud.git.PrBranchRole
-import com.github.fnunezkanut.bbcloud.git.PrBranchSyncResult
-import com.github.fnunezkanut.bbcloud.git.PrBranchSyncSkipReason
 import com.github.fnunezkanut.bbcloud.git.PrBranchSyncSnapshot
-import com.github.fnunezkanut.bbcloud.git.PrBranchSyncStepResult
 import com.github.fnunezkanut.bbcloud.git.PrBranchesSyncedListener
-import com.github.fnunezkanut.bbcloud.git.ProjectGitRepositoryLookup
 import com.github.fnunezkanut.bbcloud.project.PullRequestWorktreeMatch
+import com.github.fnunezkanut.bbcloud.project.PullRequestWorktreeProject
 import com.github.fnunezkanut.bbcloud.review.DiffyKnownUsersCache
 import com.github.fnunezkanut.bbcloud.review.DiffyPullRequestReviewState
 import com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext
 import com.github.fnunezkanut.bbcloud.review.PageReloadRequest
+import com.github.fnunezkanut.bbcloud.review.WorktreeBehindDestinationBarViewModel
+import com.github.fnunezkanut.bbcloud.review.WorktreeLocalBehindRemoteBarViewModel
 import com.github.fnunezkanut.bbcloud.review.WorktreePullRequestPageReloader
 import com.github.fnunezkanut.bbcloud.review.WorktreeTodoBannerViewModel
+import com.github.fnunezkanut.bbcloud.review.snapshotMatchesBranches
 import com.github.fnunezkanut.bbcloud.ui.diff.DiffyPullRequestDiffCommentService
 import com.github.fnunezkanut.bbcloud.ui.main.CheckedOutBranchPanel
 import com.github.fnunezkanut.bbcloud.ui.main.CommentEditor
 import com.github.fnunezkanut.bbcloud.ui.main.CommentMentionSource
 import com.github.fnunezkanut.bbcloud.ui.main.DefaultCommentMentionSource
 import com.github.fnunezkanut.bbcloud.ui.main.DescriptionEditor
-import com.github.fnunezkanut.bbcloud.ui.main.LocalBranchesBehindWarning
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestActionVisibility
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestMentionPeople
 import com.github.fnunezkanut.bbcloud.ui.main.ReviewerEditor
@@ -82,6 +80,7 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.serviceIfCreated
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
@@ -91,9 +90,6 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.EditorNotifications
-import git4idea.repo.GitRemote
-import git4idea.repo.GitRepository
-import git4idea.repo.GitRepositoryChangeListener
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -169,16 +165,12 @@ class DiffyPullRequestEditorSession(
     private var isCleanupInProgress = false
     private var pollerStarted = false
     private var pollerJob: Job? = null
-    private var isLocalBranchUpdateInProgress = false
-    private var localBehindRemoteJob: Job? = null
 
     /** Looks up the Activity card mentions that the shown conversation could not name yet. */
     private var conversationMentionJob: Job? = null
 
     /** Looks up the inline comment mentions that the diff and file cards could not name yet. */
     private var inlineMentionJob: Job? = null
-    private var lastObservedTips: ObservedBranchTips? = null
-    private var gitChangeSubscribed = false
 
     /** The people on this pull request offered as the top mention tier. */
     private val mentionPeople = PullRequestMentionPeople()
@@ -248,8 +240,7 @@ class DiffyPullRequestEditorSession(
                 submitDescriptionUpdate(content = content, onResult = onResult)
             }
         },
-        mentionSource = mentionSource,
-        onUpdateLocalBranchRequested = { updateLocalBranch() }
+        mentionSource = mentionSource
     )
 
     val component: JPanel = JPanel(BorderLayout()).apply {
@@ -278,30 +269,13 @@ class DiffyPullRequestEditorSession(
         Disposer.register(parentDisposable, sessionDisposable)
         checkedOutBranchPanel.attachProject(project = project, parentDisposable = sessionDisposable)
         WorktreePullRequestPageReloader.getInstance(project).registerSessionReloadHandler(reloadHandler)
-        subscribeToGitRepositoryChanges()
         subscribeToBranchSyncChanges()
         displayedSummary?.let { summary -> bind(summary = summary) } ?: loadRestoredPullRequest()
     }
 
     /**
-     * Re-checks the local-behind-remote state when the HEAD of the work tree moves (decision 8b: debounced
-     * `GIT_REPO_CHANGE`). The topic fires for many unrelated updates (a fetch, an index refresh), so the re-check only
-     * runs when the branch or revision really changed, mirroring [DiffyWorktreePullRequestContext].
-     */
-    private fun subscribeToGitRepositoryChanges() {
-        if (gitChangeSubscribed || project.isDisposed) {
-            return
-        }
-        gitChangeSubscribed = true
-        project.messageBus.connect(sessionDisposable).subscribe(
-            GitRepository.GIT_REPO_CHANGE,
-            GitRepositoryChangeListener { repository -> onRepositoryChanged(repository = repository) }
-        )
-    }
-
-    /**
-     * Re-renders the red warning (and the line totals, because the destination tip may have moved) whenever the sync
-     * service reports a change of the branch state, for example after the window-open sync.
+     * Reloads the line totals whenever the sync service reports a change of the branch state, for example after the
+     * window-open sync, because the destination tip may have moved.
      */
     private fun subscribeToBranchSyncChanges() {
         if (project.isDisposed) {
@@ -319,42 +293,16 @@ class DiffyPullRequestEditorSession(
                 return@invokeOnEdt
             }
             val summary = displayedSummary ?: return@invokeOnEdt
-            if (!snapshotMatches(snapshot = snapshot, summary = summary)) {
+            val matches = snapshotMatchesBranches(
+                snapshot = snapshot,
+                sourceBranch = summary.sourceBranch,
+                destinationBranch = summary.destinationBranch
+            )
+            if (!matches) {
                 return@invokeOnEdt
             }
-            renderBranchWarning(snapshot = snapshot, pullRequestId = summary.id)
             loadPullRequestLineTotals(summary)
         }
-    }
-
-    private fun snapshotMatches(snapshot: PrBranchSyncSnapshot, summary: PullRequestSummary): Boolean {
-        val source = snapshot.sourceBranch == summary.sourceBranch.trim().removePrefix("${snapshot.remoteName}/")
-        val destination = snapshot.destinationBranch == summary.destinationBranch.trim().removePrefix("${snapshot.remoteName}/")
-        return source && destination
-    }
-
-    /**
-     * Re-checks the local-behind-remote state when the HEAD of the work tree or the tip of the local or remote source
-     * and destination branch moves (debounced `GIT_REPO_CHANGE`). The topic fires for many unrelated updates (a fetch,
-     * an index refresh), so the re-check only runs when an observed tip really changed. The event itself is often a
-     * fetch, so the re-check does not fetch again.
-     */
-    private fun onRepositoryChanged(repository: GitRepository) {
-        if (disposed || project.isDisposed) {
-            return
-        }
-        val summary = displayedSummary
-        val tips = ObservedBranchTips.read(
-            repository = repository,
-            sourceBranch = summary?.sourceBranch.orEmpty(),
-            destinationBranch = summary?.destinationBranch.orEmpty()
-        )
-        val previous = lastObservedTips
-        if (previous != null && previous == tips) {
-            return
-        }
-        lastObservedTips = tips
-        refreshLocalBehindRemote(fetch = false)
     }
 
     private fun loadRestoredPullRequest() {
@@ -456,7 +404,6 @@ class DiffyPullRequestEditorSession(
         loadPullRequestInlineComments(force = true)
         loadPullRequestDetails(pullRequestId = summary.id, refresh = DetailsRefresh.Initial)
         startStatefulPoller()
-        renderLastBranchSnapshot(summary = summary)
         // A sync that just ran in this reload already fetched, so the evaluation does not fetch a second time.
         refreshLocalBehindRemote(fetch = !branchesJustSynced)
         // Open the PR Changes tool window on the left as if "Show Changes" had been clicked, but only when the page
@@ -685,10 +632,7 @@ class DiffyPullRequestEditorSession(
         component.revalidate()
         component.repaint()
         stopStatefulPoller()
-        // The closed-PR takeover replaced the detail view, so the red local-behind-remote banner is gone with it;
-        // cancel any in-flight check so it does not try to touch a detached view model (decision 4.3).
-        localBehindRemoteJob?.cancel()
-        localBehindRemoteJob = null
+        // The red bar hides itself: the closed pull request makes the banner state report that it is no longer a work tree.
         conversationMentionJob?.cancel()
         conversationMentionJob = null
     }
@@ -863,6 +807,35 @@ class DiffyPullRequestEditorSession(
         BackgroundPoll
     }
 
+    /**
+     * Feeds the yellow "behind the destination branch" bar of the work tree with the count of the overview that was
+     * just loaded. Outside a plugin-managed pull request work tree the bar does not exist, so nothing is created.
+     */
+    private fun showBehindDestinationBar(summary: PullRequestSummary, commitsBehind: ItemCount?) {
+        val isManaged = PullRequestWorktreeProject.isPluginManagedWorktree(
+            projectBasePath = project.basePath,
+            workTreeDirectory = configurationService.workTreeDirectoryOrNull()
+        )
+        if (!isManaged) {
+            LOG.debug("Yellow bar skipped for pull request #${summary.id}: the project is not a plugin-managed work tree")
+            return
+        }
+        val barViewModel = WorktreeBehindDestinationBarViewModel.getInstance(project)
+        barViewModel.ensureStarted()
+        val state = checkedOutBranchPanel.displayedPullRequestState()
+        if (state == null) {
+            barViewModel.clear(pullRequestId = summary.id)
+            return
+        }
+        barViewModel.show(
+            pullRequestId = summary.id,
+            state = state,
+            commitsBehind = commitsBehind,
+            sourceBranch = summary.sourceBranch,
+            destinationBranch = summary.destinationBranch
+        )
+    }
+
     private fun loadPullRequestOverview(summary: PullRequestSummary, inPlaceRefresh: Boolean = false, revealNewestActivity: Boolean = false) {
         val basePath = project.basePath ?: return
         val url = organizationUrl ?: configurationService.organizationUrlOrNull() ?: return
@@ -891,11 +864,11 @@ class DiffyPullRequestEditorSession(
                 checkedOutBranchPanel.showOverview(
                     pullRequestId = summary.id,
                     overview = overview,
-                    destinationBranch = summary.destinationBranch,
                     coroutineScope = coroutineScope,
                     inPlaceRefresh = inPlaceRefresh,
                     revealNewestActivity = revealNewestActivity
                 )
+                showBehindDestinationBar(summary = summary, commitsBehind = overview.commitsBehind)
                 val conversation = overview.conversation
                 if (conversation != null) {
                     mentionPeople.updateComments(
@@ -1088,163 +1061,15 @@ class DiffyPullRequestEditorSession(
         }
     }
 
-    /** Renders the last published snapshot at once, so a bind does not wait for another evaluation. */
-    private fun renderLastBranchSnapshot(summary: PullRequestSummary) {
-        val snapshot = DiffyPrBranchSyncService.getInstance(project).lastSnapshot ?: return
-        if (!snapshotMatches(snapshot = snapshot, summary = summary)) {
-            return
-        }
-        renderBranchWarning(snapshot = snapshot, pullRequestId = summary.id)
-    }
-
-    /** Shows or hides the red warning for [snapshot]. Called on the EDT. */
-    private fun renderBranchWarning(snapshot: PrBranchSyncSnapshot?, pullRequestId: Long) {
-        if (pullRequestId != displayedPullRequestId) {
-            LOG.debug("Ignoring branch state for #$pullRequestId; this editor shows #$displayedPullRequestId")
-            return
-        }
-        if (isTakenOver || isLocalBranchUpdateInProgress) {
-            return
-        }
-        val summary = displayedSummary
-        val warning = if (summary == null || summary.state != PullRequestState.Open) null else LocalBranchesBehindWarning.from(snapshot)
-        if (warning == null) {
-            checkedOutBranchPanel.clearLocalBehindRemote()
-        } else {
-            checkedOutBranchPanel.showLocalBehindRemote(warning = warning)
-        }
-    }
-
     /**
-     * Re-evaluates whether the local source and destination branches are behind Bitbucket and shows or hides the red
-     * warning accordingly. It fetches when [fetch] is true but never moves a ref, so a push to Bitbucket while the
-     * window is open shows the warning without changing files under the user.
-     *
-     * The check is skipped (and the warning cleared) when the view is taken over or the pull request is not Open, so no
-     * stale "behind" state lingers. While an update is in flight the warning is left as-is so its "updating" link state
-     * is not stomped. The git work runs off the EDT; the view model is only touched on the EDT. The last launched check
-     * wins, so a burst of triggers resolves once.
+     * Asks the project-level red bar view model to evaluate the local branches again. It fetches when [fetch] is true
+     * but never moves a ref. The view model also works while this editor is closed.
      */
     private fun refreshLocalBehindRemote(fetch: Boolean = true) {
         if (disposed || isTakenOver) {
             return
         }
-        val summary = displayedSummary
-        if (summary == null || summary.state != PullRequestState.Open) {
-            checkedOutBranchPanel.clearLocalBehindRemote()
-            return
-        }
-        if (isLocalBranchUpdateInProgress) {
-            LOG.debug("Skipping local-behind-remote check for #${summary.id}; a branch update is in progress")
-            return
-        }
-        val pullRequestId = summary.id
-        localBehindRemoteJob?.cancel()
-        localBehindRemoteJob = coroutineScope.launch {
-            val snapshot = try {
-                DiffyPrBranchSyncService.getInstance(project).evaluate(
-                    sourceBranch = summary.sourceBranch,
-                    destinationBranch = summary.destinationBranch,
-                    fetch = fetch
-                )
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                LOG.warn("Could not evaluate the local branches of pull request #$pullRequestId", exception)
-                null
-            }
-            invokeOnEdt {
-                renderBranchWarning(snapshot = snapshot, pullRequestId = pullRequestId)
-            }
-        }
-    }
-
-    /**
-     * Updates every local branch that is behind Bitbucket (the red warning's link), guarded against a concurrent update
-     * or page reload. Branches that cannot be updated are reported in one failure notification each; when at least one
-     * branch moved, or nothing needed to change, the whole page reloads.
-     */
-    private fun updateLocalBranch() {
-        if (isLocalBranchUpdateInProgress || isReloadInProgress) {
-            LOG.info("Ignored local branch update for pull request #$boundPullRequestId; an update or reload is already in progress")
-            return
-        }
-        val summary = displayedSummary
-        if (summary == null) {
-            LOG.info("Cannot update local branch: no pull request is displayed")
-            return
-        }
-        val pullRequestId = summary.id
-        LOG.info("User requested local branch update for pull request #$pullRequestId")
-        isLocalBranchUpdateInProgress = true
-        checkedOutBranchPanel.setLocalBehindRemoteUpdateInProgress(true)
-        coroutineScope.launch {
-            val result = try {
-                DiffyPrBranchSyncService.getInstance(project).updateOnUserRequest(
-                    sourceBranch = summary.sourceBranch,
-                    destinationBranch = summary.destinationBranch
-                )
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                LOG.warn("Failed to update the local branches of pull request #$pullRequestId from remote", exception)
-                null
-            }
-            invokeOnEdt {
-                isLocalBranchUpdateInProgress = false
-                onLocalBranchUpdateFinished(pullRequestId = pullRequestId, result = result)
-            }
-        }
-    }
-
-    private fun onLocalBranchUpdateFinished(pullRequestId: Long, result: PrBranchSyncResult?) {
-        if (result == null) {
-            checkedOutBranchPanel.setLocalBehindRemoteUpdateInProgress(false)
-            showFailureNotification(
-                title = DiffyBundle.message("main.branch.localBehindRemote.failedUpdate", displayedSummary?.sourceBranch.orEmpty()),
-                message = null
-            )
-            return
-        }
-        var anyProblem = false
-        for (role in PrBranchRole.entries) {
-            val stepResult = result.outcome.resultFor(role)
-            val branch = result.after.branchFor(role)
-            val message = when (stepResult) {
-                is PrBranchSyncStepResult.Skipped -> skippedMessage(branch = branch, stepResult = stepResult)
-                is PrBranchSyncStepResult.Failed -> stepResult.output
-                else -> null
-            }
-            if (message != null) {
-                anyProblem = true
-                LOG.info("Local $role branch of pull request #$pullRequestId was not updated")
-                showFailureNotification(
-                    title = DiffyBundle.message("main.branch.localBehindRemote.failedUpdate", branch),
-                    message = message
-                )
-            }
-        }
-        if (anyProblem && !result.outcome.anyRefMoved) {
-            checkedOutBranchPanel.setLocalBehindRemoteUpdateInProgress(false)
-            renderBranchWarning(snapshot = result.after, pullRequestId = pullRequestId)
-            return
-        }
-        LOG.info("Updated the local branches of pull request #$pullRequestId from remote; reloading the page")
-        reloadPullRequestPage()
-    }
-
-    private fun skippedMessage(branch: String, stepResult: PrBranchSyncStepResult.Skipped): String? {
-        return when (stepResult.reason) {
-            PrBranchSyncSkipReason.UncommittedChanges -> {
-                DiffyBundle.message("main.branch.localBehindRemote.dirtyWorktree", stepResult.path?.toString().orEmpty(), branch)
-            }
-            PrBranchSyncSkipReason.LocalCommitsNotOnRemote -> {
-                DiffyBundle.message("main.branch.localBehindRemote.diverged", branch)
-            }
-            PrBranchSyncSkipReason.CheckedOutInOtherWorktree, PrBranchSyncSkipReason.CheckedOutWorktreeStateUnknown -> {
-                null
-            }
-        }
+        WorktreeLocalBehindRemoteBarViewModel.getInstance(project).requestEvaluation(fetch = fetch)
     }
 
     /**
@@ -1786,6 +1611,8 @@ class DiffyPullRequestEditorSession(
         disposed = true
         if (!project.isDisposed) {
             WorktreePullRequestPageReloader.getInstance(project).unregisterSessionReloadHandler(reloadHandler)
+            // Only clears an existing bar; a project without one (not a work tree) does not get the service created.
+            project.serviceIfCreated<WorktreeBehindDestinationBarViewModel>()?.clear(pullRequestId = displayedPullRequestId ?: boundPullRequestId)
         }
         coroutineScope.cancel()
         Disposer.dispose(sessionDisposable)
@@ -1902,45 +1729,6 @@ private fun TakeoverContent(
                     Text(text = cleanupButtonLabel)
                 }
             }
-        }
-    }
-}
-
-/**
- * The tips of the branches the red warning depends on. A change of any of them, not only of HEAD, re-checks the
- * warning, so a destination-only fast-forward refreshes it too.
- */
-private data class ObservedBranchTips(
-    val headBranch: String?,
-    val headRevision: String?,
-    val sourceLocal: String?,
-    val destinationLocal: String?,
-    val sourceRemote: String?,
-    val destinationRemote: String?
-) {
-    companion object {
-        fun read(repository: GitRepository, sourceBranch: String, destinationBranch: String): ObservedBranchTips {
-            val remoteName = ProjectGitRepositoryLookup.selectRemote(repository)?.name ?: GitRemote.ORIGIN
-            return ObservedBranchTips(
-                headBranch = repository.currentBranchName,
-                headRevision = repository.currentRevision,
-                sourceLocal = localTip(repository = repository, branch = sourceBranch, remoteName = remoteName),
-                destinationLocal = localTip(repository = repository, branch = destinationBranch, remoteName = remoteName),
-                sourceRemote = remoteTip(repository = repository, branch = sourceBranch, remoteName = remoteName),
-                destinationRemote = remoteTip(repository = repository, branch = destinationBranch, remoteName = remoteName)
-            )
-        }
-
-        private fun localTip(repository: GitRepository, branch: String, remoteName: String): String? {
-            val name = GitBranchNames.normalize(branchName = branch, remoteName = remoteName)
-            val local = repository.branches.findLocalBranch(name) ?: return null
-            return repository.branches.getHash(local)?.asString()
-        }
-
-        private fun remoteTip(repository: GitRepository, branch: String, remoteName: String): String? {
-            val name = GitBranchNames.normalize(branchName = branch, remoteName = remoteName)
-            val remote = repository.branches.findRemoteBranch("$remoteName/$name") ?: return null
-            return repository.branches.getHash(remote)?.asString()
         }
     }
 }

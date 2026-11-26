@@ -35,8 +35,7 @@ class CheckedOutBranchPanel(
     taskEditor: TaskEditor,
     descriptionEditor: DescriptionEditor,
     commentEditor: CommentEditor,
-    private val mentionSource: CommentMentionSource? = null,
-    private val onUpdateLocalBranchRequested: () -> Unit = {}
+    private val mentionSource: CommentMentionSource? = null
 ) {
     private var attachedProject: Project? = null
     private var displayedPullRequestId: Long? = null
@@ -60,7 +59,6 @@ class CheckedOutBranchPanel(
             )
         }
     )
-    private val headerViewModel = PullRequestHeaderViewModel()
     private val infoViewModel = PullRequestInfoViewModel()
     private val detailViewModel = PullRequestDetailViewModel(
         onActionRequested = onActionRequested,
@@ -100,10 +98,8 @@ class CheckedOutBranchPanel(
             conversationViewModel = conversationViewModel,
             historyViewModel = historyViewModel,
             infoViewModel = infoViewModel,
-            headerViewModel = headerViewModel,
             configurationService = configurationService,
-            coroutineScope = coroutineScope,
-            onUpdateLocalBranch = onUpdateLocalBranchRequested
+            coroutineScope = coroutineScope
         )
     }
 
@@ -180,8 +176,6 @@ class CheckedOutBranchPanel(
             isApprovedByMe = false,
             coroutineScope = coroutineScope
         )
-        headerViewModel.clearCommitsBehind()
-        headerViewModel.clearLocalBehindRemote()
         detailViewModel.bind(pullRequestId = summary.id)
         overviewViewModel.reset()
         conversationViewModel.reset()
@@ -202,7 +196,6 @@ class CheckedOutBranchPanel(
             isApprovedByMe = details.isApprovedByCurrentUser,
             coroutineScope = coroutineScope
         )
-        headerViewModel.clearCommitsBehind()
         detailViewModel.bind(pullRequestId = details.summary.id)
         detailViewModel.showActions(details)
     }
@@ -223,25 +216,9 @@ class CheckedOutBranchPanel(
         detailViewModel.setRefreshEnabled(enabled)
     }
 
-    /** Shows the red warning that the local source and/or destination branch is behind Bitbucket. */
-    fun showLocalBehindRemote(warning: HeaderLocalBehindRemote) {
-        headerViewModel.showLocalBehindRemote(warning = warning)
-    }
-
-    /** Hides the red local-behind-remote banner (decisions 3b/5a: branch mismatch, check failure, or up to date). */
-    fun clearLocalBehindRemote() {
-        headerViewModel.clearLocalBehindRemote()
-    }
-
-    /** Disables the update link while a pull or a page reload runs (decision 7a). */
-    fun setLocalBehindRemoteUpdateInProgress(inProgress: Boolean) {
-        headerViewModel.setLocalBehindRemoteUpdateInProgress(inProgress)
-    }
-
     fun showOverview(
         pullRequestId: Long,
         overview: PullRequestOverview,
-        destinationBranch: String,
         coroutineScope: CoroutineScope,
         inPlaceRefresh: Boolean = false,
         revealNewestActivity: Boolean = false
@@ -271,16 +248,11 @@ class CheckedOutBranchPanel(
         )
         historyViewModel.bind(coroutineScope = coroutineScope)
         historyViewModel.showActivity(feed = overview.activityFeed, conversation = overview.conversation)
-        val state = displayedPullRequestState
-        if (state != null) {
-            headerViewModel.showCommitsBehind(
-                state = state,
-                commitsBehind = overview.commitsBehind,
-                destinationBranch = destinationBranch
-            )
-        } else {
-            headerViewModel.clearCommitsBehind()
-        }
+    }
+
+    /** The state of the pull request this panel shows, or null before one is bound. */
+    fun displayedPullRequestState(): PullRequestState? {
+        return displayedPullRequestState
     }
 
     /** The current user's uuid, as carried by the shown Activity conversation; null until it has loaded. */

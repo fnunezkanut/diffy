@@ -27,12 +27,8 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Added: right-click a file in the editor, or its tab, on a branch other than main or master and choose Diff this file against main (or master) to compare it with the main branch; the branch is detected from the repository and its recent commits</li>
-            <li>Fixed: the Chrome Web Store extension could not sync, open pull requests, or deliver notifications because the plugin accepted only the development extension ID; the Sync button also reported this as a missing workspace</li>
-            <li>Removed: Bitbucket API token sign-in. The plugin now signs in with Bitbucket OAuth only. If you used an API token, open Settings &gt; Tools &gt; Diffy - Bitbucket PR Review and authenticate with Bitbucket oauth login; the old token is deleted when you do</li>
-            <li>Added: Notifications tab has a Filter out bots checkbox that hides notifications from bots; the choice is remembered</li>
-            <li>Changed: PR diffs in a work tree show the editable, fully navigable work tree file on the right side when the work tree is at or ahead of the pull request source commit (Settings &gt; Tools &gt; Diffy)</li>
-            <li>Added: an orange bar under the blue bar marks files with changes that are not in the pull request yet (unpushed commits or uncommitted edits), with Commit… and Push… links</li>
+            <li>Changed: the "Local branches are behind Bitbucket" warning is now a one-line red bar under the blue bar on the PR page, every file and every diff of the work tree, with its own icon and a Sync local branch link. It also updates while the PR page is closed</li>
+            <li>Changed: "This pull request is N commits behind" is now a yellow bar under the blue and red bars on the PR page, every file and every diff of the work tree, with a Rebase onto latest with AI link that puts a stash, rebase and force-push-with-lease prompt into a new Air chat</li>
         </ul>
     ]]></change-notes>
 
@@ -147,6 +143,10 @@
                 implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestReviewBarProvider"/>
         <editorNotificationProvider
                 implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyWorktreePrViewBlueBarEditorNotificationProvider"/>
+        <editorNotificationProvider
+                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyWorktreeLocalBehindRemoteEditorNotificationProvider"/>
+        <editorNotificationProvider
+                implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyWorktreeBehindDestinationEditorNotificationProvider"/>
         <editorNotificationProvider
                 implementation="com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyWorktreeUnpushedChangesEditorNotificationProvider"/>
         <treeStructureProvider

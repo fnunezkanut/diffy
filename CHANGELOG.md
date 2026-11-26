@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## *1.16.0* - 2026-11-26
+* Changed: the "Local branches are behind Bitbucket" warning is now a one-line red bar under the blue bar on the PR page, every file and every diff of the work tree, with its own icon and a Sync local branch link. It also updates while the PR page is closed
+* Changed: "This pull request is N commits behind" is now a yellow bar under the blue and red bars on the PR page, every file and every diff of the work tree, with a Rebase onto latest with AI link that puts a stash, rebase and force-push-with-lease prompt into a new Air chat
+
 ## *1.15.0* - 2026-11-25
 * Changed: in the Chrome and Firefox extensions the Open in IntelliJ icon now sits to the left of the pull request title instead of the right
 * Added: the Open in IntelliJ icon turns into a loading spinner after you click it and goes back to the plugin icon when the IntelliJ window has opened (needs this plugin version; older plugins show the spinner for 3 seconds)

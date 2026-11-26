@@ -7,7 +7,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Layout constants shared by the blue pull request bar and the orange "not in the pull request yet" bar. */
+/**
+ * Layout constants shared by the blue pull request bar, the red "behind Bitbucket" bar, the yellow "behind the destination"
+ * bar and the orange "not in the pull request yet" bar.
+ */
 internal val ROW_HORIZONTAL_PADDING = 12.dp
 internal val ROW_VERTICAL_PADDING = 6.dp
 internal val BORDER_WIDTH = 1.dp
@@ -17,10 +20,13 @@ internal val BANNER_BOTTOM_GAP = 5.dp
 
 /**
  * The weights that order the bars above an editor or diff: a lower weight renders higher. The platform sorts the
- * notification components by weight.
+ * notification components by weight. The red bar renders between the blue bar and the orange bar.
+ * The order is blue, red, yellow, orange, review.
  */
 internal object WorktreeBarWeights {
     const val BLUE = 0.0
+    const val LOCAL_BEHIND_REMOTE = 0.25
+    const val BEHIND_DESTINATION = 0.375
     const val UNPUSHED = 0.5
     const val REVIEW = 1.0
 }
