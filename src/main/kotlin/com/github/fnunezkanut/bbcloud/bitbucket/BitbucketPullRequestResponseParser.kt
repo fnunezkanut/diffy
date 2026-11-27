@@ -140,11 +140,19 @@ object BitbucketPullRequestResponseParser {
         return buildPullRequestUrl(workspace = workspace, repoSlug = repoSlug, pullRequestId = pullRequestId) + "/decline"
     }
 
-    fun buildMergeabilityChecksUrl(workspace: String, repoSlug: String, pullRequestId: Long): String {
+    /**
+     * Bitbucket accepts only two `q` filters on this endpoint. [MergeChecksFilter.WithoutGit] skips the slow Git check;
+     * [MergeChecksFilter.GitOnly] cannot exclude the other checks, so the caller keeps only the Git entry.
+     */
+    fun buildMergeabilityChecksUrl(workspace: String, repoSlug: String, pullRequestId: Long, filter: MergeChecksFilter): String {
+        val query = when (filter) {
+            MergeChecksFilter.WithoutGit -> "type!=\"$GIT_MERGEABILITY_CHECK_TYPE\""
+            MergeChecksFilter.GitOnly -> "check.kind!=\"$MAXIMUM_COMMITS_BEHIND_KIND\""
+        }
         return buildPullRequestUrl(workspace = workspace, repoSlug = repoSlug, pullRequestId = pullRequestId).toHttpUrl()
             .newBuilder()
             .addPathSegments("mergeability/checks")
-            .addQueryParameter(name = "q", value = "type!=\"git_mergeability_check\"")
+            .addQueryParameter(name = "q", value = query)
             .build()
             .toString()
     }
@@ -483,7 +491,7 @@ object BitbucketPullRequestResponseParser {
         return json.decodeFromString(PullRequestEntry.serializer(), responseBody).toSummary()
     }
 
-    /** Keeps standard and custom merge checks; state, permission, Git, and merge queue checks are not shown as merge checks. */
+    /** Maps every check entry; an entry with a type this version does not know becomes an [PullRequestMergeCheck.UnrecognizedCheck]. */
     fun parseMergeabilityChecks(responseBody: String): List<PullRequestMergeCheck> {
         val values = json.parseToJsonElement(responseBody).jsonObject["values"] as? JsonArray ?: return emptyList()
         return values.mapNotNull { value -> (value as? JsonObject)?.let { entry -> toMergeCheck(entry) } }
@@ -549,20 +557,108 @@ object BitbucketPullRequestResponseParser {
     }
 
     private fun toMergeCheck(entry: JsonObject): PullRequestMergeCheck? {
-        val check = entry["check"] as? JsonObject
-        val kind = when (entry.stringValue("type")) {
-            STANDARD_MERGE_CHECK_TYPE -> check?.stringValue("kind")?.takeIf { it.isNotBlank() } ?: return null
-            CUSTOM_PRE_MERGE_CHECK_TYPE, CUSTOM_ON_MERGE_CHECK_TYPE -> PullRequestMergeCheck.CUSTOM_KIND
-            else -> return null
+        val type = entry.stringValue("type")?.takeIf { it.isNotBlank() } ?: return null
+        val status = parseMergeCheckStatus(entry.stringValue("status"))
+        val isRequired = entry.booleanValue("required")
+        val isBlocking = entry.booleanValue("blocking")
+        return when (type) {
+            STATE_CHECK_TYPE -> PullRequestMergeCheck.StateCheck(
+                state = parseCheckPullRequestState(entry.stringValue("state")),
+                status = status,
+                isRequired = isRequired,
+                isBlocking = isBlocking
+            )
+            PERMISSION_CHECK_TYPE -> PullRequestMergeCheck.PermissionCheck(status = status, isRequired = isRequired, isBlocking = isBlocking)
+            GIT_MERGEABILITY_CHECK_TYPE -> toGitCheck(entry = entry, status = status, isRequired = isRequired, isBlocking = isBlocking)
+            STANDARD_MERGE_CHECK_TYPE -> toStandardCheck(entry = entry, status = status, isRequired = isRequired, isBlocking = isBlocking)
+            CUSTOM_PRE_MERGE_CHECK_TYPE, CUSTOM_ON_MERGE_CHECK_TYPE -> toCustomCheck(
+                entry = entry,
+                phase = if (type == CUSTOM_ON_MERGE_CHECK_TYPE) CustomCheckPhase.OnMerge else CustomCheckPhase.PreMerge,
+                status = status,
+                isRequired = isRequired,
+                isBlocking = isBlocking
+            )
+            MERGE_QUEUE_CHECK_TYPE -> toQueueCheck(entry = entry, status = status, isRequired = isRequired, isBlocking = isBlocking)
+            else -> PullRequestMergeCheck.UnrecognizedCheck(type = type, status = status, isRequired = isRequired, isBlocking = isBlocking)
         }
-        return PullRequestMergeCheck(
-            kind = kind,
-            name = check?.stringValue("name")?.takeIf { it.isNotBlank() },
-            status = parseMergeCheckStatus(entry.stringValue("status")),
-            isBlocking = (entry["blocking"] as? JsonPrimitive)?.booleanOrNull ?: false,
-            requiredValue = firstIntValue(entry["requirement"]),
-            observedValue = firstIntValue(entry["observed"])
+    }
+
+    private fun toGitCheck(entry: JsonObject, status: MergeCheckStatus, isRequired: Boolean, isBlocking: Boolean): PullRequestMergeCheck.GitCheck {
+        val detailsLink = ((entry["links"] as? JsonObject)?.get("details") as? JsonObject)?.stringValue("href")
+        return PullRequestMergeCheck.GitCheck(
+            reason = parseGitReason(entry.stringValue("reason")),
+            conflictsUrl = detailsLink?.takeIf { it.isNotBlank() },
+            status = status,
+            isRequired = isRequired,
+            isBlocking = isBlocking
         )
+    }
+
+    private fun toStandardCheck(entry: JsonObject, status: MergeCheckStatus, isRequired: Boolean, isBlocking: Boolean): PullRequestMergeCheck.StandardCheck? {
+        val kind = (entry["check"] as? JsonObject)?.stringValue("kind")?.takeIf { it.isNotBlank() } ?: return null
+        return PullRequestMergeCheck.StandardCheck(
+            kind = kind,
+            requiredValue = firstIntValue(entry["requirement"]),
+            observedValue = firstIntValue(entry["observed"]),
+            status = status,
+            isRequired = isRequired,
+            isBlocking = isBlocking
+        )
+    }
+
+    private fun toCustomCheck(
+        entry: JsonObject,
+        phase: CustomCheckPhase,
+        status: MergeCheckStatus,
+        isRequired: Boolean,
+        isBlocking: Boolean
+    ): PullRequestMergeCheck.CustomCheck {
+        val check = entry["check"] as? JsonObject
+        return PullRequestMergeCheck.CustomCheck(
+            phase = phase,
+            id = check?.stringValue("id")?.takeIf { it.isNotBlank() },
+            name = check?.stringValue("name")?.takeIf { it.isNotBlank() },
+            message = entry.stringValue("message")?.takeIf { it.isNotBlank() },
+            status = status,
+            isRequired = isRequired,
+            isBlocking = isBlocking
+        )
+    }
+
+    private fun toQueueCheck(entry: JsonObject, status: MergeCheckStatus, isRequired: Boolean, isBlocking: Boolean): PullRequestMergeCheck.QueueCheck {
+        val queue = entry["merge_queue"] as? JsonObject
+        return PullRequestMergeCheck.QueueCheck(
+            isQueued = entry.booleanValue("queued"),
+            queueName = queue?.stringValue("name")?.takeIf { it.isNotBlank() },
+            queueState = queue?.stringValue("state")?.takeIf { it.isNotBlank() },
+            status = status,
+            isRequired = isRequired,
+            isBlocking = isBlocking
+        )
+    }
+
+    private fun parseCheckPullRequestState(value: String?): MergeCheckPullRequestState {
+        return when (value?.uppercase()) {
+            "OPEN" -> MergeCheckPullRequestState.Open
+            "DRAFT" -> MergeCheckPullRequestState.Draft
+            "MERGED" -> MergeCheckPullRequestState.Merged
+            "DECLINED" -> MergeCheckPullRequestState.Declined
+            "SUPERSEDED" -> MergeCheckPullRequestState.Superseded
+            else -> MergeCheckPullRequestState.Unknown
+        }
+    }
+
+    private fun parseGitReason(value: String?): GitMergeabilityReason? {
+        return when (value?.lowercase()) {
+            "clean" -> GitMergeabilityReason.Clean
+            "conflicts" -> GitMergeabilityReason.Conflicts
+            "merge_impossible" -> GitMergeabilityReason.MergeImpossible
+            else -> null
+        }
+    }
+
+    private fun JsonObject.booleanValue(key: String): Boolean {
+        return (this[key] as? JsonPrimitive)?.booleanOrNull ?: false
     }
 
     private fun JsonObject.stringValue(key: String): String? {
@@ -637,6 +733,11 @@ object BitbucketPullRequestResponseParser {
     private const val BITBUCKET_API_BASE = "https://api.bitbucket.org/2.0"
 
     private const val STANDARD_MERGE_CHECK_TYPE = "standard_merge_check"
+    private const val STATE_CHECK_TYPE = "pullrequest_state_check"
+    private const val PERMISSION_CHECK_TYPE = "current_user_permission_check"
+    private const val GIT_MERGEABILITY_CHECK_TYPE = "git_mergeability_check"
+    private const val MERGE_QUEUE_CHECK_TYPE = "merge_queue_check"
+    private const val MAXIMUM_COMMITS_BEHIND_KIND = "maximum_commits_behind"
     private const val CUSTOM_PRE_MERGE_CHECK_TYPE = "custom_pre_merge_check"
     private const val CUSTOM_ON_MERGE_CHECK_TYPE = "custom_on_merge_check"
     private const val CHANGES_REQUESTED_STATE = "changes_requested"

@@ -1,5 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksResult
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestAction
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDetails
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestOverview
@@ -19,6 +20,7 @@ import org.jetbrains.jewel.bridge.compose
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
+import kotlin.time.Duration
 
 /**
  * Hosts the pull-request detail view inside a pull-request editor session.
@@ -31,6 +33,9 @@ class CheckedOutBranchPanel(
     private val coroutineScope: CoroutineScope,
     private val onRefreshRequested: () -> Unit,
     onActionRequested: (PullRequestAction) -> Unit,
+    onRetryChecksRequested: () -> Unit = {},
+    onRebaseWithAi: () -> Unit = {},
+    isRebaseAvailable: () -> Boolean = { false },
     reviewerEditor: ReviewerEditor,
     taskEditor: TaskEditor,
     descriptionEditor: DescriptionEditor,
@@ -44,6 +49,10 @@ class CheckedOutBranchPanel(
     private var infoWorkspace = ""
     private var infoRepositorySlug = ""
     private var infoRepositoryAvatarUrl: String? = null
+    private var displayedDestinationBranch = ""
+
+    // The checks of the shown pull request, including the deferred Git check and the last result that loaded.
+    private val checksTracker = MergeChecksTracker()
 
     private val overviewViewModel = PullRequestOverviewViewModel(
         reviewerEditor = reviewerEditor,
@@ -52,6 +61,9 @@ class CheckedOutBranchPanel(
         workspaceSlug = { DiffySettings.getInstance().workspaceSlug },
         openSearchPopup = { request -> openReviewerSearchPopup(request) },
         isAirAvailable = { AirChatBridge.isAvailable() },
+        isRebaseAvailable = isRebaseAvailable,
+        onRebaseWithAi = onRebaseWithAi,
+        onRetryChecksRequested = onRetryChecksRequested,
         onExplainWithAi = { request ->
             AirPullRequestExplainer.explain(
                 project = attachedProject,
@@ -165,6 +177,7 @@ class CheckedOutBranchPanel(
         infoViewModel.reset()
         displayedPullRequestId = summary.id
         displayedPullRequestState = summary.state
+        displayedDestinationBranch = summary.destinationBranch
         infoViewModel.bind(
             summary = summary,
             repositoryWebUrl = repositoryWebUrl,
@@ -177,6 +190,7 @@ class CheckedOutBranchPanel(
             coroutineScope = coroutineScope
         )
         detailViewModel.bind(pullRequestId = summary.id)
+        checksTracker.bind(summary.id)
         overviewViewModel.reset()
         conversationViewModel.reset()
         historyViewModel.reset()
@@ -186,6 +200,7 @@ class CheckedOutBranchPanel(
     fun showPullRequestDetails(details: PullRequestDetails, organizationUrl: String?, coroutineScope: CoroutineScope) {
         displayedPullRequestId = details.summary.id
         displayedPullRequestState = details.summary.state
+        displayedDestinationBranch = details.summary.destinationBranch
         infoViewModel.bind(
             summary = details.summary,
             repositoryWebUrl = infoRepositoryWebUrl,
@@ -208,6 +223,62 @@ class CheckedOutBranchPanel(
         detailViewModel.setMergeChecksState(pullRequestId = pullRequestId, state = state)
     }
 
+    /** Shows checks re-read in the background; nothing is redrawn when they equal the ones already shown. Returns true when the card changed. */
+    fun showRefreshedMergeChecks(pullRequestId: Long, result: MergeChecksResult): Boolean {
+        val snapshot = checksTracker.onRefresh(pullRequestId = pullRequestId, result = result)
+        if (snapshot == null) {
+            LOG.debug("Merge checks of pull request #$pullRequestId are unchanged or belong to another pull request; keeping the card")
+            return false
+        }
+        renderChecks(pullRequestId = pullRequestId, snapshot = snapshot)
+        return true
+    }
+
+    /** Where the deferred Git request of the shown pull request stands. */
+    fun gitMergeabilityStatus(): GitRowStatus {
+        return checksTracker.gitStatus()
+    }
+
+    /** Shows the placeholder row of the deferred Git request. */
+    fun setGitMergeabilityLoading(pullRequestId: Long) {
+        checksTracker.onGitLoading(pullRequestId)?.let { snapshot -> renderChecks(pullRequestId = pullRequestId, snapshot = snapshot) }
+    }
+
+    /** Adds the Git check to the shown checks; a failed request hides the placeholder and leaves the Merge state alone. */
+    fun showGitMergeability(pullRequestId: Long, result: MergeChecksResult) {
+        val snapshot = checksTracker.onGit(pullRequestId = pullRequestId, result = result)
+        if (snapshot == null) {
+            LOG.debug("Ignoring the git mergeability of pull request #$pullRequestId; the view shows #$displayedPullRequestId")
+            return
+        }
+        renderChecks(pullRequestId = pullRequestId, snapshot = snapshot)
+    }
+
+    /** True while a check can still change on its own, which is when a background re-read is worth a request. */
+    fun hasPendingMergeCheck(): Boolean {
+        return checksTracker.hasPendingCheck()
+    }
+
+    /** Tells the Retry link when Diffy tries again by itself; null after a successful read. */
+    fun setNextChecksAttempt(delay: Duration?) {
+        overviewViewModel.setNextChecksAttempt(delay)
+    }
+
+    private fun renderChecks(pullRequestId: Long, snapshot: MergeChecksSnapshot) {
+        overviewViewModel.showChecks(result = snapshot.result, previous = snapshot.previous, gitStatus = snapshot.gitStatus)
+        applyMergeChecksState(pullRequestId = pullRequestId, snapshot = snapshot)
+    }
+
+    private fun applyMergeChecksState(pullRequestId: Long, snapshot: MergeChecksSnapshot) {
+        val mergeChecksState = MergeChecksStateResolver.resolve(
+            result = snapshot.result,
+            previous = snapshot.previous,
+            destinationBranch = displayedDestinationBranch
+        )
+        LOG.debug("Merge checks resolve to ${mergeChecksState::class.simpleName} for pull request #$pullRequestId")
+        detailViewModel.setMergeChecksState(pullRequestId = pullRequestId, state = mergeChecksState)
+    }
+
     fun setActionsEnabled(enabled: Boolean) {
         detailViewModel.setActionsEnabled(enabled)
     }
@@ -223,20 +294,15 @@ class CheckedOutBranchPanel(
         inPlaceRefresh: Boolean = false,
         revealNewestActivity: Boolean = false
     ) {
+        val snapshot = checksTracker.onOverview(pullRequestId = pullRequestId, result = overview.mergeChecks)
         overviewViewModel.showOverview(
             pullRequestId = pullRequestId,
-            overview = overview
+            overview = overview.copy(mergeChecks = snapshot.result),
+            previousChecks = snapshot.previous,
+            gitStatus = snapshot.gitStatus
         )
         // Unknown keeps Merge disabled until this overview supplies a loaded or failed merge-check result.
-        val mergeChecksState = overview.mergeChecks?.let { checks ->
-            if (MergeCheckSummary.of(checks).isBlocking) {
-                MergeChecksState.Blocked
-            } else {
-                MergeChecksState.NotBlocked
-            }
-        } ?: MergeChecksState.NotBlocked
-        LOG.debug("Overview reports mergeChecksState=$mergeChecksState for pull request #$pullRequestId")
-        detailViewModel.setMergeChecksState(pullRequestId = pullRequestId, state = mergeChecksState)
+        applyMergeChecksState(pullRequestId = pullRequestId, snapshot = snapshot)
         // The conversation goes first, so its host state (current user, mentions, file existence) is in place when the
         // timeline recomposes with the threads. Mentions still pending show a placeholder until the editor session applies them.
         conversationViewModel.bind(coroutineScope = coroutineScope)

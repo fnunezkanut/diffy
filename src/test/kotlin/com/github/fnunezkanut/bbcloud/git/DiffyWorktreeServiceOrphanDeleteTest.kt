@@ -21,7 +21,14 @@ class DiffyWorktreeServiceOrphanDeleteTest {
     lateinit var root: Path
 
     private class NoGit : GitCommandRunner {
-        override fun run(project: Project?, workingDir: Path, command: GitCommand, parameters: List<String>, remoteUrl: String?): GitCommandResult {
+        override fun run(
+            project: Project?,
+            workingDir: Path,
+            command: GitCommand,
+            parameters: List<String>,
+            remoteUrl: String?,
+            background: Boolean
+        ): GitCommandResult {
             throw IllegalStateException("git must not run when deleting an orphan folder")
         }
     }

@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.git.MainBranchSyncStatus
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectWorktreeRow
 import com.github.fnunezkanut.bbcloud.ui.components.DiffyCompactOutlinedIconButton
@@ -60,6 +61,7 @@ import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
+import kotlin.time.Clock
 
 @Composable
 fun WatchedProjectsScreen(viewModel: WatchedProjectsViewModel) {
@@ -624,6 +626,38 @@ private fun LocalCell(row: WatchedProjectRow, viewModel: WatchedProjectsViewMode
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+        row.mainBranchSync?.let { status -> MainBranchSyncLine(status = status) }
+    }
+}
+
+@Composable
+private fun MainBranchSyncLine(status: MainBranchSyncStatus) {
+    val now = remember(status) { Clock.System.now() }
+    if (!MainBranchSyncText.isWarning(status = status)) {
+        Text(
+            text = MainBranchSyncText.summary(status = status, now = now),
+            color = JewelTheme.globalColors.text.info,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        return
+    }
+    Tooltip(tooltip = { Text(text = MainBranchSyncText.warning(status = status)) }) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                key = AllIconsKeys.General.Warning,
+                contentDescription = DiffyBundle.message("workspace.watchedProjects.mainSync.tooltip")
+            )
+            Text(
+                text = status.branch ?: DiffyBundle.message("workspace.watchedProjects.mainSync.noMainBranch"),
+                color = JewelTheme.globalColors.text.info,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

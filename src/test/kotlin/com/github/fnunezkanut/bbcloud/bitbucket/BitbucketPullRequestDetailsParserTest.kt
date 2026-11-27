@@ -478,27 +478,35 @@ class BitbucketPullRequestDetailsParserTest {
     @Nested
     inner class MergeabilityCheckTests {
         @Test
-        fun `parseMergeabilityChecks - should keep standard and custom checks only`() {
+        fun `parseMergeabilityChecks - should map every check type`() {
             // GIVEN
             val json =
                 """
                 {
+                  "size": 7,
                   "values": [
-                    { "type": "pullrequest_state_check", "status": "PASSED", "required": true, "blocking": false, "state": "OPEN" },
-                    { "type": "current_user_permission_check", "status": "PASSED", "required": true, "blocking": false },
+                    { "type": "pullrequest_state_check", "status": "FAILED", "required": true, "blocking": true, "state": "DRAFT" },
+                    { "type": "current_user_permission_check", "status": "FAILED", "required": true, "blocking": true },
                     {
-                      "type": "standard_merge_check", "status": "FAILED", "required": false, "blocking": false,
+                      "type": "git_mergeability_check", "status": "FAILED", "required": true, "blocking": true, "reason": "conflicts",
+                      "links": { "details": { "href": "https://api.bitbucket.org/2.0/repositories/ws/repo/pullrequests/1/conflicts" } }
+                    },
+                    {
+                      "type": "standard_merge_check", "status": "FAILED", "required": true, "blocking": true,
                       "check": { "type": "standard_merge_check_definition", "kind": "minimum_approvals" },
-                      "requirement": { "minimum_approvals": 1 }, "observed": { "approval_count": 0 }
+                      "requirement": { "minimum_approvals": 2 }, "observed": { "approval_count": 1 }
                     },
                     {
-                      "type": "standard_merge_check", "status": "PASSED", "required": true, "blocking": false,
-                      "check": { "type": "standard_merge_check_definition", "kind": "resolved_tasks" },
-                      "requirement": {}, "observed": { "unresolved_task_count": 0 }
-                    },
-                    {
-                      "type": "custom_pre_merge_check", "status": "PENDING", "required": true, "blocking": true,
+                      "type": "custom_pre_merge_check", "status": "PENDING", "required": true, "blocking": true, "message": "Scan is running",
                       "check": { "type": "custom_merge_check_definition", "id": "ari:1", "name": "Security scan" }
+                    },
+                    {
+                      "type": "custom_on_merge_check", "status": "PENDING", "required": false, "blocking": false,
+                      "check": { "id": "ari:2", "name": "Release gate" }
+                    },
+                    {
+                      "type": "merge_queue_check", "status": "FAILED", "required": true, "blocking": true, "queued": true,
+                      "merge_queue": { "uuid": "{q}", "name": "main queue", "state": "DRAINING" }
                     }
                   ]
                 }
@@ -509,29 +517,137 @@ class BitbucketPullRequestDetailsParserTest {
 
             // THEN
             checks shouldBe listOf(
-                PullRequestMergeCheck(
-                    kind = "minimum_approvals",
-                    name = null,
+                PullRequestMergeCheck.StateCheck(
+                    state = MergeCheckPullRequestState.Draft,
                     status = MergeCheckStatus.Failed,
-                    isBlocking = false,
-                    requiredValue = 1,
-                    observedValue = 0
+                    isRequired = true,
+                    isBlocking = true
                 ),
-                PullRequestMergeCheck(
-                    kind = "resolved_tasks",
-                    name = null,
-                    status = MergeCheckStatus.Passed,
-                    isBlocking = false,
-                    requiredValue = null,
-                    observedValue = 0
+                PullRequestMergeCheck.PermissionCheck(status = MergeCheckStatus.Failed, isRequired = true, isBlocking = true),
+                PullRequestMergeCheck.GitCheck(
+                    reason = GitMergeabilityReason.Conflicts,
+                    conflictsUrl = "https://api.bitbucket.org/2.0/repositories/ws/repo/pullrequests/1/conflicts",
+                    status = MergeCheckStatus.Failed,
+                    isRequired = true,
+                    isBlocking = true
                 ),
-                PullRequestMergeCheck(
-                    kind = PullRequestMergeCheck.CUSTOM_KIND,
+                PullRequestMergeCheck.StandardCheck(
+                    kind = "minimum_approvals",
+                    requiredValue = 2,
+                    observedValue = 1,
+                    status = MergeCheckStatus.Failed,
+                    isRequired = true,
+                    isBlocking = true
+                ),
+                PullRequestMergeCheck.CustomCheck(
+                    phase = CustomCheckPhase.PreMerge,
+                    id = "ari:1",
                     name = "Security scan",
+                    message = "Scan is running",
                     status = MergeCheckStatus.Pending,
-                    isBlocking = true,
+                    isRequired = true,
+                    isBlocking = true
+                ),
+                PullRequestMergeCheck.CustomCheck(
+                    phase = CustomCheckPhase.OnMerge,
+                    id = "ari:2",
+                    name = "Release gate",
+                    message = null,
+                    status = MergeCheckStatus.Pending,
+                    isRequired = false,
+                    isBlocking = false
+                ),
+                PullRequestMergeCheck.QueueCheck(
+                    isQueued = true,
+                    queueName = "main queue",
+                    queueState = "DRAINING",
+                    status = MergeCheckStatus.Failed,
+                    isRequired = true,
+                    isBlocking = true
+                )
+            )
+        }
+
+        @Test
+        fun `parseMergeabilityChecks - should read the optional fields as absent`() {
+            // GIVEN
+            val json =
+                """
+                {
+                  "values": [
+                    { "type": "pullrequest_state_check", "status": "PASSED" },
+                    { "type": "git_mergeability_check", "status": "UNKNOWN", "required": true, "blocking": false },
+                    { "type": "custom_pre_merge_check", "status": "PASSED", "check": {} },
+                    { "type": "merge_queue_check", "status": "PASSED", "required": false, "blocking": false }
+                  ]
+                }
+                """.trimIndent()
+
+            // WHEN
+            val checks = BitbucketPullRequestResponseParser.parseMergeabilityChecks(json)
+
+            // THEN
+            checks shouldBe listOf(
+                PullRequestMergeCheck.StateCheck(
+                    state = MergeCheckPullRequestState.Unknown,
+                    status = MergeCheckStatus.Passed,
+                    isRequired = false,
+                    isBlocking = false
+                ),
+                PullRequestMergeCheck.GitCheck(
+                    reason = null,
+                    conflictsUrl = null,
+                    status = MergeCheckStatus.Unknown,
+                    isRequired = true,
+                    isBlocking = false
+                ),
+                PullRequestMergeCheck.CustomCheck(
+                    phase = CustomCheckPhase.PreMerge,
+                    id = null,
+                    name = null,
+                    message = null,
+                    status = MergeCheckStatus.Passed,
+                    isRequired = false,
+                    isBlocking = false
+                ),
+                PullRequestMergeCheck.QueueCheck(
+                    isQueued = false,
+                    queueName = null,
+                    queueState = null,
+                    status = MergeCheckStatus.Passed,
+                    isRequired = false,
+                    isBlocking = false
+                )
+            )
+        }
+
+        @Test
+        fun `parseMergeabilityChecks - should keep an advisory standard check with an empty requirement`() {
+            // GIVEN
+            val json =
+                """
+                {
+                  "values": [
+                    {
+                      "type": "standard_merge_check", "status": "FAILED", "required": false, "blocking": false,
+                      "check": { "kind": "resolved_tasks" }, "requirement": {}, "observed": { "unresolved_task_count": 2 }
+                    }
+                  ]
+                }
+                """.trimIndent()
+
+            // WHEN
+            val checks = BitbucketPullRequestResponseParser.parseMergeabilityChecks(json)
+
+            // THEN
+            checks shouldBe listOf(
+                PullRequestMergeCheck.StandardCheck(
+                    kind = "resolved_tasks",
                     requiredValue = null,
-                    observedValue = null
+                    observedValue = 2,
+                    status = MergeCheckStatus.Failed,
+                    isRequired = false,
+                    isBlocking = false
                 )
             )
         }
@@ -557,13 +673,40 @@ class BitbucketPullRequestDetailsParserTest {
 
             // THEN
             checks shouldBe listOf(
-                PullRequestMergeCheck(
+                PullRequestMergeCheck.StandardCheck(
                     kind = "no_failed_builds",
-                    name = null,
-                    status = MergeCheckStatus.Unknown,
-                    isBlocking = false,
                     requiredValue = null,
-                    observedValue = 2
+                    observedValue = 2,
+                    status = MergeCheckStatus.Unknown,
+                    isRequired = false,
+                    isBlocking = false
+                )
+            )
+        }
+
+        @Test
+        fun `parseMergeabilityChecks - should keep an unrecognized type and skip an entry without a type`() {
+            // GIVEN
+            val json =
+                """
+                {
+                  "values": [
+                    { "type": "future_check", "status": "FAILED", "required": true, "blocking": true },
+                    { "status": "PASSED", "required": true, "blocking": false }
+                  ]
+                }
+                """.trimIndent()
+
+            // WHEN
+            val checks = BitbucketPullRequestResponseParser.parseMergeabilityChecks(json)
+
+            // THEN
+            checks shouldBe listOf(
+                PullRequestMergeCheck.UnrecognizedCheck(
+                    type = "future_check",
+                    status = MergeCheckStatus.Failed,
+                    isRequired = true,
+                    isBlocking = true
                 )
             )
         }
@@ -578,13 +721,32 @@ class BitbucketPullRequestDetailsParserTest {
         }
 
         @Test
-        fun `buildMergeabilityChecksUrl - should exclude the git mergeability check`() {
+        fun `buildMergeabilityChecksUrl - should exclude the git mergeability check for WithoutGit`() {
             // WHEN
-            val url = BitbucketPullRequestResponseParser.buildMergeabilityChecksUrl(workspace = "my-workspace", repoSlug = "examplerepo", pullRequestId = 273)
+            val url = BitbucketPullRequestResponseParser.buildMergeabilityChecksUrl(
+                workspace = "my-workspace",
+                repoSlug = "examplerepo",
+                pullRequestId = 273,
+                filter = MergeChecksFilter.WithoutGit
+            )
 
             // THEN
             url.toHttpUrl().queryParameter("q") shouldBe "type!=\"git_mergeability_check\""
             url.toHttpUrl().encodedPath shouldBe "/2.0/repositories/my-workspace/examplerepo/pullrequests/273/mergeability/checks"
+        }
+
+        @Test
+        fun `buildMergeabilityChecksUrl - should exclude only commits behind for GitOnly`() {
+            // WHEN
+            val url = BitbucketPullRequestResponseParser.buildMergeabilityChecksUrl(
+                workspace = "my-workspace",
+                repoSlug = "examplerepo",
+                pullRequestId = 273,
+                filter = MergeChecksFilter.GitOnly
+            )
+
+            // THEN
+            url.toHttpUrl().queryParameter("q") shouldBe "check.kind!=\"maximum_commits_behind\""
         }
     }
 

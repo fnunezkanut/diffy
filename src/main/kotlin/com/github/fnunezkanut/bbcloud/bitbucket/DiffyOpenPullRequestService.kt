@@ -210,7 +210,7 @@ class DiffyOpenPullRequestService(
             operation = "load pull request overview",
             projectBasePath = projectBasePath,
             organizationUrl = organizationUrl
-        ) ?: return PullRequestOverview(commitsBehind = null, builds = null)
+        ) ?: return PullRequestOverview(commitsBehind = null, builds = null, mergeChecks = MergeChecksResult.Unavailable(MergeChecksFailure.Other))
 
         LOG.debug("Loading overview for pull request #${summary.id} in ${target.workspace}/${target.repoSlug}")
         return coroutineScope {
@@ -236,6 +236,7 @@ class DiffyOpenPullRequestService(
                     workspace = target.workspace,
                     repoSlug = target.repoSlug,
                     pullRequestId = summary.id,
+                    filter = MergeChecksFilter.WithoutGit,
                     apiToken = target.apiToken
                 )
             }
@@ -278,6 +279,52 @@ class DiffyOpenPullRequestService(
                 activityFeed = activityFeed
             )
         }
+    }
+
+    /**
+     * Reads only the Git mergeability check of [summary], which Bitbucket computes slowly and which the overview therefore
+     * leaves out. The endpoint cannot exclude the other checks, so everything but the [PullRequestMergeCheck.GitCheck] is
+     * dropped here. A result without a Git check is a [MergeChecksResult.Loaded] with no entries.
+     */
+    suspend fun pullRequestGitMergeability(projectBasePath: String?, organizationUrl: String, summary: PullRequestSummary): MergeChecksResult {
+        val target = resolveTarget(
+            operation = "load pull request git mergeability",
+            projectBasePath = projectBasePath,
+            organizationUrl = organizationUrl
+        ) ?: return MergeChecksResult.Unavailable(MergeChecksFailure.Other)
+
+        LOG.debug("Loading the git mergeability of pull request #${summary.id} in ${target.workspace}/${target.repoSlug}")
+        val result = pullRequestClient.listMergeChecks(
+            workspace = target.workspace,
+            repoSlug = target.repoSlug,
+            pullRequestId = summary.id,
+            filter = MergeChecksFilter.GitOnly,
+            apiToken = target.apiToken
+        )
+        return when (result) {
+            is MergeChecksResult.Loaded -> MergeChecksResult.Loaded(result.checks.filterIsInstance<PullRequestMergeCheck.GitCheck>())
+            is MergeChecksResult.Unavailable -> result
+        }
+    }
+
+    /**
+     * Reads the overview checks again without the Git check, for the background refresh while a check can still change.
+     * The result is Unavailable when the target cannot be resolved.
+     */
+    suspend fun pullRequestMergeChecks(projectBasePath: String?, organizationUrl: String, summary: PullRequestSummary): MergeChecksResult {
+        val target = resolveTarget(
+            operation = "refresh pull request merge checks",
+            projectBasePath = projectBasePath,
+            organizationUrl = organizationUrl
+        ) ?: return MergeChecksResult.Unavailable(MergeChecksFailure.Other)
+
+        return pullRequestClient.listMergeChecks(
+            workspace = target.workspace,
+            repoSlug = target.repoSlug,
+            pullRequestId = summary.id,
+            filter = MergeChecksFilter.WithoutGit,
+            apiToken = target.apiToken
+        )
     }
 
     /** Returns null when the comments could not be loaded; missing activity or commits are reported via partial failure flags. */

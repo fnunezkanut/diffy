@@ -20,9 +20,9 @@ import org.jetbrains.jewel.ui.component.Text
  * tool window.
  */
 @Composable
-internal fun TitledCardBox(title: String? = null, content: @Composable () -> Unit) {
+internal fun TitledCardBox(title: String? = null, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .border(width = 1.dp, color = JewelTheme.globalColors.borders.normal, shape = RoundedCornerShape(2.dp))
             .padding(8.dp)

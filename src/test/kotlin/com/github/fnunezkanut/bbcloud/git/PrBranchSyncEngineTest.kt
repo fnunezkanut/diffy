@@ -30,7 +30,14 @@ class PrBranchSyncEngineTest {
         var failCombinedFetch = false
         var fetchSucceedsFor: Set<String>? = null
 
-        override fun run(project: Project?, workingDir: Path, command: GitCommand, parameters: List<String>, remoteUrl: String?): GitCommandResult {
+        override fun run(
+            project: Project?,
+            workingDir: Path,
+            command: GitCommand,
+            parameters: List<String>,
+            remoteUrl: String?,
+            background: Boolean
+        ): GitCommandResult {
             calls += Call(workingDir = workingDir, command = command, parameters = parameters)
             return when (command) {
                 GitCommand.FETCH -> fetch(parameters)
@@ -654,6 +661,68 @@ class PrBranchSyncEngineTest {
             )
 
             git.calls.count { call -> call.command == GitCommand.FETCH } shouldBe 0
+        }
+    }
+
+    @Nested
+    inner class SingleBranch {
+        @Test
+        fun `inspectSingle - should report behind with the revisions of one branch`(
+            @TempDir tempDir: Path
+        ) {
+            // GIVEN
+            val git = FakeGit().apply {
+                remoteRefs["main"] = "new"
+                localRefs["main"] = "old"
+                counts["main"] = "0\t2"
+            }
+
+            // WHEN
+            val status = engineWith(git).inspectSingle(project = null, workingDir = tempDir, remoteName = "origin", branch = "main")
+
+            // THEN
+            status shouldBe BranchSyncStatus.Behind(
+                commitsBehind = 2,
+                commitsAhead = 0,
+                localRevision = "old",
+                remoteRevision = "new",
+                checkedOutAt = null,
+                checkedOutWorktreeDirty = null
+            )
+        }
+
+        @Test
+        fun `execute - should run the decided update-ref once`(
+            @TempDir tempDir: Path
+        ) {
+            // GIVEN
+            val git = FakeGit()
+            val status = BranchSyncStatus.Behind(
+                commitsBehind = 2,
+                commitsAhead = 0,
+                localRevision = "old",
+                remoteRevision = "new",
+                checkedOutAt = null,
+                checkedOutWorktreeDirty = null
+            )
+
+            // WHEN
+            val result = engineWith(git).execute(
+                project = null,
+                workingDir = tempDir,
+                remoteName = "origin",
+                branch = "main",
+                status = status,
+                action = PrBranchSyncAction.UpdateRef(newRevision = "new", oldRevision = "old"),
+                remoteUrl = null
+            )
+
+            // THEN
+            assertSoftly {
+                result shouldBe PrBranchSyncStepResult.Updated(path = null)
+                git.calls.single().command shouldBe GitCommand.UPDATE_REF
+                git.calls.single().parameters.takeLast(3) shouldBe listOf("refs/heads/main", "new", "old")
+            }
         }
     }
 }

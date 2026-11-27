@@ -3,6 +3,7 @@ package com.github.fnunezkanut.bbcloud.ui.otherprojects
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.state.ToggleableState
+import com.github.fnunezkanut.bbcloud.git.MainBranchSyncStatus
 import com.github.fnunezkanut.bbcloud.git.WorktreeCurrentBranchReader
 import com.github.fnunezkanut.bbcloud.project.PullRequestWorktreeListing
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
@@ -15,6 +16,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
@@ -73,7 +76,9 @@ class WatchedProjectsViewModel(
     private val onOpenWorktreesHelpCallback: () -> Unit,
     private val onGoToWorkspaceCallback: () -> Unit,
     private val onCheckoutProjectCallback: () -> Unit,
-    private val runOnEdt: (() -> Unit) -> Unit = { block -> ApplicationManager.getApplication().invokeLater(block) }
+    private val runOnEdt: (() -> Unit) -> Unit = { block -> ApplicationManager.getApplication().invokeLater(block) },
+    /** The results of "Auto-update main branches" by repository slug; production passes the service flow. */
+    mainBranchStatuses: StateFlow<Map<String, MainBranchSyncStatus>> = MutableStateFlow(emptyMap())
 ) {
     val state: MutableState<WatchedProjectsUiState> = mutableStateOf(
         WatchedProjectsUiState(showOnlyWatched = dataSource.showOnlyWatched())
@@ -89,6 +94,20 @@ class WatchedProjectsViewModel(
     private var worktreeLoadGeneration = 0L
 
     private var organizationUrl: String? = null
+
+    /** The latest "Auto-update main branches" results, merged into every row that is built. EDT-only. */
+    private var mainBranchSyncBySlug: Map<String, MainBranchSyncStatus> = emptyMap()
+
+    init {
+        coroutineScope.launch {
+            mainBranchStatuses.collect { statuses ->
+                runOnEdt {
+                    mainBranchSyncBySlug = statuses
+                    updateRows(rows = withMainBranchSync(rows = state.value.rows, statuses = statuses))
+                }
+            }
+        }
+    }
 
     /**
      * Shows the persisted mappings of the current workspace on the Watched Projects tab, or routes to the generic
@@ -287,7 +306,8 @@ class WatchedProjectsViewModel(
                     mapping = row.mapping,
                     organizationUrl = organizationUrl,
                     avatarUrl = null,
-                    worktrees = row.worktrees
+                    worktrees = row.worktrees,
+                    mainBranchSync = row.mainBranchSync
                 )
             },
             avatarRevision = state.value.avatarRevision + 1
@@ -507,7 +527,8 @@ class WatchedProjectsViewModel(
             buildWatchedProjectRow(
                 mapping = mapping,
                 organizationUrl = organizationUrl,
-                avatarUrl = slugToAvatarUrl[mapping.remoteRepoSlug]
+                avatarUrl = slugToAvatarUrl[mapping.remoteRepoSlug],
+                mainBranchSync = mainBranchSyncBySlug[mapping.remoteRepoSlug]
             )
         }
     }

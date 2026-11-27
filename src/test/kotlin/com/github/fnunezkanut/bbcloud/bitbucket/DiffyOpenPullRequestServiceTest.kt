@@ -316,13 +316,13 @@ class DiffyOpenPullRequestServiceTest {
             description = null,
             updatedOn = null
         )
-        private val mergeCheck = PullRequestMergeCheck(
+        private val mergeCheck = PullRequestMergeCheck.StandardCheck(
             kind = "minimum_approvals",
-            name = null,
-            status = MergeCheckStatus.Failed,
-            isBlocking = false,
             requiredValue = 1,
-            observedValue = 0
+            observedValue = 0,
+            status = MergeCheckStatus.Failed,
+            isRequired = true,
+            isBlocking = false
         )
         private val task = PullRequestTask(id = 7, content = "Update the changelog", isResolved = false)
 
@@ -344,8 +344,14 @@ class DiffyOpenPullRequestServiceTest {
                     client.listBuildStatuses(workspace = "my-workspace", repoSlug = "examplerepo", pullRequestId = 273, apiToken = "token")
                 } returns listOf(build)
                 coEvery {
-                    client.listMergeChecks(workspace = "my-workspace", repoSlug = "examplerepo", pullRequestId = 273, apiToken = "token")
-                } returns listOf(mergeCheck)
+                    client.listMergeChecks(
+                        workspace = "my-workspace",
+                        repoSlug = "examplerepo",
+                        pullRequestId = 273,
+                        filter = MergeChecksFilter.WithoutGit,
+                        apiToken = "token"
+                    )
+                } returns MergeChecksResult.Loaded(listOf(mergeCheck))
                 coEvery {
                     client.listTasks(workspace = "my-workspace", repoSlug = "examplerepo", pullRequestId = 273, apiToken = "token")
                 } returns listOf(task)
@@ -363,7 +369,7 @@ class DiffyOpenPullRequestServiceTest {
                 assertSoftly(overview) {
                     commitsBehind shouldBe ItemCount(value = 1, isTruncated = false)
                     builds shouldBe listOf(build)
-                    mergeChecks shouldBe listOf(mergeCheck)
+                    mergeChecks shouldBe MergeChecksResult.Loaded(listOf(mergeCheck))
                     tasks shouldBe listOf(task)
                     conversation.shouldNotBeNull()
                     conversation.threads shouldBe emptyList()
@@ -386,7 +392,7 @@ class DiffyOpenPullRequestServiceTest {
                 val client = mockk<BitbucketPullRequestClient>()
                 coEvery { client.countCommitsBehind(any(), any(), any(), any(), any()) } returns ItemCount(value = 0, isTruncated = false)
                 coEvery { client.listBuildStatuses(any(), any(), any(), any()) } returns emptyList()
-                coEvery { client.listMergeChecks(any(), any(), any(), any()) } returns emptyList()
+                coEvery { client.listMergeChecks(any(), any(), any(), any(), any()) } returns MergeChecksResult.Loaded(emptyList())
                 coEvery { client.listTasks(any(), any(), any(), any()) } returns emptyList()
                 stubTimelineSources(client)
                 coEvery { client.getCurrentUser(apiToken = "token") } returns CurrentUser(uuid = "{me}", avatarUrl = "https://avatars/me.png")
@@ -413,7 +419,7 @@ class DiffyOpenPullRequestServiceTest {
                 val client = mockk<BitbucketPullRequestClient>()
                 coEvery { client.countCommitsBehind(any(), any(), any(), any(), any()) } returns ItemCount(value = 0, isTruncated = false)
                 coEvery { client.listBuildStatuses(any(), any(), any(), any()) } returns listOf(build)
-                coEvery { client.listMergeChecks(any(), any(), any(), any()) } returns emptyList()
+                coEvery { client.listMergeChecks(any(), any(), any(), any(), any()) } returns MergeChecksResult.Loaded(emptyList())
                 coEvery { client.listTasks(any(), any(), any(), any()) } returns emptyList()
                 stubTimelineSources(client = client, comments = null)
                 val service = DiffyOpenPullRequestService(storeWithToken("token"), client)
@@ -445,7 +451,7 @@ class DiffyOpenPullRequestServiceTest {
                 val client = mockk<BitbucketPullRequestClient>()
                 coEvery { client.countCommitsBehind(any(), any(), any(), any(), any()) } returns ItemCount(value = 0, isTruncated = false)
                 coEvery { client.listBuildStatuses(any(), any(), any(), any()) } returns emptyList()
-                coEvery { client.listMergeChecks(any(), any(), any(), any()) } returns emptyList()
+                coEvery { client.listMergeChecks(any(), any(), any(), any(), any()) } returns MergeChecksResult.Loaded(emptyList())
                 coEvery { client.listTasks(any(), any(), any(), any()) } returns emptyList()
                 stubTimelineSources(
                     client = client,
@@ -481,7 +487,7 @@ class DiffyOpenPullRequestServiceTest {
                 val client = mockk<BitbucketPullRequestClient>()
                 coEvery { client.countCommitsBehind(any(), any(), any(), any(), any()) } returns ItemCount(value = 0, isTruncated = false)
                 coEvery { client.listBuildStatuses(any(), any(), any(), any()) } returns emptyList()
-                coEvery { client.listMergeChecks(any(), any(), any(), any()) } returns emptyList()
+                coEvery { client.listMergeChecks(any(), any(), any(), any(), any()) } returns MergeChecksResult.Loaded(emptyList())
                 coEvery { client.listTasks(any(), any(), any(), any()) } returns emptyList()
                 stubTimelineSources(client = client, activity = PagedItems(items = listOf(approval), isTruncated = false), commits = null)
                 val service = DiffyOpenPullRequestService(storeWithToken("token"), client)
@@ -508,7 +514,7 @@ class DiffyOpenPullRequestServiceTest {
                 val client = mockk<BitbucketPullRequestClient>()
                 coEvery { client.countCommitsBehind(any(), any(), any(), any(), any()) } returns ItemCount(value = 0, isTruncated = false)
                 coEvery { client.listBuildStatuses(any(), any(), any(), any()) } returns listOf(build)
-                coEvery { client.listMergeChecks(any(), any(), any(), any()) } returns emptyList()
+                coEvery { client.listMergeChecks(any(), any(), any(), any(), any()) } returns MergeChecksResult.Loaded(emptyList())
                 coEvery { client.listTasks(any(), any(), any(), any()) } returns null
                 stubTimelineSources(client)
                 val service = DiffyOpenPullRequestService(storeWithToken("token"), client)
@@ -541,7 +547,7 @@ class DiffyOpenPullRequestServiceTest {
                 val client = mockk<BitbucketPullRequestClient>()
                 coEvery { client.countCommitsBehind(any(), any(), any(), any(), any()) } returns ItemCount(value = 0, isTruncated = false)
                 coEvery { client.listBuildStatuses(any(), any(), any(), any()) } returns emptyList()
-                coEvery { client.listMergeChecks(any(), any(), any(), any()) } returns emptyList()
+                coEvery { client.listMergeChecks(any(), any(), any(), any(), any()) } returns MergeChecksResult.Loaded(emptyList())
                 coEvery { client.listTasks(any(), any(), any(), any()) } returns emptyList()
                 stubTimelineSources(client = client, activity = PagedItems(items = listOf(approval), isTruncated = false), comments = null)
                 val service = DiffyOpenPullRequestService(storeWithToken("token"), client)
@@ -563,6 +569,89 @@ class DiffyOpenPullRequestServiceTest {
             }
 
         @Test
+        fun `pullRequestGitMergeability - should request the git filter and keep only the git check`(): Unit =
+            runBlocking {
+                // GIVEN
+                val gitCheck = PullRequestMergeCheck.GitCheck(
+                    reason = GitMergeabilityReason.Conflicts,
+                    conflictsUrl = null,
+                    status = MergeCheckStatus.Failed,
+                    isRequired = true,
+                    isBlocking = true
+                )
+                val client = mockk<BitbucketPullRequestClient>()
+                coEvery {
+                    client.listMergeChecks(
+                        workspace = "my-workspace",
+                        repoSlug = "examplerepo",
+                        pullRequestId = 273,
+                        filter = MergeChecksFilter.GitOnly,
+                        apiToken = "token"
+                    )
+                } returns MergeChecksResult.Loaded(listOf(mergeCheck, gitCheck))
+                val service = DiffyOpenPullRequestService(storeWithToken("token"), client)
+
+                // WHEN
+                val result = service.pullRequestGitMergeability(projectBasePath = basePath, organizationUrl = organizationUrl, summary = summary)
+
+                // THEN
+                result shouldBe MergeChecksResult.Loaded(listOf(gitCheck))
+            }
+
+        @Test
+        fun `pullRequestGitMergeability - should pass a failure through`(): Unit =
+            runBlocking {
+                // GIVEN
+                val client = mockk<BitbucketPullRequestClient>()
+                coEvery { client.listMergeChecks(any(), any(), any(), any(), any()) } returns MergeChecksResult.Unavailable(MergeChecksFailure.RateLimited)
+                val service = DiffyOpenPullRequestService(storeWithToken("token"), client)
+
+                // WHEN
+                val result = service.pullRequestGitMergeability(projectBasePath = basePath, organizationUrl = organizationUrl, summary = summary)
+
+                // THEN
+                result shouldBe MergeChecksResult.Unavailable(MergeChecksFailure.RateLimited)
+            }
+
+        @Test
+        fun `pullRequestGitMergeability - should be unavailable without calling the client when the token is missing`(): Unit =
+            runBlocking {
+                // GIVEN
+                val client = mockk<BitbucketPullRequestClient>()
+                val service = DiffyOpenPullRequestService(storeWithToken(null), client)
+
+                // WHEN
+                val result = service.pullRequestGitMergeability(projectBasePath = basePath, organizationUrl = organizationUrl, summary = summary)
+
+                // THEN
+                result shouldBe MergeChecksResult.Unavailable(MergeChecksFailure.Other)
+                coVerify(exactly = 0) { client.listMergeChecks(any(), any(), any(), any(), any()) }
+            }
+
+        @Test
+        fun `pullRequestMergeChecks - should request the checks without the git check`(): Unit =
+            runBlocking {
+                // GIVEN
+                val client = mockk<BitbucketPullRequestClient>()
+                coEvery {
+                    client.listMergeChecks(
+                        workspace = "my-workspace",
+                        repoSlug = "examplerepo",
+                        pullRequestId = 273,
+                        filter = MergeChecksFilter.WithoutGit,
+                        apiToken = "token"
+                    )
+                } returns MergeChecksResult.Loaded(listOf(mergeCheck))
+                val service = DiffyOpenPullRequestService(storeWithToken("token"), client)
+
+                // WHEN
+                val result = service.pullRequestMergeChecks(projectBasePath = basePath, organizationUrl = organizationUrl, summary = summary)
+
+                // THEN
+                result shouldBe MergeChecksResult.Loaded(listOf(mergeCheck))
+            }
+
+        @Test
         fun `pullRequestOverview - should return empty overview without calling client when token missing`(): Unit =
             runBlocking {
                 // GIVEN
@@ -577,10 +666,14 @@ class DiffyOpenPullRequestServiceTest {
                 )
 
                 // THEN
-                overview shouldBe PullRequestOverview(commitsBehind = null, builds = null)
+                overview shouldBe PullRequestOverview(
+                    commitsBehind = null,
+                    builds = null,
+                    mergeChecks = MergeChecksResult.Unavailable(MergeChecksFailure.Other)
+                )
                 coVerify(exactly = 0) { client.countCommitsBehind(any(), any(), any(), any(), any()) }
                 coVerify(exactly = 0) { client.listBuildStatuses(any(), any(), any(), any()) }
-                coVerify(exactly = 0) { client.listMergeChecks(any(), any(), any(), any()) }
+                coVerify(exactly = 0) { client.listMergeChecks(any(), any(), any(), any(), any()) }
                 coVerify(exactly = 0) { client.listTasks(any(), any(), any(), any()) }
                 coVerify(exactly = 0) { client.listActivity(any(), any(), any(), any()) }
             }
@@ -896,7 +989,7 @@ class DiffyOpenPullRequestServiceTest {
             val client = mockk<BitbucketPullRequestClient>()
             coEvery { client.countCommitsBehind(any(), any(), any(), any(), any()) } returns ItemCount(value = 0, isTruncated = false)
             coEvery { client.listBuildStatuses(any(), any(), any(), any()) } returns emptyList()
-            coEvery { client.listMergeChecks(any(), any(), any(), any()) } returns emptyList()
+            coEvery { client.listMergeChecks(any(), any(), any(), any(), any()) } returns MergeChecksResult.Loaded(emptyList())
             coEvery { client.listTasks(any(), any(), any(), any()) } returns emptyList()
             coEvery { client.listWorkspaceMembers(any(), any()) } returns members
             return client

@@ -22,8 +22,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.review.BehindDestinationBarUiState
+import com.github.fnunezkanut.bbcloud.review.RebaseLinkMode
 import com.github.fnunezkanut.bbcloud.ui.components.DiffyPluginIcons
 import com.github.fnunezkanut.bbcloud.ui.components.labelForeground
+import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
@@ -41,7 +43,8 @@ private val LINK_ICON_GAP = 4.dp
  *
  * @param state what the bar shows, or null when the pull request is not behind.
  * @param isPullRequestOpen whether the pull request is proven open.
- * @param showRebaseLink whether the link is shown: the Air plugin is available and the red bar is not visible.
+ * @param rebaseLinkMode what the end of the bar shows: the rebase link, the "Rebase currently in progress" text while a
+ *   rebase runs, or nothing when the Air plugin is missing or the red bar is visible.
  * @param onRebaseWithAi puts the rebase prompt into a new Air chat.
  * @param modifier the modifier of the bar.
  */
@@ -49,7 +52,7 @@ private val LINK_ICON_GAP = 4.dp
 internal fun WorktreeBehindDestinationBar(
     state: BehindDestinationBarUiState?,
     isPullRequestOpen: Boolean,
-    showRebaseLink: Boolean,
+    rebaseLinkMode: RebaseLinkMode,
     onRebaseWithAi: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -85,8 +88,10 @@ internal fun WorktreeBehindDestinationBar(
                         )
                     }
                 }
-                if (showRebaseLink) {
-                    RebaseWithAiLink(onClick = onRebaseWithAi)
+                when (rebaseLinkMode) {
+                    RebaseLinkMode.Link -> RebaseWithAiLink(onClick = onRebaseWithAi)
+                    RebaseLinkMode.InProgress -> RebaseInProgressText()
+                    RebaseLinkMode.Hidden -> Unit
                 }
             }
         }
@@ -108,5 +113,17 @@ private fun RebaseWithAiLink(onClick: () -> Unit) {
             )
             Link(text = DiffyBundle.message("worktree.behindDestinationBar.rebaseWithAi"), onClick = onClick)
         }
+    }
+}
+
+/** Replaces the link while a rebase runs. It is not clickable and has no icon, so it cannot be mistaken for the link. */
+@Composable
+private fun RebaseInProgressText() {
+    Tooltip(tooltip = { Text(text = DiffyBundle.message("worktree.behindDestinationBar.rebaseInProgress.tooltip")) }) {
+        Text(
+            text = DiffyBundle.message("worktree.behindDestinationBar.rebaseInProgress"),
+            color = JewelTheme.globalColors.text.info,
+            maxLines = 1
+        )
     }
 }

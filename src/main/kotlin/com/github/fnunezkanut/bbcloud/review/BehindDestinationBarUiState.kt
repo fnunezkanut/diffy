@@ -49,10 +49,29 @@ internal fun behindDestinationBarStateOf(
     )
 }
 
+/** What the end of the yellow bar shows. */
+enum class RebaseLinkMode {
+    /** Nothing: the link is not allowed. */
+    Hidden,
+
+    /** The clickable "Rebase onto latest with AI" link. */
+    Link,
+
+    /** The plain text "Rebase currently in progress", so the user does not start a second rebase. */
+    InProgress
+}
+
 /**
- * Whether the "Rebase onto latest with AI" link is shown: the Air plugin is available and the red "local branches are
- * behind Bitbucket" bar is not visible, because a force push would then discard commits the local branch lacks.
+ * What takes the place of the "Rebase onto latest with AI" link. Nothing is shown unless the Air plugin is available and
+ * the red "local branches are behind Bitbucket" bar is not visible, because a force push would then discard commits the
+ * local branch lacks. When that holds, a rebase that is running in the work tree replaces the link with a text.
  */
-internal fun shouldShowRebaseLink(isAirAvailable: Boolean, isRedBarVisible: Boolean): Boolean {
-    return isAirAvailable && !isRedBarVisible
+internal fun rebaseLinkModeOf(isAirAvailable: Boolean, isRedBarVisible: Boolean, isRebaseInProgress: Boolean): RebaseLinkMode {
+    if (!isAirAvailable || isRedBarVisible) {
+        return RebaseLinkMode.Hidden
+    }
+    if (isRebaseInProgress) {
+        return RebaseLinkMode.InProgress
+    }
+    return RebaseLinkMode.Link
 }

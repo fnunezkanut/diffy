@@ -3,20 +3,30 @@ package com.github.fnunezkanut.bbcloud.ui.main
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksFailure
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestAction
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDetails
 import com.intellij.openapi.diagnostic.logger
 
-/** The merge-check loading result used to gate the Merge action. */
-enum class MergeChecksState {
+/** What the mergeability checks say about the Merge action. Every state except [NotBlocked] disables Merge. */
+sealed interface MergeChecksState {
     /** Merge checks have not loaded yet, so Merge is disabled while they are being checked. */
-    Unknown,
+    data object Unknown : MergeChecksState
 
-    /** At least one merge check blocks merging, so Merge is disabled. */
-    Blocked,
+    /** No merge check blocks merging. */
+    data object NotBlocked : MergeChecksState
 
-    /** No merge check blocks merging, or the merge-check load failed or returned no checks. */
-    NotBlocked
+    /** At least one merge check blocks merging. [reasons] are the localized plain-text labels of the blocking checks. */
+    data class Blocked(val reasons: List<String>) : MergeChecksState
+
+    /** The current user may not merge into [branch]: no write access, a branch restriction, or the source repository is gone. */
+    data class PermissionDenied(val branch: String) : MergeChecksState
+
+    /** The destination branch requires the pull request to go through a merge queue. */
+    data object QueueRequired : MergeChecksState
+
+    /** The checks could not be read and no earlier result exists, so Merge stays disabled. */
+    data class Unavailable(val failure: MergeChecksFailure) : MergeChecksState
 }
 
 /**
@@ -80,14 +90,56 @@ class PullRequestDetailViewModel(private val onActionRequested: (PullRequestActi
             return
         }
         if (mergeChecksState != state) {
-            when (state) {
-                MergeChecksState.Blocked -> LOG.info("Merge checks block merging on pull request #$pullRequestId")
-                MergeChecksState.NotBlocked -> LOG.info("Merge checks no longer block merging on pull request #$pullRequestId")
-                MergeChecksState.Unknown -> LOG.info("Merge checks are still loading for pull request #$pullRequestId")
-            }
+            logTransition(pullRequestId = pullRequestId, state = state)
         }
         mergeChecksState = state
         recomputeActions()
+    }
+
+    /** One `info` line per transition; reasons are counted rather than logged because they can carry user-authored check names. */
+    private fun logTransition(pullRequestId: Long, state: MergeChecksState) {
+        val description = when (state) {
+            MergeChecksState.Unknown -> "are still loading"
+            MergeChecksState.NotBlocked -> "no longer block merging"
+            is MergeChecksState.Blocked -> "block merging (${state.reasons.size} blocking)"
+            is MergeChecksState.PermissionDenied -> "deny the current user permission to merge"
+            MergeChecksState.QueueRequired -> "require a merge queue"
+            is MergeChecksState.Unavailable -> "are unavailable (${state.failure})"
+        }
+        LOG.info("Merge checks $description on pull request #$pullRequestId")
+    }
+
+    private fun mergeTooltipFor(state: MergeChecksState): String? {
+        return when (state) {
+            MergeChecksState.NotBlocked -> null
+            MergeChecksState.Unknown -> DiffyBundle.message("main.branch.action.merge.checking")
+            is MergeChecksState.Blocked -> blockedTooltip(state.reasons)
+            is MergeChecksState.PermissionDenied -> DiffyBundle.message("main.branch.action.merge.noPermission", state.branch)
+            MergeChecksState.QueueRequired -> DiffyBundle.message("main.branch.action.merge.queueRequired")
+            is MergeChecksState.Unavailable -> unavailableTooltip(state.failure)
+        }
+    }
+
+    private fun blockedTooltip(reasons: List<String>): String {
+        if (reasons.isEmpty()) {
+            return DiffyBundle.message("main.branch.action.merge.blocked")
+        }
+        val shown = reasons.take(MAX_TOOLTIP_REASONS).joinToString(separator = ", ")
+        val hidden = reasons.size - MAX_TOOLTIP_REASONS
+        return if (hidden > 0) {
+            DiffyBundle.message("main.branch.action.merge.blockedByMore", shown, hidden)
+        } else {
+            DiffyBundle.message("main.branch.action.merge.blockedBy", shown)
+        }
+    }
+
+    private fun unavailableTooltip(failure: MergeChecksFailure): String {
+        val key = when (failure) {
+            MergeChecksFailure.CustomChecksUnavailable -> "main.branch.action.merge.customChecksUnavailable"
+            MergeChecksFailure.RateLimited -> "main.branch.action.merge.rateLimited"
+            MergeChecksFailure.Other -> "main.branch.action.merge.checksUnavailable"
+        }
+        return DiffyBundle.message(key)
     }
 
     private fun recomputeActions() {
@@ -98,12 +150,7 @@ class PullRequestDetailViewModel(private val onActionRequested: (PullRequestActi
             isApprovedByCurrentUser = details.isApprovedByCurrentUser,
             isChangesRequestedByCurrentUser = details.isChangesRequestedByCurrentUser
         )
-        val mergeTooltip = when {
-            PullRequestAction.Merge !in actions -> null
-            mergeChecksState == MergeChecksState.Unknown -> DiffyBundle.message("main.branch.action.merge.checking")
-            mergeChecksState == MergeChecksState.Blocked -> DiffyBundle.message("main.branch.action.merge.blocked")
-            else -> null
-        }
+        val mergeTooltip = if (PullRequestAction.Merge in actions) mergeTooltipFor(mergeChecksState) else null
         val changesRequestActions = actions.filter { action ->
             action == PullRequestAction.RequestChanges || action == PullRequestAction.RemoveChangesRequest
         }
@@ -160,5 +207,7 @@ class PullRequestDetailViewModel(private val onActionRequested: (PullRequestActi
 
     companion object {
         private val LOG = logger<PullRequestDetailViewModel>()
+
+        private const val MAX_TOOLTIP_REASONS = 3
     }
 }

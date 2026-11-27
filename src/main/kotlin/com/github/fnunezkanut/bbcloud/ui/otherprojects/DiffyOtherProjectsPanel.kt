@@ -29,6 +29,7 @@ import com.github.fnunezkanut.bbcloud.cache.DiffyWorkspaceRepositoryCache
 import com.github.fnunezkanut.bbcloud.cache.PullRequestCacheRefresh
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
 import com.github.fnunezkanut.bbcloud.git.DiffyBranchCheckoutService
+import com.github.fnunezkanut.bbcloud.git.DiffyMainBranchAutoUpdateService
 import com.github.fnunezkanut.bbcloud.git.DiffyProjectCloneService
 import com.github.fnunezkanut.bbcloud.git.DiffyWorktreeService
 import com.github.fnunezkanut.bbcloud.git.WorktreeRemovalResult
@@ -188,7 +189,8 @@ class DiffyOtherProjectsPanel(
         onPruneWorktreesCallback = ::pruneAllWatchedWorktrees,
         onOpenWorktreesHelpCallback = ::openWorktreesHelp,
         onGoToWorkspaceCallback = onGoToWorkspace,
-        onCheckoutProjectCallback = ::startWatchedProjectCheckout
+        onCheckoutProjectCallback = ::startWatchedProjectCheckout,
+        mainBranchStatuses = DiffyMainBranchAutoUpdateService.getInstance().statusBySlug
     )
 
     /** Lists the workspace repositories (cached) and re-checks one against Bitbucket before it is cloned. */

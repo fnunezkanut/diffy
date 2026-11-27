@@ -370,6 +370,22 @@ class DiffySettingsTest {
     }
 
     @Test
+    fun `autoUpdateMainBranches - should default to false and round-trip`() {
+        // GIVEN
+        val settings = DiffySettings()
+        val initial = settings.autoUpdateMainBranches
+
+        // WHEN
+        settings.autoUpdateMainBranches = true
+
+        // THEN
+        assertSoftly {
+            initial shouldBe false
+            settings.autoUpdateMainBranches shouldBe true
+        }
+    }
+
+    @Test
     fun `notificationsFilterOutBots - should default to false and round-trip`() {
         // GIVEN
         val settings = DiffySettings()

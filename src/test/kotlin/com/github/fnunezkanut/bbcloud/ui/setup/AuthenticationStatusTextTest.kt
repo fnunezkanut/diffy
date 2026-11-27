@@ -30,7 +30,7 @@ class AuthenticationStatusTextTest {
         val result = AuthenticationStatusText.build(method = method, workspaceSlug = null)
 
         // THEN
-        result shouldBe "Authenticated using Bitbucket oauth login"
+        result shouldBe "Authenticated"
     }
 
     @Test
@@ -42,7 +42,7 @@ class AuthenticationStatusTextTest {
         val result = AuthenticationStatusText.build(method = method, workspaceSlug = "acme")
 
         // THEN
-        result shouldBe "Authenticated using Bitbucket oauth login. Workspace: acme"
+        result shouldBe "Workspace: acme"
     }
 
     @Test
@@ -54,6 +54,6 @@ class AuthenticationStatusTextTest {
         val result = AuthenticationStatusText.build(method = method, workspaceSlug = "   ")
 
         // THEN
-        result shouldBe "Authenticated using Bitbucket oauth login"
+        result shouldBe "Authenticated"
     }
 }

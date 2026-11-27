@@ -30,7 +30,14 @@ class DiffyWorktreeServiceTest {
 
     /** A [GitCommandRunner] that returns scripted results keyed by working directory, git command, and parameters. */
     private class ScriptedGitRunner(private val script: (Path, GitCommand, List<String>) -> GitCommandResult) : GitCommandRunner {
-        override fun run(project: Project?, workingDir: Path, command: GitCommand, parameters: List<String>, remoteUrl: String?): GitCommandResult {
+        override fun run(
+            project: Project?,
+            workingDir: Path,
+            command: GitCommand,
+            parameters: List<String>,
+            remoteUrl: String?,
+            background: Boolean
+        ): GitCommandResult {
             return script(workingDir, command, parameters)
         }
     }

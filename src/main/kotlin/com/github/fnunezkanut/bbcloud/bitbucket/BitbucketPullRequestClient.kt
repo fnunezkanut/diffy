@@ -57,7 +57,11 @@ interface BitbucketPullRequestClient {
         apiToken: String
     ): PullRequestActionResult
 
-    suspend fun listMergeChecks(workspace: String, repoSlug: String, pullRequestId: Long, apiToken: String): List<PullRequestMergeCheck>?
+    /**
+     * Reads the mergeability checks selected by [filter]. Never returns null: a failure is reported as
+     * [MergeChecksResult.Unavailable] with the reason the Merge button and the Checks card need.
+     */
+    suspend fun listMergeChecks(workspace: String, repoSlug: String, pullRequestId: Long, filter: MergeChecksFilter, apiToken: String): MergeChecksResult
 
     /** Returns null when any page fails; stops at the page limit and reports that through [WorkspaceMembers.isTruncated]. */
     suspend fun listWorkspaceMembers(workspace: String, apiToken: String): WorkspaceMembers?

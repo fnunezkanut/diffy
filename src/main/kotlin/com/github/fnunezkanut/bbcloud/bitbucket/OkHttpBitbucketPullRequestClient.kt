@@ -200,18 +200,57 @@ class OkHttpBitbucketPullRequestClient(private val httpClient: OkHttpClient = sh
         }
     }
 
-    override suspend fun listMergeChecks(workspace: String, repoSlug: String, pullRequestId: Long, apiToken: String): List<PullRequestMergeCheck>? {
+    override suspend fun listMergeChecks(
+        workspace: String,
+        repoSlug: String,
+        pullRequestId: Long,
+        filter: MergeChecksFilter,
+        apiToken: String
+    ): MergeChecksResult {
         return withContext(Dispatchers.IO) {
             val url = BitbucketPullRequestResponseParser.buildMergeabilityChecksUrl(
                 workspace = workspace,
                 repoSlug = repoSlug,
-                pullRequestId = pullRequestId
+                pullRequestId = pullRequestId,
+                filter = filter
             )
-            val body = fetchBody(url = url, apiToken = apiToken) ?: return@withContext null
-            parseOrNull(url = url) { BitbucketPullRequestResponseParser.parseMergeabilityChecks(body) }?.also { checks ->
-                LOG.debug("Parsed ${checks.size} merge checks for pull request #$pullRequestId: kinds=${checks.map { check -> check.kind }}")
+            executeGet(
+                url = url,
+                apiToken = apiToken,
+                onFailure = { MergeChecksResult.Unavailable(MergeChecksFailure.Other) }
+            ) { response -> toMergeChecksResult(response = response, url = url, pullRequestId = pullRequestId) }
+        }
+    }
+
+    private fun toMergeChecksResult(response: Response, url: String, pullRequestId: Long): MergeChecksResult {
+        return when {
+            response.code == HTTP_TOO_MANY_REQUESTS -> {
+                LOG.warn("Mergeability checks rate limited for pull request #$pullRequestId${BitbucketHttpErrors.describe(response)}")
+                MergeChecksResult.Unavailable(MergeChecksFailure.RateLimited)
+            }
+            response.code == HTTP_INTERNAL_SERVER_ERROR -> {
+                LOG.warn("Unexpected HTTP status ${response.code} for GET $url${BitbucketHttpErrors.describe(response)}")
+                MergeChecksResult.Unavailable(MergeChecksFailure.CustomChecksUnavailable)
+            }
+            !response.isSuccessful -> {
+                LOG.warn("Unexpected HTTP status ${response.code} for GET $url${BitbucketHttpErrors.describe(response)}")
+                MergeChecksResult.Unavailable(MergeChecksFailure.Other)
+            }
+            else -> {
+                parseMergeChecks(body = response.body.string(), pullRequestId = pullRequestId)
             }
         }
+    }
+
+    private fun parseMergeChecks(body: String, pullRequestId: Long): MergeChecksResult {
+        val checks = try {
+            BitbucketPullRequestResponseParser.parseMergeabilityChecks(body)
+        } catch (exception: Exception) {
+            LOG.debug("Could not parse the mergeability checks for pull request #$pullRequestId", exception)
+            return MergeChecksResult.Unavailable(MergeChecksFailure.Other)
+        }
+        LOG.debug("Parsed ${checks.size} merge checks for pull request #$pullRequestId: types=${checks.map { check -> check::class.simpleName }}")
+        return MergeChecksResult.Loaded(checks)
     }
 
     override suspend fun listWorkspaceMembers(workspace: String, apiToken: String): WorkspaceMembers? {
@@ -846,6 +885,9 @@ class OkHttpBitbucketPullRequestClient(private val httpClient: OkHttpClient = sh
         private val LOG = logger<OkHttpBitbucketPullRequestClient>()
 
         private const val MAX_COUNT_PAGES = 10
+
+        private const val HTTP_TOO_MANY_REQUESTS = 429
+        private const val HTTP_INTERNAL_SERVER_ERROR = 500
 
         /** 40 pages at 50 pull requests per page bounds the complete pruning set at 2,000 open PRs. */
         private const val MAX_OPEN_PR_PAGES = 40

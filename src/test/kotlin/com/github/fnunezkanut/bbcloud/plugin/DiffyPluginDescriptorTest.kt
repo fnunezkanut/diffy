@@ -43,6 +43,7 @@ class DiffyPluginDescriptorTest {
                 "com.github.fnunezkanut.bbcloud.auth.DiffyOAuthLoginService",
                 "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotStore",
                 "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotCacheService",
+                "com.github.fnunezkanut.bbcloud.git.DiffyMainBranchAutoUpdateService",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestReviewState",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedFiles",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedThreads",
@@ -88,6 +89,7 @@ class DiffyPluginDescriptorTest {
                 "com.github.fnunezkanut.bbcloud.auth.DiffyOAuthLoginService",
                 "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotStore",
                 "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotCacheService",
+                "com.github.fnunezkanut.bbcloud.git.DiffyMainBranchAutoUpdateService",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestReviewState",
                 "com.github.fnunezkanut.bbcloud.review.DiffyPullRequestViewedFiles",
                 "com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContext",
@@ -172,6 +174,7 @@ class DiffyPluginDescriptorTest {
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestEditorStartupActivity",
                 "com.github.fnunezkanut.bbcloud.review.DiffyWorktreePullRequestContextStartupActivity",
                 "com.github.fnunezkanut.bbcloud.external.DiffyBrowserSnapshotCacheStartupActivity",
+                "com.github.fnunezkanut.bbcloud.git.DiffyMainBranchAutoUpdateStartupActivity",
                 "com.github.fnunezkanut.bbcloud.ui.pullrequest.projectView.DiffyPullRequestProjectViewRefreshStartupActivity"
             )
         }

@@ -8,7 +8,7 @@ import androidx.compose.ui.awt.ComposePanel
 import com.github.fnunezkanut.bbcloud.review.WorktreeBehindDestinationBarViewModel
 import com.github.fnunezkanut.bbcloud.review.WorktreeLocalBehindRemoteBarViewModel
 import com.github.fnunezkanut.bbcloud.review.WorktreeTodoBannerViewModel
-import com.github.fnunezkanut.bbcloud.review.shouldShowRebaseLink
+import com.github.fnunezkanut.bbcloud.review.rebaseLinkModeOf
 import com.github.fnunezkanut.bbcloud.ui.air.AirChatBridge
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
@@ -84,14 +84,16 @@ internal class WorktreeBehindDestinationBarPanel private constructor(private val
                 val content = compose(config = { panel = this }) {
                     val state by barViewModel.state.collectAsState()
                     val redBarState by redBarViewModel.state.collectAsState()
+                    val isRebaseInProgress by barViewModel.isRebaseInProgress.collectAsState()
                     val bannerState by bannerViewModel.state
                     val isAirAvailable = remember { AirChatBridge.isAvailable() }
                     WorktreeBehindDestinationBar(
                         state = state,
                         isPullRequestOpen = bannerState.isWorktree,
-                        showRebaseLink = shouldShowRebaseLink(
+                        rebaseLinkMode = rebaseLinkModeOf(
                             isAirAvailable = isAirAvailable,
-                            isRedBarVisible = redBarState != null && bannerState.isWorktree
+                            isRedBarVisible = redBarState != null && bannerState.isWorktree,
+                            isRebaseInProgress = isRebaseInProgress
                         ),
                         onRebaseWithAi = { barViewModel.rebaseWithAi() }
                     )

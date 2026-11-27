@@ -11,19 +11,27 @@ import org.junit.jupiter.api.Test
 @Tag("unit")
 class AirRebasePullRequestPromptTest {
     private val quote = '"'
+    private val headSha = "a".repeat(40)
+    private val backupRef = "refs/diffy/backups/pr-7/1795694861000"
 
     private fun request(
         sourceBranch: String = "feature/foo",
         destinationBranch: String = "main",
         remoteName: String = "origin",
-        repositoryPath: String? = "/tmp/.worktrees/repo--pr-7"
+        repositoryPath: String? = "/tmp/.worktrees/repo--pr-7",
+        headSha: String = this.headSha,
+        backupRef: String = this.backupRef,
+        wipBackupRef: String? = null
     ): RebasePullRequestRequest {
         return RebasePullRequestRequest(
             pullRequestId = 7L,
             sourceBranch = sourceBranch,
             destinationBranch = destinationBranch,
             remoteName = remoteName,
-            repositoryPath = repositoryPath
+            repositoryPath = repositoryPath,
+            headSha = headSha,
+            backupRef = backupRef,
+            wipBackupRef = wipBackupRef
         )
     }
 
@@ -38,6 +46,7 @@ class AirRebasePullRequestPromptTest {
         // THEN
         val commands = listOf(
             "git fetch origin",
+            "git rev-parse HEAD",
             "git rev-list --count HEAD..origin/feature/foo",
             "git stash push --include-untracked --message ${quote}diffy: before rebase of PR #7$quote",
             "git rebase origin/main",
@@ -106,6 +115,7 @@ class AirRebasePullRequestPromptTest {
         // THEN
         assertSoftly(prompt) {
             shouldContain("Do not ask for permission between steps or for routine conflict resolutions.")
+            shouldContain("Run every git command as its own separate command")
             shouldContain("(a) a conflict has unclear business or domain intent")
             shouldContain("(b) tests or builds fail after resolving conflicts")
             shouldContain("(c) `git push --force-with-lease` is rejected due to remote changes")
@@ -141,5 +151,53 @@ class AirRebasePullRequestPromptTest {
 
         // THEN
         span shouldBe "`` `edge ``"
+    }
+
+    @Test
+    fun `build - should ask the agent to confirm HEAD against the backup`() {
+        // GIVEN
+        val request = request()
+
+        // WHEN
+        val prompt = AirRebasePullRequestPrompt.build(request)
+
+        // THEN
+        assertSoftly(prompt) {
+            shouldContain("confirm that it prints `$headSha`")
+            shouldContain("Diffy saved this commit as `$backupRef`")
+            shouldContain("the branch changed after the backup was taken: stop and ask me.")
+        }
+    }
+
+    @Test
+    fun `build - should protect the backup refs and name the restore command`() {
+        // GIVEN
+        val request = request()
+
+        // WHEN
+        val prompt = AirRebasePullRequestPrompt.build(request)
+
+        // THEN
+        assertSoftly(prompt) {
+            shouldContain("Do not delete, move or update any ref under `refs/diffy/`")
+            shouldContain("`git reset --hard $backupRef`")
+            shouldNotContain("git stash apply")
+        }
+    }
+
+    @Test
+    fun `build - should also restore the uncommitted changes when a wip backup exists`() {
+        // GIVEN
+        val wipRef = "$backupRef-wip"
+        val request = request(wipBackupRef = wipRef)
+
+        // WHEN
+        val prompt = AirRebasePullRequestPrompt.build(request)
+
+        // THEN
+        assertSoftly(prompt) {
+            shouldContain("the uncommitted changes backup `$wipRef`")
+            shouldContain("`git reset --hard $backupRef && git stash apply $wipRef`")
+        }
     }
 }
