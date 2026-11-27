@@ -1,5 +1,6 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksFailure
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestAction
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDetails
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
@@ -70,13 +71,13 @@ class PullRequestDetailViewModelTest {
         viewModel.showActions(details())
 
         // WHEN
-        viewModel.setMergeChecksState(pullRequestId = 42L, state = MergeChecksState.Blocked)
+        viewModel.setMergeChecksState(pullRequestId = 42L, state = BLOCKED)
 
         // THEN
         assertSoftly {
             viewModel.state.value.actions shouldContain PullRequestAction.Merge
             viewModel.state.value.disabledActions shouldContain PullRequestAction.Merge
-            viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Merging is blocked by a merge check"
+            viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Blocked by: Has conflicts"
         }
     }
 
@@ -85,7 +86,7 @@ class PullRequestDetailViewModelTest {
         // GIVEN
         val viewModel = createViewModel()
         viewModel.bind(pullRequestId = 42L)
-        viewModel.setMergeChecksState(pullRequestId = 42L, state = MergeChecksState.Blocked)
+        viewModel.setMergeChecksState(pullRequestId = 42L, state = BLOCKED)
 
         // WHEN
         viewModel.showActions(details())
@@ -94,7 +95,7 @@ class PullRequestDetailViewModelTest {
         assertSoftly {
             viewModel.state.value.actions shouldContain PullRequestAction.Merge
             viewModel.state.value.disabledActions shouldContain PullRequestAction.Merge
-            viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Merging is blocked by a merge check"
+            viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Blocked by: Has conflicts"
         }
     }
 
@@ -107,7 +108,7 @@ class PullRequestDetailViewModelTest {
         viewModel.setMergeChecksState(pullRequestId = 42L, state = MergeChecksState.NotBlocked)
 
         // WHEN
-        viewModel.setMergeChecksState(pullRequestId = 99L, state = MergeChecksState.Blocked)
+        viewModel.setMergeChecksState(pullRequestId = 99L, state = BLOCKED)
 
         // THEN
         assertSoftly {
@@ -122,7 +123,7 @@ class PullRequestDetailViewModelTest {
         val viewModel = createViewModel()
         viewModel.bind(pullRequestId = 42L)
         viewModel.showActions(details())
-        viewModel.setMergeChecksState(pullRequestId = 42L, state = MergeChecksState.Blocked)
+        viewModel.setMergeChecksState(pullRequestId = 42L, state = BLOCKED)
 
         // WHEN
         viewModel.bind(pullRequestId = 42L)
@@ -132,7 +133,7 @@ class PullRequestDetailViewModelTest {
         assertSoftly {
             viewModel.state.value.actions shouldContain PullRequestAction.Merge
             viewModel.state.value.disabledActions shouldContain PullRequestAction.Merge
-            viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Merging is blocked by a merge check"
+            viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Blocked by: Has conflicts"
         }
     }
 
@@ -142,7 +143,7 @@ class PullRequestDetailViewModelTest {
         val viewModel = createViewModel()
         viewModel.bind(pullRequestId = 42L)
         viewModel.showActions(details(id = 42L))
-        viewModel.setMergeChecksState(pullRequestId = 42L, state = MergeChecksState.Blocked)
+        viewModel.setMergeChecksState(pullRequestId = 42L, state = BLOCKED)
 
         // WHEN
         viewModel.bind(pullRequestId = 99L)
@@ -153,6 +154,71 @@ class PullRequestDetailViewModelTest {
             viewModel.state.value.actions shouldContain PullRequestAction.Merge
             viewModel.state.value.disabledActions shouldContain PullRequestAction.Merge
             viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Checking merge requirements…"
+        }
+    }
+
+    @Test
+    fun `setMergeChecksState - should list at most three blocking reasons and count the rest`() {
+        // GIVEN
+        val viewModel = createViewModel()
+        viewModel.bind(pullRequestId = 42L)
+        viewModel.showActions(details())
+
+        // WHEN
+        viewModel.setMergeChecksState(
+            pullRequestId = 42L,
+            state = MergeChecksState.Blocked(reasons = listOf("A", "B", "C", "D", "E"))
+        )
+
+        // THEN
+        viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Blocked by: A, B, C +2 more"
+    }
+
+    @Test
+    fun `setMergeChecksState - should list exactly three blocking reasons without a count`() {
+        // GIVEN
+        val viewModel = createViewModel()
+        viewModel.bind(pullRequestId = 42L)
+        viewModel.showActions(details())
+
+        // WHEN
+        viewModel.setMergeChecksState(pullRequestId = 42L, state = MergeChecksState.Blocked(reasons = listOf("A", "B", "C")))
+
+        // THEN
+        viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Blocked by: A, B, C"
+    }
+
+    @Test
+    fun `setMergeChecksState - should disable Merge with a tooltip for every state that is not NotBlocked`() {
+        // GIVEN
+        val expectations = mapOf(
+            MergeChecksState.Unknown to "Checking merge requirements…",
+            MergeChecksState.PermissionDenied(branch = "main") to
+                "You cannot merge into main. Check your write access and the branch restrictions.",
+            MergeChecksState.QueueRequired to "This branch requires a merge queue. Open the pull request in Bitbucket to queue it.",
+            MergeChecksState.Unavailable(MergeChecksFailure.CustomChecksUnavailable) to
+                "Bitbucket could not evaluate the custom merge checks, so a merge would fail too",
+            MergeChecksState.Unavailable(MergeChecksFailure.RateLimited) to
+                "Bitbucket is rate limiting merge check requests. Diffy will retry shortly.",
+            MergeChecksState.Unavailable(MergeChecksFailure.Other) to "Could not load the merge checks, so Merge is disabled"
+        )
+
+        // WHEN
+        val results = expectations.keys.map { checksState ->
+            val viewModel = createViewModel()
+            viewModel.bind(pullRequestId = 42L)
+            viewModel.showActions(details())
+            viewModel.setMergeChecksState(pullRequestId = 42L, state = checksState)
+            checksState to viewModel.state.value
+        }
+
+        // THEN
+        assertSoftly {
+            results.forEach { (checksState, uiState) ->
+                uiState.actions shouldContain PullRequestAction.Merge
+                uiState.disabledActions shouldContain PullRequestAction.Merge
+                uiState.actionTooltips[PullRequestAction.Merge] shouldBe expectations.getValue(checksState)
+            }
         }
     }
 
@@ -238,13 +304,13 @@ class PullRequestDetailViewModelTest {
         viewModel.showActions(details(isAuthoredByCurrentUser = true))
 
         // WHEN
-        viewModel.setMergeChecksState(pullRequestId = 42L, state = MergeChecksState.Blocked)
+        viewModel.setMergeChecksState(pullRequestId = 42L, state = BLOCKED)
 
         // THEN
         assertSoftly {
             viewModel.state.value.disabledActions shouldContain PullRequestAction.Merge
             viewModel.state.value.disabledActions shouldContain PullRequestAction.RequestChanges
-            viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Merging is blocked by a merge check"
+            viewModel.state.value.actionTooltips[PullRequestAction.Merge] shouldBe "Blocked by: Has conflicts"
             viewModel.state.value.actionTooltips[PullRequestAction.RequestChanges] shouldBe
                 "You cannot request changes on your own pull request"
         }
@@ -270,5 +336,9 @@ class PullRequestDetailViewModelTest {
             isChangesRequestedByCurrentUser = isChangesRequestedByCurrentUser,
             isAuthoredByCurrentUser = isAuthoredByCurrentUser
         )
+    }
+
+    private companion object {
+        val BLOCKED = MergeChecksState.Blocked(reasons = listOf("Has conflicts"))
     }
 }

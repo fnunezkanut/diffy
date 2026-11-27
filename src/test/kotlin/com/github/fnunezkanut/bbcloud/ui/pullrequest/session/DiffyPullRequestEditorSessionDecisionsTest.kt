@@ -30,6 +30,59 @@ class DiffyPullRequestEditorSessionDecisionsTest {
     }
 
     @Nested
+    inner class MergeChecksRefresh {
+        @Test
+        fun `shouldRefreshMergeChecks - should refresh while a check is pending`() {
+            DiffyPullRequestEditorSession.shouldRefreshMergeChecks(
+                hasPendingCheck = true,
+                hasBuildInProgress = false,
+                unchangedBuildRefreshes = 0
+            ) shouldBe true
+        }
+
+        @Test
+        fun `shouldRefreshMergeChecks - should refresh while a build is in progress`() {
+            DiffyPullRequestEditorSession.shouldRefreshMergeChecks(
+                hasPendingCheck = false,
+                hasBuildInProgress = true,
+                unchangedBuildRefreshes = 0
+            ) shouldBe true
+        }
+
+        @Test
+        fun `shouldRefreshMergeChecks - should not refresh when nothing can still change`() {
+            DiffyPullRequestEditorSession.shouldRefreshMergeChecks(
+                hasPendingCheck = false,
+                hasBuildInProgress = false,
+                unchangedBuildRefreshes = 0
+            ) shouldBe false
+        }
+
+        @Test
+        fun `shouldRefreshMergeChecks - should stop asking for a build after five reads that found nothing new`() {
+            DiffyPullRequestEditorSession.shouldRefreshMergeChecks(
+                hasPendingCheck = false,
+                hasBuildInProgress = true,
+                unchangedBuildRefreshes = 4
+            ) shouldBe true
+            DiffyPullRequestEditorSession.shouldRefreshMergeChecks(
+                hasPendingCheck = false,
+                hasBuildInProgress = true,
+                unchangedBuildRefreshes = 5
+            ) shouldBe false
+        }
+
+        @Test
+        fun `shouldRefreshMergeChecks - should keep refreshing for a pending check however many reads found nothing new`() {
+            DiffyPullRequestEditorSession.shouldRefreshMergeChecks(
+                hasPendingCheck = true,
+                hasBuildInProgress = true,
+                unchangedBuildRefreshes = 50
+            ) shouldBe true
+        }
+    }
+
+    @Nested
     inner class RecentDetailsReuse {
         @Test
         fun `canReuseRecentDetails - should reuse for an initial load of the same pull request within the window`() {

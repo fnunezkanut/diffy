@@ -2,6 +2,7 @@ package com.github.fnunezkanut.bbcloud.ui.otherprojects
 
 import androidx.compose.ui.state.ToggleableState
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
+import com.github.fnunezkanut.bbcloud.git.MainBranchSyncStatus
 import com.github.fnunezkanut.bbcloud.project.LocalProjectRepositorySlug
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectMapping
 import com.github.fnunezkanut.bbcloud.project.WatchedProjectWorktreeRow
@@ -16,7 +17,9 @@ data class WatchedProjectRow(
     val isLocalOpenable: Boolean,
     /** Branch the local checkout is on; null when there is no local checkout, HEAD is detached, or it is unreadable. */
     val localBranch: String? = null,
-    val avatarUrl: String?
+    val avatarUrl: String?,
+    /** The last result of "Auto-update main branches" for this project; null while the setting is off or nothing ran yet. */
+    val mainBranchSync: MainBranchSyncStatus? = null
 )
 
 enum class WatchedProjectsCard {
@@ -98,7 +101,8 @@ internal fun buildWatchedProjectRow(
     mapping: WatchedProjectMapping,
     organizationUrl: String?,
     avatarUrl: String?,
-    worktrees: List<WatchedProjectWorktreeRow> = emptyList()
+    worktrees: List<WatchedProjectWorktreeRow> = emptyList(),
+    mainBranchSync: MainBranchSyncStatus? = null
 ): WatchedProjectRow {
     return WatchedProjectRow(
         mapping = mapping,
@@ -114,8 +118,14 @@ internal fun buildWatchedProjectRow(
             Files.isDirectory(Path.of(mapping.localFolderPath))
         }.getOrDefault(false),
         localBranch = readLocalBranch(mapping.localFolderPath),
-        avatarUrl = avatarUrl
+        avatarUrl = avatarUrl,
+        mainBranchSync = mainBranchSync
     )
+}
+
+/** Returns [rows] with the status of each project (matched by repository slug) set, or null when it has none. */
+internal fun withMainBranchSync(rows: List<WatchedProjectRow>, statuses: Map<String, MainBranchSyncStatus>): List<WatchedProjectRow> {
+    return rows.map { row -> row.copy(mainBranchSync = statuses[row.mapping.remoteRepoSlug]) }
 }
 
 private const val HEAD_REF_PREFIX = "ref: refs/heads/"

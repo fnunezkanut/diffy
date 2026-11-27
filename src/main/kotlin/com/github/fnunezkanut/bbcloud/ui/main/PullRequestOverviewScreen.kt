@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
@@ -26,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -37,7 +40,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentEmojiResolver
-import com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestReviewer
 import com.github.fnunezkanut.bbcloud.bitbucket.ReviewerStatus
 import com.github.fnunezkanut.bbcloud.settings.DiffySettings
@@ -89,7 +91,9 @@ fun PullRequestOverviewScreen(
     val leftScrollState = rememberScrollState()
     val settings = remember { DiffySettings.getInstance() }
     val splitState = rememberSplitLayoutState(initialSplitFraction = settings.prPageSplitFraction)
+    val sectionRequesters = remember { CheckSection.entries.associateWith { BringIntoViewRequester() } }
     PersistSplitFraction(splitState = splitState, settings = settings)
+    SectionScrollEffect(target = state.scrollTarget, requesters = sectionRequesters, onConsumed = viewModel::onScrollTargetConsumed)
     HorizontalSplitLayout(
         modifier = Modifier.fillMaxSize(),
         state = splitState,
@@ -159,16 +163,16 @@ fun PullRequestOverviewScreen(
                             TicketsCard(viewModel = viewModel)
                         }
                     }
-                    TitledCardBox {
+                    TitledCardBox(modifier = Modifier.bringIntoViewRequester(sectionRequesters.getValue(CheckSection.Builds))) {
                         BuildsCard(viewModel = viewModel)
                     }
                     TitledCardBox {
                         ChecksCard(viewModel = viewModel)
                     }
-                    TitledCardBox {
+                    TitledCardBox(modifier = Modifier.bringIntoViewRequester(sectionRequesters.getValue(CheckSection.Reviewers))) {
                         ReviewersCard(viewModel = viewModel)
                     }
-                    TitledCardBox {
+                    TitledCardBox(modifier = Modifier.bringIntoViewRequester(sectionRequesters.getValue(CheckSection.Tasks))) {
                         TasksCard(viewModel = viewModel)
                     }
                 }
@@ -176,6 +180,20 @@ fun PullRequestOverviewScreen(
         }
     )
     ActivityScrollEffect(conversationViewModel = conversationViewModel, scrollState = leftScrollState)
+}
+
+/** Scrolls the card a check row links to into view once its section is expanded, then reports the request as handled. */
+@Composable
+private fun SectionScrollEffect(target: CheckSection?, requesters: Map<CheckSection, BringIntoViewRequester>, onConsumed: () -> Unit) {
+    if (target == null) {
+        return
+    }
+    LaunchedEffect(target) {
+        // Wait one frame so a section that was collapsed has its body laid out before the card is scrolled to.
+        withFrameNanos { }
+        requesters.getValue(target).bringIntoView()
+        onConsumed()
+    }
 }
 
 /**
@@ -282,6 +300,7 @@ private fun CollapsibleSection(
     statusIcon: SectionStatusIcon = SectionStatusIcon.None,
     statusTooltip: String? = null,
     leading: (@Composable () -> Unit)? = null,
+    titleSuffix: String? = null,
     body: @Composable () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -309,6 +328,7 @@ private fun CollapsibleSection(
                 overflow = TextOverflow.Ellipsis,
                 maxLines = 1
             )
+            titleSuffix?.let { suffix -> MessageText(text = suffix) }
             SectionStatus(statusIcon = statusIcon, tooltip = statusTooltip)
         }
         if (isExpanded) {
@@ -446,26 +466,85 @@ private fun ChecksCard(viewModel: PullRequestOverviewViewModel) {
         titleIcon = AllIconsKeys.Actions.ListChanges,
         isTitleBold = false,
         statusIcon = checks.statusIcon,
-        statusTooltip = checks.statusTooltip
+        statusTooltip = checks.statusTooltip,
+        titleSuffix = if (checks.isStale) DiffyBundle.message("main.branch.checks.stale") else null
     ) {
         checks.message?.let { MessageText(text = it) }
+        if (checks.isRetryVisible) {
+            RetryLink(tooltip = checks.retryTooltip, onClick = viewModel::onRetryChecks)
+        }
         checks.rows.forEach { row ->
-            Tooltip(tooltip = { Text(text = row.tooltip) }) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
-                    Icon(key = checkStatusIconKey(row.status, row.isBlocking), contentDescription = null)
-                    Text(text = htmlToPlain(row.labelHtml))
+            CheckRow(row = row, viewModel = viewModel)
+        }
+    }
+}
+
+@Composable
+private fun RetryLink(tooltip: String?, onClick: () -> Unit) {
+    val link = @Composable { Link(text = DiffyBundle.message("main.branch.checks.retry"), onClick = onClick) }
+    if (tooltip == null) {
+        link()
+    } else {
+        Tooltip(tooltip = { Text(text = tooltip) }) { link() }
+    }
+}
+
+@Composable
+private fun CheckRow(row: CheckRowState, viewModel: PullRequestOverviewViewModel) {
+    Tooltip(tooltip = { Text(text = row.tooltip) }) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
+            Icon(key = checkStatusIconKey(row.iconKind), contentDescription = null)
+            Column {
+                val label = htmlToPlain(row.labelHtml)
+                if (row.isMuted) {
+                    MessageText(text = label)
+                } else {
+                    Text(text = label)
+                }
+                row.secondaryText?.let { text -> MessageText(text = htmlToPlain(text)) }
+                if (row.actions.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        row.actions.forEach { action ->
+                            CheckActionLink(action = action, viewModel = viewModel)
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-private fun checkStatusIconKey(status: MergeCheckStatus, isBlocking: Boolean): IconKey {
-    return when (status) {
-        MergeCheckStatus.Passed -> AllIconsKeys.RunConfigurations.TestPassed
-        MergeCheckStatus.Failed -> if (isBlocking) AllIconsKeys.RunConfigurations.TestFailed else AllIconsKeys.General.BalloonWarning
-        MergeCheckStatus.Pending -> AllIconsKeys.Process.Step_1
-        MergeCheckStatus.Skipped, MergeCheckStatus.Unknown -> AllIconsKeys.RunConfigurations.TestIgnored
+@Composable
+private fun CheckActionLink(action: CheckRowAction, viewModel: PullRequestOverviewViewModel) {
+    Link(
+        text = DiffyBundle.message(checkActionLabelKey(action)),
+        onClick = {
+            viewModel.onCheckActionClicked(action)
+            when (action) {
+                is CheckRowAction.OpenConflictsInBrowser -> BrowserUtil.browse(action.url)
+                is CheckRowAction.OpenInBitbucket -> BrowserUtil.browse(action.url)
+                CheckRowAction.RebaseWithAi, is CheckRowAction.ScrollToSection -> Unit
+            }
+        }
+    )
+}
+
+private fun checkActionLabelKey(action: CheckRowAction): String {
+    return when (action) {
+        CheckRowAction.RebaseWithAi -> "main.branch.checks.action.rebaseWithAi"
+        is CheckRowAction.OpenConflictsInBrowser -> "main.branch.checks.action.openConflicts"
+        is CheckRowAction.OpenInBitbucket -> "main.branch.checks.action.openInBitbucket"
+        is CheckRowAction.ScrollToSection -> "main.branch.checks.action.show"
+    }
+}
+
+private fun checkStatusIconKey(kind: CheckRowIcon): IconKey {
+    return when (kind) {
+        CheckRowIcon.Passed -> AllIconsKeys.RunConfigurations.TestPassed
+        CheckRowIcon.Blocking -> AllIconsKeys.RunConfigurations.TestFailed
+        CheckRowIcon.Warning -> AllIconsKeys.General.BalloonWarning
+        CheckRowIcon.Pending -> AllIconsKeys.Process.Step_1
+        CheckRowIcon.Neutral -> AllIconsKeys.RunConfigurations.TestIgnored
     }
 }
 

@@ -3,6 +3,8 @@ package com.github.fnunezkanut.bbcloud.ui.main
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import com.github.fnunezkanut.bbcloud.DiffyBundle
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksFailure
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksResult
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestBuildStatus
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDetails
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestMergeCheck
@@ -16,6 +18,7 @@ import com.intellij.collaboration.ui.codereview.comment.CommentInputActionsCompo
 import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.CoroutineScope
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -37,6 +40,9 @@ class PullRequestOverviewViewModel(
     private val openSearchPopup: (ReviewerSearchRequest) -> Unit,
     private val isAirAvailable: () -> Boolean = { false },
     private val onExplainWithAi: (ExplainPullRequestRequest) -> Unit = {},
+    private val isRebaseAvailable: () -> Boolean = { false },
+    private val onRebaseWithAi: () -> Unit = {},
+    private val onRetryChecksRequested: () -> Unit = {},
     private val clock: () -> Instant = { Clock.System.now() }
 ) {
     val state: MutableState<PullRequestOverviewUiState> = mutableStateOf(initialState())
@@ -45,6 +51,12 @@ class PullRequestOverviewViewModel(
     private var coroutineScope: CoroutineScope? = null
     private var explainRequest: ExplainPullRequestRequest? = null
     private var lastExplainClick: Pair<Long, Instant>? = null
+
+    // Checks backing data; the card is rendered again when the web URL or the Git request becomes known.
+    private var checksResult: MergeChecksResult? = null
+    private var previousChecks: MergeChecksResult.Loaded? = null
+    private var gitStatus = GitRowStatus.NotLoaded
+    private var nextChecksAttemptIn: Duration? = null
 
     // Reviewer backing data.
     private var reviewers: List<PullRequestReviewer> = emptyList()
@@ -64,6 +76,10 @@ class PullRequestOverviewViewModel(
         displayedPullRequestId = null
         explainRequest = null
         lastExplainClick = null
+        checksResult = null
+        previousChecks = null
+        gitStatus = GitRowStatus.NotLoaded
+        nextChecksAttemptIn = null
         reviewers = emptyList()
         authorUuid = null
         tasks = emptyList()
@@ -74,11 +90,25 @@ class PullRequestOverviewViewModel(
         state.value = initialState()
     }
 
-    fun showOverview(pullRequestId: Long, overview: PullRequestOverview) {
+    /** [previousChecks] is the last successful checks result of this pull request, shown as stale when [overview] reports a failed read. */
+    fun showOverview(
+        pullRequestId: Long,
+        overview: PullRequestOverview,
+        previousChecks: MergeChecksResult.Loaded? = null,
+        gitStatus: GitRowStatus = GitRowStatus.NotLoaded
+    ) {
         displayedPullRequestId = pullRequestId
         renderBuilds(overview.builds)
-        renderChecks(overview.mergeChecks)
+        showChecks(result = overview.mergeChecks, previous = previousChecks, gitStatus = gitStatus)
         applyTasks(overview.tasks)
+    }
+
+    /** Renders the Checks card from [result]; [previous] backs a stale rendering and [gitStatus] says where the Git request stands. */
+    fun showChecks(result: MergeChecksResult?, previous: MergeChecksResult.Loaded?, gitStatus: GitRowStatus) {
+        checksResult = result
+        previousChecks = previous
+        this.gitStatus = gitStatus
+        renderChecks()
     }
 
     fun showReviewers(details: PullRequestDetails, coroutineScope: CoroutineScope) {
@@ -106,6 +136,8 @@ class PullRequestOverviewViewModel(
                 isExplainWithAiVisible = editable && isAirAvailable()
             )
         )
+        // The web URL behind the Open in Bitbucket links is known only now.
+        renderChecks()
         reviewerAvatarCache.prefetch(
             urls = reviewers.mapNotNull { reviewer -> reviewer.avatarUrl },
             coroutineScope = coroutineScope,
@@ -282,69 +314,133 @@ class PullRequestOverviewViewModel(
 
     // region Checks
 
-    private fun renderChecks(checks: List<PullRequestMergeCheck>?) {
+    private fun renderChecks() {
         val expanded = state.value.checks.isExpanded
-        val section = when {
-            checks == null -> {
+        val section = when (val result = checksResult) {
+            null -> {
                 ChecksSectionState(
                     title = DiffyBundle.message("main.branch.checks.title"),
                     isExpanded = expanded,
-                    message = DiffyBundle.message("main.branch.checks.error")
+                    statusIcon = SectionStatusIcon.Loading,
+                    gitStatus = gitStatus
                 )
             }
-            checks.isEmpty() -> {
-                ChecksSectionState(
-                    title = DiffyBundle.message("main.branch.checks.title"),
-                    isExpanded = expanded,
-                    message = DiffyBundle.message("main.branch.checks.empty")
-                )
+            is MergeChecksResult.Loaded -> {
+                loadedChecksSection(checks = result.checks, isExpanded = expanded)
             }
-            else -> {
-                val summary = MergeCheckSummary.of(checks)
-                ChecksSectionState(
-                    title = DiffyBundle.message("main.branch.checks.summary", summary.passed, summary.total),
-                    isExpanded = expanded,
-                    statusIcon = if (summary.isBlocking) SectionStatusIcon.Error else SectionStatusIcon.Success,
-                    statusTooltip = if (summary.isBlocking) {
-                        DiffyBundle.message("main.branch.checks.header.blocking")
-                    } else {
-                        DiffyBundle.message("main.branch.checks.header.notBlocking")
-                    },
-                    rows = checks.map { check -> toCheckRow(check) }
-                )
+            is MergeChecksResult.Unavailable -> {
+                unavailableChecksSection(failure = result.reason, isExpanded = expanded)
             }
         }
         state.value = state.value.copy(checks = section)
     }
 
-    private fun toCheckRow(check: PullRequestMergeCheck): CheckRowState {
-        return CheckRowState(
-            labelHtml = MergeCheckLabels.toHtml(MergeCheckLabels.labelFor(check)),
-            tooltip = checkTooltip(check),
-            status = check.status,
-            isBlocking = check.isBlocking
+    /** Says when Diffy retries the checks by itself after a rate limit, or null when no retry is scheduled. */
+    fun setNextChecksAttempt(delay: Duration?) {
+        nextChecksAttemptIn = delay
+        renderChecks()
+    }
+
+    private fun retryTooltip(): String? {
+        val delay = nextChecksAttemptIn ?: return null
+        return DiffyBundle.message("main.branch.checks.retry.tooltip", delay.inWholeSeconds.coerceAtLeast(1))
+    }
+
+    private fun checkRowContext(): CheckRowContext {
+        return CheckRowContext(
+            pullRequestWebUrl = explainRequest?.webUrl,
+            isRebaseAvailable = isRebaseAvailable(),
+            gitStatus = gitStatus
         )
     }
 
-    private fun checkTooltip(check: PullRequestMergeCheck): String {
-        val key = when (check.status) {
-            com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus.Passed -> {
-                "main.branch.checks.tooltip.passed"
-            }
-            com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus.Failed -> {
-                if (check.isBlocking) "main.branch.checks.tooltip.failedBlocking" else "main.branch.checks.tooltip.failedNotBlocking"
-            }
-            com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus.Pending -> {
-                "main.branch.checks.tooltip.pending"
-            }
-            com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus.Skipped -> {
-                "main.branch.checks.tooltip.skipped"
-            }
-            com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus.Unknown -> {
-                "main.branch.checks.tooltip.unknown"
-            }
+    private fun loadedChecksSection(checks: List<PullRequestMergeCheck>, isExpanded: Boolean): ChecksSectionState {
+        val rows = CheckRowsBuilder.build(checks = checks, context = checkRowContext())
+        if (rows.isEmpty()) {
+            return ChecksSectionState(
+                title = DiffyBundle.message("main.branch.checks.title"),
+                isExpanded = isExpanded,
+                message = DiffyBundle.message("main.branch.checks.empty"),
+                gitStatus = gitStatus
+            )
         }
-        return DiffyBundle.message(key)
+        return checksSection(checks = checks, rows = rows, isExpanded = isExpanded)
+    }
+
+    private fun checksSection(checks: List<PullRequestMergeCheck>, rows: List<CheckRowState>, isExpanded: Boolean): ChecksSectionState {
+        val summary = MergeCheckSummary.of(checks)
+        return ChecksSectionState(
+            title = DiffyBundle.message("main.branch.checks.summary", summary.passed, summary.total),
+            isExpanded = isExpanded,
+            statusIcon = if (summary.isBlocking) SectionStatusIcon.Error else SectionStatusIcon.Success,
+            statusTooltip = if (summary.isBlocking) {
+                DiffyBundle.message("main.branch.checks.header.blocking")
+            } else {
+                DiffyBundle.message("main.branch.checks.header.notBlocking")
+            },
+            rows = rows,
+            gitStatus = gitStatus
+        )
+    }
+
+    /** A failed read keeps the last successful rows, marked stale, and always offers Retry. */
+    private fun unavailableChecksSection(failure: MergeChecksFailure, isExpanded: Boolean): ChecksSectionState {
+        val message = DiffyBundle.message(unavailableMessageKey(failure))
+        val previous = previousChecks
+        if (previous == null) {
+            return ChecksSectionState(
+                title = DiffyBundle.message("main.branch.checks.title"),
+                isExpanded = isExpanded,
+                message = message,
+                isRetryVisible = true,
+                retryTooltip = retryTooltip(),
+                gitStatus = gitStatus
+            )
+        }
+        val rows = CheckRowsBuilder.build(checks = previous.checks, context = checkRowContext())
+        return checksSection(checks = previous.checks, rows = rows, isExpanded = isExpanded).copy(
+            message = message,
+            isStale = true,
+            isRetryVisible = true,
+            retryTooltip = retryTooltip()
+        )
+    }
+
+    private fun unavailableMessageKey(failure: MergeChecksFailure): String {
+        return when (failure) {
+            MergeChecksFailure.CustomChecksUnavailable -> "main.branch.checks.error.customUnavailable"
+            MergeChecksFailure.RateLimited -> "main.branch.checks.error.rateLimited"
+            MergeChecksFailure.Other -> "main.branch.checks.error"
+        }
+    }
+
+    /** Handles a click on a link of a check row; the screen opens the browser for the URL actions. */
+    fun onCheckActionClicked(action: CheckRowAction) {
+        LOG.info("User clicked the ${action::class.simpleName} link of a merge check on pull request #$displayedPullRequestId")
+        when (action) {
+            CheckRowAction.RebaseWithAi -> onRebaseWithAi()
+            is CheckRowAction.ScrollToSection -> revealSection(action.section)
+            is CheckRowAction.OpenConflictsInBrowser, is CheckRowAction.OpenInBitbucket -> Unit
+        }
+    }
+
+    fun onRetryChecks() {
+        LOG.info("User clicked Retry on the merge checks of pull request #$displayedPullRequestId")
+        onRetryChecksRequested()
+    }
+
+    fun onScrollTargetConsumed() {
+        state.value = state.value.copy(scrollTarget = null)
+    }
+
+    private fun revealSection(section: CheckSection) {
+        val current = state.value
+        val expanded = when (section) {
+            CheckSection.Reviewers -> current.copy(reviewers = current.reviewers.copy(isExpanded = true))
+            CheckSection.Tasks -> current.copy(tasks = current.tasks.copy(isExpanded = true))
+            CheckSection.Builds -> current.copy(builds = current.builds.copy(isExpanded = true))
+        }
+        state.value = expanded.copy(scrollTarget = section)
     }
 
     fun onToggleChecks() {

@@ -132,7 +132,7 @@ class DiffyToolsConfigurable(private val project: Project) :
 
     private fun onPluginReset() {
         bindSettingsState()
-        toolWindowPanelOrNull()?.onPluginReset()
+        withToolWindowPanel { it.onPluginReset() }
     }
 
     private fun onProjectsDirectoryChosen(absolutePath: String) {
@@ -140,7 +140,7 @@ class DiffyToolsConfigurable(private val project: Project) :
         // saveProjectsDirectory empties the watched map; the rescan rebuilds it clear-first so rediscovered
         // repositories come in unwatched rather than carrying over selections from the old directory.
         configurationService.saveProjectsDirectory(absolutePath = absolutePath)
-        toolWindowPanelOrNull()?.onProjectsDirectoryChanged()
+        withToolWindowPanel { it.onProjectsDirectoryChanged() }
         refreshToolWindow()
     }
 
@@ -205,7 +205,24 @@ class DiffyToolsConfigurable(private val project: Project) :
     }
 
     private fun refreshToolWindow() {
-        toolWindowPanelOrNull()?.refreshSelectedTab()
+        withToolWindowPanel { it.refreshSelectedTab() }
+    }
+
+    /**
+     * Runs [action] on the tool window panel on the EDT. The panel is a project service that builds a Compose panel when
+     * first created, and Compose panels may only be created on the EDT, but the view model's callbacks (for example an
+     * OAuth login that finished in another project's settings page) arrive on a background dispatcher. Calls made
+     * in order run in order, so a rescan is still followed by its refresh.
+     */
+    private fun withToolWindowPanel(action: (DiffyToolWindowPanel) -> Unit) {
+        if (ApplicationManager.getApplication().isDispatchThread) {
+            toolWindowPanelOrNull()?.let(action)
+            return
+        }
+        ApplicationManager.getApplication().invokeLater(
+            { toolWindowPanelOrNull()?.let(action) },
+            ModalityState.any()
+        )
     }
 
     /** The default project (Settings opened from the Welcome screen) has no tool window to refresh. */

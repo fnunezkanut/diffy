@@ -15,12 +15,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.fnunezkanut.bbcloud.DiffyBundle
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketRepositoryUrls
+import com.github.fnunezkanut.bbcloud.bitbucket.BuildState
 import com.github.fnunezkanut.bbcloud.bitbucket.CommentChange
 import com.github.fnunezkanut.bbcloud.bitbucket.DiffyOpenPullRequestService
 import com.github.fnunezkanut.bbcloud.bitbucket.ItemCount
 import com.github.fnunezkanut.bbcloud.bitbucket.MentionNames
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksBackoff
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksFailure
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksResult
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestAction
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestActionResult
+import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestBuildStatus
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestComment
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestConversation
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDeclineDecision
@@ -52,12 +57,14 @@ import com.github.fnunezkanut.bbcloud.review.WorktreeLocalBehindRemoteBarViewMod
 import com.github.fnunezkanut.bbcloud.review.WorktreePullRequestPageReloader
 import com.github.fnunezkanut.bbcloud.review.WorktreeTodoBannerViewModel
 import com.github.fnunezkanut.bbcloud.review.snapshotMatchesBranches
+import com.github.fnunezkanut.bbcloud.ui.air.AirPullRequestRebaser
 import com.github.fnunezkanut.bbcloud.ui.diff.DiffyPullRequestDiffCommentService
 import com.github.fnunezkanut.bbcloud.ui.main.CheckedOutBranchPanel
 import com.github.fnunezkanut.bbcloud.ui.main.CommentEditor
 import com.github.fnunezkanut.bbcloud.ui.main.CommentMentionSource
 import com.github.fnunezkanut.bbcloud.ui.main.DefaultCommentMentionSource
 import com.github.fnunezkanut.bbcloud.ui.main.DescriptionEditor
+import com.github.fnunezkanut.bbcloud.ui.main.GitRowStatus
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestActionVisibility
 import com.github.fnunezkanut.bbcloud.ui.main.PullRequestMentionPeople
 import com.github.fnunezkanut.bbcloud.ui.main.ReviewerEditor
@@ -166,6 +173,21 @@ class DiffyPullRequestEditorSession(
     private var pollerStarted = false
     private var pollerJob: Job? = null
 
+    /** Spaces out the mergeability requests after an HTTP 429. Read from the EDT and from the poller. */
+    private val mergeChecksBackoff = MergeChecksBackoff()
+
+    /** The running request for the deferred Git check; a newer request cancels it. */
+    private var gitMergeabilityJob: Job? = null
+
+    /** Waits out the rate limit and then reads the merge checks again. */
+    private var mergeChecksRetryJob: Job? = null
+
+    /** The builds of the last overview; a build in progress is one reason to re-read the merge checks. Touched on the EDT only. */
+    private var lastOverviewBuilds: List<PullRequestBuildStatus>? = null
+
+    /** Background re-reads in a row that found nothing new, while only a build in progress asked for them. Touched on the EDT only. */
+    private var unchangedBuildRefreshes = 0
+
     /** Looks up the Activity card mentions that the shown conversation could not name yet. */
     private var conversationMentionJob: Job? = null
 
@@ -196,6 +218,9 @@ class DiffyPullRequestEditorSession(
         coroutineScope = coroutineScope,
         onRefreshRequested = { reloadPullRequestPage(syncBranches = true) },
         onActionRequested = { action -> performPullRequestAction(action) },
+        onRetryChecksRequested = { retryMergeChecks() },
+        onRebaseWithAi = { rebaseWithAi() },
+        isRebaseAvailable = { AirPullRequestRebaser.isAvailableIn(project) },
         reviewerEditor = object : ReviewerEditor {
             override fun addReviewer(candidate: ReviewerCandidate) {
                 updateReviewer(change = ReviewerChange.Add(candidate.uuid), displayName = candidate.displayName)
@@ -400,7 +425,12 @@ class DiffyPullRequestEditorSession(
             coroutineScope = coroutineScope
         )
         loadPullRequestLineTotals(summary)
-        loadPullRequestOverview(summary = summary, inPlaceRefresh = inPlaceRefresh, revealNewestActivity = revealNewestActivity)
+        loadPullRequestOverview(
+            summary = summary,
+            inPlaceRefresh = inPlaceRefresh,
+            revealNewestActivity = revealNewestActivity,
+            loadGitMergeability = true
+        )
         loadPullRequestInlineComments(force = true)
         loadPullRequestDetails(pullRequestId = summary.id, refresh = DetailsRefresh.Initial)
         startStatefulPoller()
@@ -769,9 +799,170 @@ class DiffyPullRequestEditorSession(
         val age = cachedDetailsAgeOrNull(projectBasePath = basePath, organizationUrl = url, pullRequestId = pullRequestId)
         if (shouldSkipBackgroundPoll(age = age, window = POLL_SKIP_IF_REFRESHED_WITHIN)) {
             LOG.debug("Skipping pull-request state poll for #$pullRequestId; its details were read $age ago")
+        } else {
+            loadPullRequestDetails(pullRequestId = pullRequestId, refresh = DetailsRefresh.BackgroundPoll)
+        }
+        invokeOnEdt { refreshMergeChecksIfNeeded(basePath = basePath, organizationUrl = url) }
+    }
+
+    /**
+     * Re-reads the merge checks (without the Git check) while one of them can still change: a check is pending or a build is
+     * running. The card and the Merge button are redrawn only when the checks differ from the ones shown. Call it on the EDT.
+     */
+    private fun refreshMergeChecksIfNeeded(basePath: String, organizationUrl: String) {
+        val summary = displayedSummary ?: return
+        val hasPendingCheck = checkedOutBranchPanel.hasPendingMergeCheck()
+        val hasBuildInProgress = lastOverviewBuilds.orEmpty().any { build -> build.state == BuildState.InProgress }
+        if (!shouldRefreshMergeChecks(
+                hasPendingCheck = hasPendingCheck,
+                hasBuildInProgress = hasBuildInProgress,
+                unchangedBuildRefreshes = unchangedBuildRefreshes
+            )
+        ) {
+            LOG.debug("Skipping the merge checks refresh of pull request #${summary.id}: no check is pending and no build asks for one")
             return
         }
-        loadPullRequestDetails(pullRequestId = pullRequestId, refresh = DetailsRefresh.BackgroundPoll)
+        if (!mergeChecksBackoff.isAllowed()) {
+            LOG.debug("Skipping the merge checks refresh of pull request #${summary.id}: rate limited for ${mergeChecksBackoff.remaining()} more")
+            return
+        }
+        LOG.debug("Refreshing the merge checks of pull request #${summary.id} (pending=$hasPendingCheck, buildInProgress=$hasBuildInProgress)")
+        readMergeChecksInBackground(
+            summary = summary,
+            basePath = basePath,
+            organizationUrl = organizationUrl,
+            retriesGitMergeability = false
+        ) { changed ->
+            unchangedBuildRefreshes = if (hasPendingCheck || changed) 0 else unchangedBuildRefreshes + 1
+        }
+    }
+
+    /** The Retry link of the Checks card. It waits for a pending rate limit instead of sending a request that would fail again. */
+    private fun retryMergeChecks() {
+        val summary = displayedSummary ?: return
+        val basePath = project.basePath ?: return
+        val url = organizationUrl ?: configurationService.organizationUrlOrNull() ?: return
+        if (!mergeChecksBackoff.isAllowed()) {
+            val remaining = mergeChecksBackoff.remaining()
+            LOG.info("Retry of the merge checks of pull request #${summary.id} waits ${remaining.inWholeSeconds} s for the rate limit")
+            scheduleMergeChecksRetry(delay = remaining)
+            return
+        }
+        readMergeChecksInBackground(summary = summary, basePath = basePath, organizationUrl = url, retriesGitMergeability = true) { }
+    }
+
+    /**
+     * Reads the merge checks without the Git check and shows them. With [retriesGitMergeability] a Git check that has not loaded
+     * is requested again afterwards. [onFinished] gets whether the card changed. Call it on the EDT.
+     */
+    private fun readMergeChecksInBackground(
+        summary: PullRequestSummary,
+        basePath: String,
+        organizationUrl: String,
+        retriesGitMergeability: Boolean,
+        onFinished: (changed: Boolean) -> Unit
+    ) {
+        coroutineScope.launch {
+            val result = readMergeChecks {
+                openPullRequestService.pullRequestMergeChecks(projectBasePath = basePath, organizationUrl = organizationUrl, summary = summary)
+            }
+            invokeOnEdt {
+                if (summary.id != displayedPullRequestId) {
+                    LOG.debug("Dropping the merge checks of pull request #${summary.id}; this editor shows #$displayedPullRequestId")
+                    return@invokeOnEdt
+                }
+                recordMergeChecksOutcome(result = result, isOverviewChecks = true)
+                val changed = checkedOutBranchPanel.showRefreshedMergeChecks(pullRequestId = summary.id, result = result)
+                onFinished(changed)
+                val gitIsMissing = checkedOutBranchPanel.gitMergeabilityStatus() != GitRowStatus.Loaded
+                if (retriesGitMergeability && result is MergeChecksResult.Loaded && gitIsMissing) {
+                    startGitMergeability(summary)
+                }
+            }
+        }
+    }
+
+    /**
+     * Requests the Git check of [summary] on its own, because Bitbucket computes it slowly. The overview is already on screen;
+     * the card shows "Checking for conflicts" until the result arrives. It is never started from the poller. A newer request
+     * cancels a running one. Call it on the EDT.
+     */
+    private fun startGitMergeability(summary: PullRequestSummary) {
+        gitMergeabilityJob?.cancel()
+        val basePath = project.basePath ?: return
+        val url = organizationUrl ?: configurationService.organizationUrlOrNull() ?: return
+        if (!mergeChecksBackoff.isAllowed()) {
+            LOG.debug("Skipping the git mergeability request of pull request #${summary.id}: rate limited for ${mergeChecksBackoff.remaining()} more")
+            checkedOutBranchPanel.showGitMergeability(pullRequestId = summary.id, result = MergeChecksResult.Unavailable(MergeChecksFailure.RateLimited))
+            return
+        }
+        checkedOutBranchPanel.setGitMergeabilityLoading(pullRequestId = summary.id)
+        gitMergeabilityJob = coroutineScope.launch {
+            val result = readMergeChecks {
+                openPullRequestService.pullRequestGitMergeability(projectBasePath = basePath, organizationUrl = url, summary = summary)
+            }
+            invokeOnEdt {
+                if (summary.id != displayedPullRequestId) {
+                    LOG.debug("Dropping the git mergeability of pull request #${summary.id}; this editor shows #$displayedPullRequestId")
+                    return@invokeOnEdt
+                }
+                recordMergeChecksOutcome(result = result, isOverviewChecks = false)
+                checkedOutBranchPanel.showGitMergeability(pullRequestId = summary.id, result = result)
+            }
+        }
+    }
+
+    /** The client reports failures as a result; this only guards against an unexpected exception so the Git row cannot stay in "Checking". */
+    private suspend fun readMergeChecks(read: suspend () -> MergeChecksResult): MergeChecksResult {
+        return try {
+            read()
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            LOG.warn("Reading the merge checks failed", exception)
+            MergeChecksResult.Unavailable(MergeChecksFailure.Other)
+        }
+    }
+
+    /**
+     * Feeds the rate-limit backoff. A 429 starts a wait and schedules the next read; a successful read of the checks ends the
+     * wait. [isOverviewChecks] is false for the Git request: its success lifts the limit but does not repair stale checks.
+     */
+    private fun recordMergeChecksOutcome(result: MergeChecksResult, isOverviewChecks: Boolean) {
+        when {
+            result is MergeChecksResult.Loaded -> {
+                mergeChecksBackoff.onSuccess()
+                if (isOverviewChecks) {
+                    mergeChecksRetryJob?.cancel()
+                    checkedOutBranchPanel.setNextChecksAttempt(null)
+                }
+            }
+            result is MergeChecksResult.Unavailable && result.reason == MergeChecksFailure.RateLimited -> {
+                val delay = mergeChecksBackoff.onRateLimited()
+                LOG.info("Merge checks are rate limited; the next attempt is in ${delay.inWholeSeconds} s")
+                scheduleMergeChecksRetry(delay = delay)
+            }
+        }
+    }
+
+    private fun scheduleMergeChecksRetry(delay: Duration) {
+        checkedOutBranchPanel.setNextChecksAttempt(delay)
+        mergeChecksRetryJob?.cancel()
+        mergeChecksRetryJob = coroutineScope.launch {
+            delay(delay)
+            invokeOnEdt { retryMergeChecks() }
+        }
+    }
+
+    /** The "Rebase with AI" link of a conflicts row. */
+    private fun rebaseWithAi() {
+        val summary = displayedSummary ?: return
+        AirPullRequestRebaser.rebase(
+            project = project,
+            pullRequestId = summary.id,
+            sourceBranch = summary.sourceBranch,
+            destinationBranch = summary.destinationBranch
+        )
     }
 
     /** A failed age lookup only means the poll runs, so it is logged and treated as unknown. */
@@ -836,7 +1027,17 @@ class DiffyPullRequestEditorSession(
         )
     }
 
-    private fun loadPullRequestOverview(summary: PullRequestSummary, inPlaceRefresh: Boolean = false, revealNewestActivity: Boolean = false) {
+    /**
+     * Loads the overview of [summary]. The Git check is a separate, slower request, so [loadGitMergeability] starts it once the
+     * overview is shown: on the first load, on a manual refresh and after an action, but not for the reloads that follow a
+     * comment, task or reviewer change.
+     */
+    private fun loadPullRequestOverview(
+        summary: PullRequestSummary,
+        inPlaceRefresh: Boolean = false,
+        revealNewestActivity: Boolean = false,
+        loadGitMergeability: Boolean = false
+    ) {
         val basePath = project.basePath ?: return
         val url = organizationUrl ?: configurationService.organizationUrlOrNull() ?: return
         if (isCommentUpdateInProgress) {
@@ -869,6 +1070,12 @@ class DiffyPullRequestEditorSession(
                     revealNewestActivity = revealNewestActivity
                 )
                 showBehindDestinationBar(summary = summary, commitsBehind = overview.commitsBehind)
+                lastOverviewBuilds = overview.builds
+                unchangedBuildRefreshes = 0
+                overview.mergeChecks?.let { checks -> recordMergeChecksOutcome(result = checks, isOverviewChecks = true) }
+                if (loadGitMergeability) {
+                    startGitMergeability(summary)
+                }
                 val conversation = overview.conversation
                 if (conversation != null) {
                     mentionPeople.updateComments(
@@ -1561,7 +1768,7 @@ class DiffyPullRequestEditorSession(
                 val isRefreshing = pullRequestId == displayedPullRequestId &&
                     loadPullRequestDetails(pullRequestId = pullRequestId, refresh = DetailsRefresh.AfterAction)
                 if (isRefreshing) {
-                    displayedSummary?.let { summary -> loadPullRequestOverview(summary) }
+                    displayedSummary?.let { summary -> loadPullRequestOverview(summary = summary, loadGitMergeability = true) }
                 } else {
                     finishAction()
                 }
@@ -1632,6 +1839,18 @@ class DiffyPullRequestEditorSession(
         /** Whether a background poll can be skipped, because the cache entry was read less than [window] ago. Unknown or future ages never skip. */
         internal fun shouldSkipBackgroundPoll(age: Duration?, window: Duration): Boolean {
             return age != null && !age.isNegative() && age < window
+        }
+
+        /** A background re-read of the merge checks stops after this many in a row that found nothing new while only a build asked for it. */
+        private const val MAX_UNCHANGED_BUILD_REFRESHES = 5
+
+        /**
+         * Whether the poller should re-read the merge checks: a pending check can still change, and so can the outcome of a
+         * running build, but a build alone stops asking after [MAX_UNCHANGED_BUILD_REFRESHES] reads that found nothing new,
+         * because the overview that reports builds is not re-read by the poller.
+         */
+        internal fun shouldRefreshMergeChecks(hasPendingCheck: Boolean, hasBuildInProgress: Boolean, unchangedBuildRefreshes: Int): Boolean {
+            return hasPendingCheck || (hasBuildInProgress && unchangedBuildRefreshes < MAX_UNCHANGED_BUILD_REFRESHES)
         }
 
         /** Only an `Initial` load reuses details, and only for the same pull request read less than [window] ago. */

@@ -248,6 +248,8 @@ class DiffyConfigurationService(
         settings.workspaceSlug = ""
         settings.organizationUrl = ""
         settings.projectsDirectory = ""
+        // Unlike the view preferences, the main branch auto-update is part of the setup, so a reset turns it off.
+        settings.autoUpdateMainBranches = false
         clearWatchedProjects()
         pullRequestCache.clear()
         // The PR list Exclude: filters are view preferences, not setup, so they are intentionally kept across a reset.

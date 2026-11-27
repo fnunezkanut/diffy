@@ -251,6 +251,21 @@ class DiffyConfigurationServiceTest {
             }
         }
 
+    @Test
+    fun `resetAll - should turn off the main branch auto-update`(): Unit =
+        runBlocking {
+            // GIVEN
+            val settings = settings(workspaceSlug = "my-workspace")
+            settings.autoUpdateMainBranches = true
+            val service = service(settings, FakeCredentialStore(hasLogin = true))
+
+            // WHEN
+            service.resetAll()
+
+            // THEN
+            settings.autoUpdateMainBranches shouldBe false
+        }
+
     private fun oauthTokens(): OAuthTokens {
         return OAuthTokens(
             accessToken = "oauth-access",

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 @Tag("unit")
@@ -45,7 +46,7 @@ class WorktreeBehindDestinationBarViewModelTest {
     }
 
     /** The view model with fakes for every collaborator. The reload debounce is short so the tests run in real time. */
-    private inner class Fixture {
+    private inner class Fixture(retryDelays: List<Duration> = emptyList()) {
         var banner = WorktreeTodoBannerUiState(
             isWorktree = true,
             repoSlug = "repo",
@@ -55,6 +56,7 @@ class WorktreeBehindDestinationBarViewModelTest {
         )
         var redBarVisible = false
         var rebasing = false
+        var mergeInProgress = false
         var currentTips = tips()
         val repository = mockk<GitRepository>(relaxed = true)
         val refreshes = AtomicInteger()
@@ -70,9 +72,12 @@ class WorktreeBehindDestinationBarViewModelTest {
                 rebaseWithAi = { state -> rebasedStates.add(state) },
                 isRedBarVisible = { redBarVisible },
                 readTips = { _, _, _ -> currentTips },
-                isRepositoryRebasing = { rebasing },
+                isRepositoryRebasing = { rebasing || mergeInProgress },
+                isRebasing = { rebasing },
+                currentRepository = { repository },
                 requestReload = { reloads.incrementAndGet() },
-                reloadDebounce = DEBOUNCE
+                reloadDebounce = DEBOUNCE,
+                retryDelays = retryDelays
             )
         )
 
@@ -374,6 +379,84 @@ class WorktreeBehindDestinationBarViewModelTest {
         }
 
         @Test
+        fun `onRepositoryChanged - should reload once after the rebase ended when the tips moved during it`() {
+            // GIVEN
+            val fixture = Fixture()
+            fixture.showBehind()
+            fixture.observeTips(tips())
+            fixture.rebasing = true
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            letDebounceExpire()
+
+            // WHEN the rebase ends and the repository reports a change with the same tips
+            fixture.rebasing = false
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            awaitReloads(fixture = fixture, expected = 1)
+            letDebounceExpire()
+
+            // THEN
+            fixture.reloads.get() shouldBe 1
+        }
+
+        @Test
+        fun `onRepositoryChanged - should reload once after another git operation ended when the tips moved during it`() {
+            // GIVEN
+            val fixture = Fixture()
+            fixture.showBehind()
+            fixture.observeTips(tips())
+            fixture.mergeInProgress = true
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            letDebounceExpire()
+
+            // WHEN
+            fixture.mergeInProgress = false
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            awaitReloads(fixture = fixture, expected = 1)
+            letDebounceExpire()
+
+            // THEN
+            fixture.reloads.get() shouldBe 1
+        }
+
+        @Test
+        fun `onRepositoryChanged - should not reload again for a change without moved tips after the deferred reload ran`() {
+            // GIVEN
+            val fixture = Fixture()
+            fixture.showBehind()
+            fixture.observeTips(tips())
+            fixture.rebasing = true
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            fixture.rebasing = false
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            awaitReloads(fixture = fixture, expected = 1)
+            letDebounceExpire()
+
+            // WHEN
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            letDebounceExpire()
+
+            // THEN
+            fixture.reloads.get() shouldBe 1
+        }
+
+        @Test
+        fun `onRepositoryChanged - should not reload after the rebase ended when no state is stored`() {
+            // GIVEN
+            val fixture = Fixture()
+            fixture.observeTips(tips())
+            fixture.rebasing = true
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+
+            // WHEN
+            fixture.rebasing = false
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            letDebounceExpire()
+
+            // THEN
+            fixture.reloads.get() shouldBe 0
+        }
+
+        @Test
         fun `onRepositoryChanged - should not reload when only the local tips changed`() {
             // GIVEN
             val fixture = Fixture()
@@ -406,22 +489,171 @@ class WorktreeBehindDestinationBarViewModelTest {
     }
 
     @Nested
+    inner class RebaseState {
+        @Test
+        fun `onRepositoryChanged - should report a rebase while the repository rebases and stop after it ended`() {
+            // GIVEN
+            val fixture = Fixture()
+
+            // WHEN the repository starts rebasing
+            fixture.rebasing = true
+            fixture.viewModel.onRepositoryChanged(fixture.repository)
+            val whileRebasing = fixture.viewModel.isRebaseInProgress.value
+            fixture.rebasing = false
+            fixture.viewModel.onRepositoryChanged(fixture.repository)
+
+            // THEN
+            assertSoftly {
+                whileRebasing shouldBe true
+                fixture.viewModel.isRebaseInProgress.value shouldBe false
+            }
+        }
+
+        @Test
+        fun `onRepositoryChanged - should report a rebase when the banner has no branches`() {
+            // GIVEN
+            val fixture = Fixture()
+            fixture.banner = fixture.banner.copy(sourceBranch = "", destinationBranch = "")
+
+            // WHEN
+            fixture.rebasing = true
+            fixture.viewModel.onRepositoryChanged(fixture.repository)
+
+            // THEN
+            fixture.viewModel.isRebaseInProgress.value shouldBe true
+        }
+
+        @Test
+        fun `onRepositoryChanged - should not report a rebase for another git operation`() {
+            // GIVEN
+            val fixture = Fixture()
+            fixture.mergeInProgress = true
+
+            // WHEN
+            fixture.viewModel.onRepositoryChanged(fixture.repository)
+
+            // THEN
+            fixture.viewModel.isRebaseInProgress.value shouldBe false
+        }
+
+        @Test
+        fun `onRepositoryChanged - should ignore a change of another repository`() {
+            // GIVEN
+            val fixture = Fixture()
+            val otherRepository = mockk<GitRepository>(relaxed = true)
+            fixture.rebasing = true
+
+            // WHEN
+            fixture.viewModel.onRepositoryChanged(otherRepository)
+
+            // THEN
+            fixture.viewModel.isRebaseInProgress.value shouldBe false
+        }
+
+        @Test
+        fun `seedRebaseState - should show a rebase that was already running`() {
+            // GIVEN
+            val fixture = Fixture()
+            fixture.rebasing = true
+
+            // WHEN
+            fixture.viewModel.seedRebaseState()
+
+            // THEN
+            fixture.viewModel.isRebaseInProgress.value shouldBe true
+        }
+
+        @Test
+        fun `rebaseWithAi - should do nothing while a rebase is in progress and work again afterwards`() {
+            // GIVEN
+            val fixture = Fixture()
+            fixture.showBehind()
+            fixture.rebasing = true
+            fixture.viewModel.onRepositoryChanged(fixture.repository)
+
+            // WHEN
+            fixture.viewModel.rebaseWithAi()
+            val duringRebase = fixture.rebasedStates.size
+            fixture.rebasing = false
+            fixture.viewModel.onRepositoryChanged(fixture.repository)
+            fixture.viewModel.rebaseWithAi()
+
+            // THEN
+            assertSoftly {
+                duringRebase shouldBe 0
+                fixture.rebasedStates.size shouldBe 1
+            }
+        }
+    }
+
+    @Nested
+    inner class Retries {
+        @Test
+        fun `onRepositoryChanged - should reload again while the bar is still shown`() {
+            // GIVEN
+            val fixture = Fixture(retryDelays = listOf(50.milliseconds, 50.milliseconds))
+            fixture.showBehind()
+            fixture.observeTips(tips())
+
+            // WHEN
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            awaitReloads(fixture = fixture, expected = 3)
+            letDebounceExpire()
+
+            // THEN the first reload and the two retries
+            fixture.reloads.get() shouldBe 3
+        }
+
+        @Test
+        fun `onRepositoryChanged - should stop reloading when the bar hides`() {
+            // GIVEN
+            val fixture = Fixture(retryDelays = listOf(300.milliseconds, 300.milliseconds))
+            fixture.showBehind()
+            fixture.observeTips(tips())
+            fixture.observeTips(tips(sourceRemote = "pushed"))
+            awaitReloads(fixture = fixture, expected = 1)
+
+            // WHEN the reload found that the pull request is up to date
+            fixture.showBehind(commits = 0)
+            Thread.sleep(RETRY_SETTLE_MILLIS)
+
+            // THEN
+            fixture.reloads.get() shouldBe 1
+        }
+    }
+
+    @Nested
     inner class RebaseLinkVisibility {
         @Test
-        fun `shouldShowRebaseLink - should be true only when Air is available and the red bar is hidden`() {
-            // GIVEN every combination of the two inputs
+        fun `rebaseLinkModeOf - should map every combination of the inputs`() {
+            // GIVEN every combination of the three inputs: Air available, red bar visible, rebase in progress
             val combinations = listOf(
-                Pair(true, false),
-                Pair(true, true),
-                Pair(false, false),
-                Pair(false, true)
+                Triple(true, false, false),
+                Triple(true, false, true),
+                Triple(true, true, false),
+                Triple(true, true, true),
+                Triple(false, false, false),
+                Triple(false, false, true),
+                Triple(false, true, false),
+                Triple(false, true, true)
             )
 
             // WHEN
-            val results = combinations.map { (air, red) -> shouldShowRebaseLink(isAirAvailable = air, isRedBarVisible = red) }
+            val results = combinations.map { (air, red, rebase) ->
+                rebaseLinkModeOf(isAirAvailable = air, isRedBarVisible = red, isRebaseInProgress = rebase)
+            }
 
             // THEN
-            results shouldBe listOf(true, false, false, false)
+            results shouldBe listOf(
+                RebaseLinkMode.Link,
+                RebaseLinkMode.InProgress,
+                RebaseLinkMode.Hidden,
+                RebaseLinkMode.Hidden,
+                RebaseLinkMode.Hidden,
+                RebaseLinkMode.Hidden,
+                RebaseLinkMode.Hidden,
+                RebaseLinkMode.Hidden
+            )
         }
     }
 
@@ -429,6 +661,7 @@ class WorktreeBehindDestinationBarViewModelTest {
         val DEBOUNCE = 100.milliseconds
         const val SETTLE_MILLIS = 400L
         const val POLL_MILLIS = 10L
+        const val RETRY_SETTLE_MILLIS = 800L
         const val AWAIT_NANOS = 3_000_000_000L
     }
 }

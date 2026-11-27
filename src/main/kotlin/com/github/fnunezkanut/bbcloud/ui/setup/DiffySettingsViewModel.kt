@@ -10,6 +10,8 @@ import com.github.fnunezkanut.bbcloud.auth.OAuthLoginResult
 import com.github.fnunezkanut.bbcloud.auth.OAuthLoginState
 import com.github.fnunezkanut.bbcloud.auth.OAuthTokens
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.git.DiffyMainBranchAutoUpdateService
+import com.github.fnunezkanut.bbcloud.git.MainBranchAutoUpdateControl
 import com.github.fnunezkanut.bbcloud.settings.DiffySettings
 import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +33,9 @@ class DiffySettingsViewModel(
     private val onExternalAuthChanged: () -> Unit,
     private val onProjectsDirectoryChosenCallback: (String) -> Unit,
     private val chooseWorkspace: (slugs: List<String>, preselectedSlug: String) -> String?,
-    private val confirmReset: () -> Boolean
+    private val confirmReset: () -> Boolean,
+    /** Resolved when used, so unit tests never touch the IDE application. */
+    private val mainBranchAutoUpdate: () -> MainBranchAutoUpdateControl = { DiffyMainBranchAutoUpdateService.getInstance() }
 ) {
     val state: MutableState<SettingsUiState> = mutableStateOf(
         SettingsUiState(pluginVersionFooter = SetupFooterText.build(resolvePluginVersion()))
@@ -93,15 +97,27 @@ class DiffySettingsViewModel(
         }
     }
 
-    /** Whether the source side of pull request diffs is the editable work tree file. */
-    fun isEditableSourceSideEnabled(): Boolean {
+    /** Whether pull request diffs in a work tree are editable ("Make pull request diffs editable" on Settings). */
+    fun isEditableDiffsEnabled(): Boolean {
         return DiffySettings.getInstance().editableSourceSideInDiffs
     }
 
-    /** Persists the "editable source side of pull request diffs" choice at once. */
-    fun onEditableSourceSideChanged(enabled: Boolean) {
-        LOG.info("User changed 'Edit the source side of pull request diffs' on Settings: enabled=$enabled")
+    /** Persists the "Make pull request diffs editable" choice at once. */
+    fun onEditableDiffsChanged(enabled: Boolean) {
+        LOG.info("User changed 'Make pull request diffs editable' on Settings: enabled=$enabled")
         DiffySettings.getInstance().editableSourceSideInDiffs = enabled
+    }
+
+    /** Whether the main branch of each watched project is kept up to date ("Auto-update main branches" on Settings). */
+    fun isAutoUpdateMainBranchesEnabled(): Boolean {
+        return DiffySettings.getInstance().autoUpdateMainBranches
+    }
+
+    /** Persists the "Auto-update main branches" choice at once and starts or stops the background job. */
+    fun onAutoUpdateMainBranchesChanged(enabled: Boolean) {
+        LOG.info("User changed 'Auto-update main branches' on Settings: enabled=$enabled")
+        DiffySettings.getInstance().autoUpdateMainBranches = enabled
+        mainBranchAutoUpdate().onSettingChanged(enabled = enabled)
     }
 
     /**
@@ -250,6 +266,8 @@ class DiffySettingsViewModel(
         // watched projects.
         coroutineScope.launch {
             configurationService.resetAll()
+            // The reset turned the setting off; stop the job and drop its results.
+            mainBranchAutoUpdate().onSettingChanged(enabled = false)
             state.value = state.value.copy(
                 hasOAuthTokens = false,
                 workingMethod = DiffyAuthenticationMethod.None,

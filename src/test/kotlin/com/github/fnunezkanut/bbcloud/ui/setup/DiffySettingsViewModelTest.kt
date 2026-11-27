@@ -8,6 +8,7 @@ import com.github.fnunezkanut.bbcloud.auth.OAuthTokens
 import com.github.fnunezkanut.bbcloud.bitbucket.BitbucketWorkspace
 import com.github.fnunezkanut.bbcloud.bitbucket.WorkspaceListResult
 import com.github.fnunezkanut.bbcloud.config.DiffyConfigurationService
+import com.github.fnunezkanut.bbcloud.git.MainBranchAutoUpdateControl
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
@@ -33,6 +34,8 @@ class DiffySettingsViewModelTest {
         every { state } returns loginState
     }
 
+    private val mainBranchAutoUpdate = mockk<MainBranchAutoUpdateControl>(relaxed = true)
+
     private fun oauthTokens(): OAuthTokens {
         return OAuthTokens(
             accessToken = "access",
@@ -57,7 +60,8 @@ class DiffySettingsViewModelTest {
             onExternalAuthChanged = onExternalAuthChanged,
             onProjectsDirectoryChosenCallback = {},
             chooseWorkspace = chooseWorkspace,
-            confirmReset = confirmReset
+            confirmReset = confirmReset,
+            mainBranchAutoUpdate = { mainBranchAutoUpdate }
         )
     }
 
@@ -125,6 +129,19 @@ class DiffySettingsViewModelTest {
                 viewModel.state.value.authenticationMethod shouldBe DiffyAuthenticationMethod.None
             }
             verify { oauthLoginService.cancel() }
+        }
+
+        @Test
+        fun `onResetClicked - should stop the main branch auto-update`() {
+            // GIVEN
+            coEvery { configurationService.resetAll() } returns Unit
+            val viewModel = createViewModel(confirmReset = { true })
+
+            // WHEN
+            viewModel.onResetClicked()
+
+            // THEN
+            verify { mainBranchAutoUpdate.onSettingChanged(enabled = false) }
         }
     }
 

@@ -10,7 +10,6 @@ import com.github.fnunezkanut.bbcloud.git.PrBranchSyncSnapshot
 import com.github.fnunezkanut.bbcloud.git.PrBranchSyncStepResult
 import com.github.fnunezkanut.bbcloud.git.PrBranchesSyncedListener
 import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyPullRequestReviewBarRefresh
-import com.github.fnunezkanut.bbcloud.ui.pullrequest.editor.DiffyWorktreeLocalBehindRemoteEditorNotificationProvider
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
@@ -20,7 +19,6 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import com.intellij.ui.EditorNotificationProvider
 import com.intellij.ui.EditorNotifications
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
@@ -371,23 +369,13 @@ class WorktreeLocalBehindRemoteBarViewModel(private val project: Project, privat
                 .notify(project)
         }
 
-        /** Re-collects the notifications of the red bar provider only, so the other bars do not flicker. Runs on the EDT. */
+        /** Re-collects the editor notifications, because the platform no longer refreshes a single provider. */
         private fun refreshEditorNotifications(project: Project) {
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) {
                     return@invokeLater
                 }
-                val notifications = EditorNotifications.getInstance(project)
-                val provider = EditorNotificationProvider.EP_NAME.findExtension(
-                    DiffyWorktreeLocalBehindRemoteEditorNotificationProvider::class.java,
-                    project
-                )
-                if (provider == null) {
-                    LOG.debug("The red bar provider is not registered; refreshing all editor notifications")
-                    notifications.updateAllNotifications()
-                } else {
-                    notifications.updateNotifications(provider)
-                }
+                EditorNotifications.getInstance(project).updateAllNotifications()
             }
         }
     }

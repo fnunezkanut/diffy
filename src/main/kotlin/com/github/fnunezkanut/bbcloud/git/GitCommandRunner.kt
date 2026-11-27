@@ -48,16 +48,51 @@ class OpenProjectLocatorImpl : OpenProjectLocator {
  * source-clone project is open.
  */
 interface GitCommandRunner {
-    fun run(project: Project?, workingDir: Path, command: GitCommand, parameters: List<String>, remoteUrl: String? = null): GitCommandResult
+    /**
+     * Runs one git command. When [background] is true the command runs unattended: it always runs as a plain process,
+     * never prompts for credentials (see [backgroundEnvironment]), and times out after 60 seconds.
+     */
+    fun run(
+        project: Project?,
+        workingDir: Path,
+        command: GitCommand,
+        parameters: List<String>,
+        remoteUrl: String? = null,
+        background: Boolean = false
+    ): GitCommandResult
+}
+
+/**
+ * The environment variables that keep an unattended git process from waiting for input. [parent] is the environment
+ * the process inherits. `GIT_SSH_COMMAND` is only set when neither it nor `GIT_SSH` is already defined, so the user's own
+ * SSH setup always wins.
+ */
+fun backgroundEnvironment(parent: Map<String, String>): Map<String, String> {
+    val environment = linkedMapOf(
+        "GIT_TERMINAL_PROMPT" to "0",
+        "GCM_INTERACTIVE" to "never"
+    )
+    if (!parent.containsKey("GIT_SSH_COMMAND") && !parent.containsKey("GIT_SSH")) {
+        environment["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes -o ConnectTimeout=15"
+    }
+    return environment
 }
 
 /** The production [GitCommandRunner] that drives git4idea's [Git] or a direct [GeneralCommandLine]. */
 class PlatformGitCommandRunner : GitCommandRunner {
-    override fun run(project: Project?, workingDir: Path, command: GitCommand, parameters: List<String>, remoteUrl: String?): GitCommandResult {
-        return if (project != null) {
+    override fun run(
+        project: Project?,
+        workingDir: Path,
+        command: GitCommand,
+        parameters: List<String>,
+        remoteUrl: String?,
+        background: Boolean
+    ): GitCommandResult {
+        // A background run never goes through the IDE handler, so it cannot raise an authentication dialog.
+        return if (project != null && !background) {
             runViaGitLineHandler(project = project, workingDir = workingDir, command = command, parameters = parameters, remoteUrl = remoteUrl)
         } else {
-            runViaProcess(workingDir = workingDir, command = command, parameters = parameters)
+            runViaProcess(workingDir = workingDir, command = command, parameters = parameters, background = background)
         }
     }
 
@@ -83,15 +118,18 @@ class PlatformGitCommandRunner : GitCommandRunner {
         )
     }
 
-    private fun runViaProcess(workingDir: Path, command: GitCommand, parameters: List<String>): GitCommandResult {
+    private fun runViaProcess(workingDir: Path, command: GitCommand, parameters: List<String>, background: Boolean): GitCommandResult {
         val gitExecutable = GitExecutableManager.getInstance().pathToGit
         val commandLine = GeneralCommandLine(gitExecutable, command.name())
             .withParameters(parameters)
             .withWorkDirectory(workingDir.toFile())
+        if (background) {
+            commandLine.withEnvironment(backgroundEnvironment(parent = commandLine.parentEnvironment))
+        }
         LOG.debug("Running ${commandLine.commandLineString} in $workingDir")
         val started = TimeSource.Monotonic.markNow()
         return try {
-            val processOutput = CapturingProcessHandler(commandLine).runProcess(PROCESS_TIMEOUT_MS)
+            val processOutput = CapturingProcessHandler(commandLine).runProcess(if (background) BACKGROUND_TIMEOUT_MS else PROCESS_TIMEOUT_MS)
             val exitCode = if (processOutput.isTimeout) -1 else processOutput.exitCode
             LOG.debug("Finished ${commandLine.commandLineString}: exitCode=$exitCode in ${started.elapsedNow().inWholeMilliseconds} ms")
             GitCommandResult(
@@ -111,5 +149,6 @@ class PlatformGitCommandRunner : GitCommandRunner {
     companion object {
         private val LOG = logger<PlatformGitCommandRunner>()
         private const val PROCESS_TIMEOUT_MS = 120_000
+        private const val BACKGROUND_TIMEOUT_MS = 60_000
     }
 }

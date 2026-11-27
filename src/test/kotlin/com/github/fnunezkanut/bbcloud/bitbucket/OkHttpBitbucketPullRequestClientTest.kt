@@ -604,6 +604,96 @@ class OkHttpBitbucketPullRequestClientTest {
         )
     }
 
+    @Test
+    fun `listMergeChecks - maps a 200 response to the loaded checks and sends the filter`(): Unit =
+        runBlocking {
+            // GIVEN
+            val requests = mutableListOf<Request>()
+            val body = """{ "values": [ { "type": "current_user_permission_check", "status": "PASSED", "required": true, "blocking": false } ] }"""
+            val client = OkHttpBitbucketPullRequestClient(respondingClient(requests) { 200 to body })
+
+            // WHEN
+            val result = client.listMergeChecks(
+                workspace = "workspace",
+                repoSlug = "repo",
+                pullRequestId = 42,
+                filter = MergeChecksFilter.GitOnly,
+                apiToken = "secret"
+            )
+
+            // THEN
+            assertSoftly {
+                result shouldBe MergeChecksResult.Loaded(
+                    listOf(PullRequestMergeCheck.PermissionCheck(status = MergeCheckStatus.Passed, isRequired = true, isBlocking = false))
+                )
+                requests.single().url.queryParameter("q") shouldBe "check.kind!=\"maximum_commits_behind\""
+                requests.single().header("Authorization") shouldBe "Bearer secret"
+            }
+        }
+
+    @Test
+    fun `listMergeChecks - maps error statuses and a network failure to Unavailable`(): Unit =
+        runBlocking {
+            // GIVEN
+            val expectations = mapOf(
+                400 to MergeChecksFailure.Other,
+                401 to MergeChecksFailure.Other,
+                403 to MergeChecksFailure.Other,
+                404 to MergeChecksFailure.Other,
+                429 to MergeChecksFailure.RateLimited,
+                500 to MergeChecksFailure.CustomChecksUnavailable
+            )
+
+            // WHEN
+            val results = expectations.keys.associateWith { code ->
+                OkHttpBitbucketPullRequestClient(respondingClient(mutableListOf()) { code to "{}" }).listMergeChecks(
+                    workspace = "workspace",
+                    repoSlug = "repo",
+                    pullRequestId = 42,
+                    filter = MergeChecksFilter.WithoutGit,
+                    apiToken = "secret"
+                )
+            }
+
+            // THEN
+            assertSoftly {
+                expectations.forEach { (code, failure) ->
+                    results[code] shouldBe MergeChecksResult.Unavailable(failure)
+                }
+            }
+        }
+
+    @Test
+    fun `listMergeChecks - maps a network failure and an unparseable body to Other`(): Unit =
+        runBlocking {
+            // GIVEN
+            val failingClient = OkHttpClient.Builder()
+                .addInterceptor(Interceptor { throw java.io.IOException("offline") })
+                .build()
+
+            // WHEN
+            val networkFailure = OkHttpBitbucketPullRequestClient(failingClient).listMergeChecks(
+                workspace = "workspace",
+                repoSlug = "repo",
+                pullRequestId = 42,
+                filter = MergeChecksFilter.WithoutGit,
+                apiToken = "secret"
+            )
+            val badBody = OkHttpBitbucketPullRequestClient(respondingClient(mutableListOf()) { 200 to "not json" }).listMergeChecks(
+                workspace = "workspace",
+                repoSlug = "repo",
+                pullRequestId = 42,
+                filter = MergeChecksFilter.WithoutGit,
+                apiToken = "secret"
+            )
+
+            // THEN
+            assertSoftly {
+                networkFailure shouldBe MergeChecksResult.Unavailable(MergeChecksFailure.Other)
+                badBody shouldBe MergeChecksResult.Unavailable(MergeChecksFailure.Other)
+            }
+        }
+
     private fun respondingClient(requests: MutableList<Request>, responseFor: (Request) -> Pair<Int, String>): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor(

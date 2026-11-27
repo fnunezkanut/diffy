@@ -61,13 +61,12 @@ internal fun WorktreeLocalBehindRemoteBar(state: LocalBehindRemoteBarUiState?, i
                 Tooltip(tooltip = { Text(text = iconTooltip) }) {
                     Icon(key = DiffyPluginIcons.localBehindRemote, contentDescription = iconTooltip)
                 }
-                Tooltip(tooltip = { Text(text = state.tooltip) }) {
+                Tooltip(tooltip = { Text(text = state.tooltip) }, modifier = Modifier.weight(1f)) {
                     Text(
                         text = state.message,
                         color = labelForeground(),
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 val linkText = if (state.updateInProgress) DiffyBundle.message("worktree.localBehindBar.syncing") else state.linkText

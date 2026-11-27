@@ -1,9 +1,15 @@
 package com.github.fnunezkanut.bbcloud.ui.air
 
+import com.github.fnunezkanut.bbcloud.git.RebaseBackupRefs
+
 /**
  * Builds the agent prompt put into a new JetBrains Air chat by "Rebase onto latest with AI". The prompt asks the agent
  * to stash, rebase the source branch onto the latest destination branch, resolve conflicts, verify, force push with
  * lease and restore the stash. It is an agent prompt, not UI text, so it is not localized.
+ *
+ * Diffy saves `HEAD` under a backup ref before the prompt is built. Step 1 makes the agent confirm that `HEAD` still
+ * is that commit, a rule keeps the agent away from `refs/diffy/`, and the summary names the backup ref and the command
+ * that restores it.
  *
  * Branch names come from Bitbucket and can contain backticks, so every value is rendered as a Markdown code span whose
  * fence is longer than any backtick run inside it.
@@ -12,6 +18,9 @@ internal object AirRebasePullRequestPrompt {
     private const val QUOTE = '"'
     private const val NEW_LINE = '\n'
     private const val RULES_HEADER = "Rules:"
+    private const val SEPARATE_COMMANDS_RULE =
+        "- Run every git command as its own separate command. Do not join commands with ;, &&, || or pipes, because the " +
+            "terminal tool can pass them to git as arguments and fail."
     private const val NO_PERMISSION_RULE = "- Do not ask for permission between steps or for routine conflict resolutions."
     private const val STOP_RULE =
         "- Stop and ask me only if: (a) a conflict has unclear business or domain intent where two valid interpretations " +
@@ -22,9 +31,7 @@ internal object AirRebasePullRequestPrompt {
             "restore the stash from step 3 the same way as in step 8."
     private const val NO_SIDE_EFFECTS_RULE =
         "- Do not commit the stashed changes, do not create new branches, and do not change the pull request on Bitbucket."
-    private const val SUMMARY_RULE =
-        "- At the end, summarize all conflicted files and how each was resolved, and say whether a stash was created and " +
-            "restored."
+    private const val BACKUP_RULE = "- Do not delete, move or update any ref under `refs/diffy/`; it holds the backup of this branch."
     private const val CONFLICT_STEP =
         "If merge conflicts occur: resolve them directly without asking for confirmation on each file or step. Stage the " +
             "resolved files and run `git rebase --continue` until all conflicts are resolved and the rebase completes."
@@ -42,10 +49,15 @@ internal object AirRebasePullRequestPrompt {
             append(codeSpan(text = "$remote/${request.destinationBranch}"))
             append(location(repositoryPath = request.repositoryPath))
             append(", using this exact sequence:").append(NEW_LINE).append(NEW_LINE)
-            append("1. Run ").append(codeSpan(text = "git fetch $remote")).append(". Confirm that the current branch is ")
+            append("1. Run ").append(codeSpan(text = "git fetch $remote")).append(". Then run ")
+            append(codeSpan(text = "git branch --show-current")).append(" as a separate command and confirm that the current branch is ")
             append(source).append(". This directory is a git work tree created for this pull request, so do not switch ")
             append("branches: if the current branch is not ").append(source)
-            append(" (including a detached HEAD), stop and ask me.").append(NEW_LINE)
+            append(" (including a detached HEAD), stop and ask me. ")
+            append("Then run ").append(codeSpan(text = "git rev-parse HEAD")).append(" as a separate command and confirm that it prints ")
+            append(codeSpan(text = request.headSha)).append(". Diffy saved this commit as ").append(codeSpan(text = request.backupRef))
+            append(" before this prompt was created. If it prints anything else, the branch changed after the backup was taken: ")
+            append("stop and ask me.").append(NEW_LINE)
             append("2. Run ").append(codeSpan(text = "git rev-list --count HEAD..$remote/${request.sourceBranch}"))
             append(". If the result is not 0, the remote branch has commits that the local branch does not have: stop and ")
             append("ask me, because a force push would discard them.").append(NEW_LINE)
@@ -64,12 +76,22 @@ internal object AirRebasePullRequestPrompt {
             append("them so the uncommitted changes are kept, and do not drop the stash until they are; if the intent is ")
             append("unclear, stop and ask me.").append(NEW_LINE).append(NEW_LINE)
             append(RULES_HEADER).append(NEW_LINE)
+            append(SEPARATE_COMMANDS_RULE).append(NEW_LINE)
             append(NO_PERMISSION_RULE).append(NEW_LINE)
             append(STOP_RULE).append(NEW_LINE)
             append(ABORT_RULE).append(NEW_LINE)
             append(NO_SIDE_EFFECTS_RULE).append(NEW_LINE)
-            append(SUMMARY_RULE)
+            append(BACKUP_RULE).append(NEW_LINE)
+            append(summaryRule(backupRef = request.backupRef, wipBackupRef = request.wipBackupRef))
         }
+    }
+
+    private fun summaryRule(backupRef: String, wipBackupRef: String?): String {
+        val wipPart = if (wipBackupRef == null) "" else " and the uncommitted changes backup ${codeSpan(text = wipBackupRef)}"
+        val restoreCommand = RebaseBackupRefs.restoreCommand(backupRef = backupRef, wipRef = wipBackupRef)
+        return "- At the end, summarize all conflicted files and how each was resolved, say whether a stash was created and " +
+            "restored, and name the backup ref ${codeSpan(text = backupRef)}$wipPart with the command that restores the " +
+            "branch to its state before the rebase: ${codeSpan(text = restoreCommand)}."
     }
 
     private fun location(repositoryPath: String?): String {

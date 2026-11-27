@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## *1.17.0* - 2026-11-27
+* Changed: the Merge button and the Checks card use all of Bitbucket's mergeability checks (PR state, merge permission, conflicts, merge queue, branch restrictions and app checks). Merge stays disabled with a tooltip naming the blocking checks, such as "Blocked by: 1 of 2 approvals". Before, a failed check request left Merge enabled
+* Added: the Checks card shows merge conflicts as "Has conflicts", with Rebase with AI (in a PR work tree) and Open conflicts in browser links. The conflict check runs after the page loads. A queued pull request shows its queue, and a draining or suspended queue is named
+* Changed: the Checks card counts only the checks Bitbucket enforces ("X of Y checks passed"). Other checks stay listed as advisory warnings, and checks that run only on merge are labeled "Evaluated when merging". Approvals, tasks and builds link to their cards
+* Changed: while a check is pending or a build is running, the Checks card refreshes every 30 seconds. When Bitbucket rate limits the checks, the last result stays visible marked "(stale)", Diffy retries with a growing wait (30 seconds to 5 minutes), and a Retry link is available
+* Added: "Auto-update main branches" setting (off by default). Every 5 minutes it fetches the main branch of each watched project and fast-forwards the local one when it has no uncommitted changes or local commits. The Watched Projects tab shows the last result per project. After fast-forwarding a checked-out main branch, git runs the clone's post-merge hook (if any)
+* Changed: the Settings section "Pull Request Diffs" is now "Other Settings", and its checkbox reads "Make pull request diffs editable" with a clearer description
+* Added: Rebase onto latest with AI first backs up the current commit and uncommitted tracked changes under refs/diffy/backups, shows a notification with a Copy restore command action, and tells the agent to stop if the branch changed after the backup. The 5 newest backups per pull request are kept. Untracked files are not backed up
+
 ## *1.16.0* - 2026-11-26
 * Changed: the "Local branches are behind Bitbucket" warning is now a one-line red bar under the blue bar on the PR page, every file and every diff of the work tree, with its own icon and a Sync local branch link. It also updates while the PR page is closed
 * Changed: "This pull request is N commits behind" is now a yellow bar under the blue and red bars on the PR page, every file and every diff of the work tree, with a Rebase onto latest with AI link that puts a stash, rebase and force-push-with-lease prompt into a new Air chat

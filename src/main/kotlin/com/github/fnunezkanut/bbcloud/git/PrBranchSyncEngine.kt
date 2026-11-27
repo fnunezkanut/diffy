@@ -29,7 +29,7 @@ class PrBranchSyncEngine(
      * combined fetch fails and there is more than one branch, each refspec is retried on its own so a missing remote
      * branch does not block the other. Returns true when at least one fetch succeeded.
      */
-    fun fetch(project: Project?, prWorktreePath: Path, remoteName: String, remoteUrl: String?, branches: List<String>): Boolean {
+    fun fetch(project: Project?, prWorktreePath: Path, remoteName: String, remoteUrl: String?, branches: List<String>, background: Boolean = false): Boolean {
         val distinctBranches = branches
             .map { branch -> normalizeBranchName(branchName = branch, remoteName = remoteName) }
             .filter { branch -> branch.isNotBlank() }
@@ -38,7 +38,14 @@ class PrBranchSyncEngine(
             return false
         }
         val refspecs = distinctBranches.map { branch -> refspec(remoteName = remoteName, branch = branch) }
-        val combined = runFetch(project = project, workingDir = prWorktreePath, remoteName = remoteName, remoteUrl = remoteUrl, refspecs = refspecs)
+        val combined = runFetch(
+            project = project,
+            workingDir = prWorktreePath,
+            remoteName = remoteName,
+            remoteUrl = remoteUrl,
+            refspecs = refspecs,
+            background = background
+        )
         if (combined) {
             return true
         }
@@ -47,7 +54,15 @@ class PrBranchSyncEngine(
         }
         var anySucceeded = false
         for (refspec in refspecs) {
-            if (runFetch(project = project, workingDir = prWorktreePath, remoteName = remoteName, remoteUrl = remoteUrl, refspecs = listOf(refspec))) {
+            val fetched = runFetch(
+                project = project,
+                workingDir = prWorktreePath,
+                remoteName = remoteName,
+                remoteUrl = remoteUrl,
+                refspecs = listOf(refspec),
+                background = background
+            )
+            if (fetched) {
                 anySucceeded = true
             }
         }
@@ -84,6 +99,23 @@ class PrBranchSyncEngine(
             prWorktreePath = prWorktreePath,
             source = sourceStatus,
             destination = destinationStatus
+        )
+    }
+
+    /**
+     * Reads the state of one [branch] of the clone at [workingDir] without changing anything. [background] runs git
+     * unattended (see [GitCommandRunner.run]). Never throws (other than cancellation).
+     */
+    fun inspectSingle(project: Project?, workingDir: Path, remoteName: String, branch: String, background: Boolean = false): BranchSyncStatus {
+        val normalized = normalizeBranchName(branchName = branch, remoteName = remoteName)
+        val worktreeList = readWorktreeList(project = project, prWorktreePath = workingDir, background = background)
+        return inspectBranch(
+            project = project,
+            prWorktreePath = workingDir,
+            remoteName = remoteName,
+            branch = normalized,
+            worktreeList = worktreeList,
+            background = background
         )
     }
 
@@ -149,14 +181,15 @@ class PrBranchSyncEngine(
         return PrBranchSyncResult(outcome = outcome, after = after)
     }
 
-    private fun runFetch(project: Project?, workingDir: Path, remoteName: String, remoteUrl: String?, refspecs: List<String>): Boolean {
+    private fun runFetch(project: Project?, workingDir: Path, remoteName: String, remoteUrl: String?, refspecs: List<String>, background: Boolean): Boolean {
         return try {
             val result = gitRunner.run(
                 project = project,
                 workingDir = workingDir,
                 command = GitCommand.FETCH,
                 parameters = listOf(remoteName) + refspecs,
-                remoteUrl = remoteUrl
+                remoteUrl = remoteUrl,
+                background = background
             )
             if (!result.success) {
                 LOG.debug("git fetch $remoteName ${refspecs.size} refspec(s) failed")
@@ -170,17 +203,25 @@ class PrBranchSyncEngine(
         }
     }
 
-    private fun readWorktreeList(project: Project?, prWorktreePath: Path): String? {
+    private fun readWorktreeList(project: Project?, prWorktreePath: Path, background: Boolean = false): String? {
         val result = runSafely(
             project = project,
             workingDir = prWorktreePath,
             command = GitCommand.WORKTREE,
-            parameters = listOf("list", "--porcelain")
+            parameters = listOf("list", "--porcelain"),
+            background = background
         )
         return if (result != null && result.success) result.combinedOutput else null
     }
 
-    private fun inspectBranch(project: Project?, prWorktreePath: Path, remoteName: String, branch: String, worktreeList: String?): BranchSyncStatus {
+    private fun inspectBranch(
+        project: Project?,
+        prWorktreePath: Path,
+        remoteName: String,
+        branch: String,
+        worktreeList: String?,
+        background: Boolean = false
+    ): BranchSyncStatus {
         if (branch.isBlank()) {
             return BranchSyncStatus.Unknown
         }
@@ -190,7 +231,8 @@ class PrBranchSyncEngine(
             project = project,
             workingDir = prWorktreePath,
             command = GitCommand.REV_PARSE,
-            parameters = listOf("--verify", "--quiet", "$remoteRef^{commit}")
+            parameters = listOf("--verify", "--quiet", "$remoteRef^{commit}"),
+            background = background
         )
         val remoteRevision = remoteResult?.takeIf { result -> result.success }
             ?.let { result -> GitCommandOutput.lastOutputLine(result.combinedOutput) }
@@ -201,7 +243,8 @@ class PrBranchSyncEngine(
             project = project,
             workingDir = prWorktreePath,
             command = GitCommand.REV_PARSE,
-            parameters = listOf("--verify", "--quiet", "$localRef^{commit}")
+            parameters = listOf("--verify", "--quiet", "$localRef^{commit}"),
+            background = background
         )
         val localRevision = localResult?.takeIf { result -> result.success }
             ?.let { result -> GitCommandOutput.lastOutputLine(result.combinedOutput) }
@@ -212,7 +255,8 @@ class PrBranchSyncEngine(
             project = project,
             workingDir = prWorktreePath,
             command = GitCommand.REV_LIST,
-            parameters = listOf("--left-right", "--count", "$localRef...$remoteRef")
+            parameters = listOf("--left-right", "--count", "$localRef...$remoteRef"),
+            background = background
         )
         val aheadBehind = countResult?.takeIf { result -> result.success }
             ?.let { result -> GitAheadBehindOutput.parse(result.combinedOutput) }
@@ -224,7 +268,7 @@ class PrBranchSyncEngine(
             return BranchSyncStatus.Unknown
         }
         val checkedOutAt = WorktreeListOutput.worktreeForBranch(porcelainOutput = worktreeList, branchName = branch)
-        val dirty = checkedOutAt?.let { path -> readDirty(project = project, prWorktreePath = prWorktreePath, worktreePath = path) }
+        val dirty = checkedOutAt?.let { path -> readDirty(project = project, prWorktreePath = prWorktreePath, worktreePath = path, background = background) }
         return BranchSyncStatus.Behind(
             commitsBehind = aheadBehind.behind,
             commitsAhead = aheadBehind.ahead,
@@ -235,7 +279,7 @@ class PrBranchSyncEngine(
         )
     }
 
-    private fun readDirty(project: Project?, prWorktreePath: Path, worktreePath: Path): Boolean? {
+    private fun readDirty(project: Project?, prWorktreePath: Path, worktreePath: Path, background: Boolean = false): Boolean? {
         if (!Files.isDirectory(worktreePath)) {
             return null
         }
@@ -243,7 +287,8 @@ class PrBranchSyncEngine(
             project = projectFor(project = project, prWorktreePath = prWorktreePath, path = worktreePath),
             workingDir = worktreePath,
             command = GitCommand.STATUS,
-            parameters = listOf("--porcelain", "--untracked-files=no")
+            parameters = listOf("--porcelain", "--untracked-files=no"),
+            background = background
         )
         if (result == null || !result.success) {
             return null
@@ -258,7 +303,6 @@ class PrBranchSyncEngine(
         remoteUrl: String?,
         mode: PrBranchSyncMode
     ): PrBranchSyncStepResult {
-        val branch = snapshot.branchFor(role)
         val status = snapshot.statusFor(role)
         val action = PrBranchFastForwardPolicy.decide(
             role = role,
@@ -266,49 +310,80 @@ class PrBranchSyncEngine(
             prWorktreePath = snapshot.prWorktreePath,
             mode = mode
         )
-        val remoteRef = "refs/remotes/${snapshot.remoteName}/$branch"
+        return execute(
+            project = project,
+            workingDir = snapshot.prWorktreePath,
+            remoteName = snapshot.remoteName,
+            branch = snapshot.branchFor(role),
+            status = status,
+            action = action,
+            remoteUrl = remoteUrl,
+            label = role.toString()
+        )
+    }
+
+    /**
+     * Carries out an [action] that was decided elsewhere for one [branch] of the clone at [workingDir]. [label] only
+     * names the branch in log lines. [background] runs git unattended (see [GitCommandRunner.run]). Never throws (other
+     * than cancellation).
+     */
+    fun execute(
+        project: Project?,
+        workingDir: Path,
+        remoteName: String,
+        branch: String,
+        status: BranchSyncStatus,
+        action: PrBranchSyncAction,
+        remoteUrl: String?,
+        label: String = "main",
+        background: Boolean = false
+    ): PrBranchSyncStepResult {
+        val remoteRef = "refs/remotes/$remoteName/$branch"
         return try {
             when (action) {
                 PrBranchSyncAction.None -> {
                     PrBranchSyncStepResult.NotNeeded
                 }
                 is PrBranchSyncAction.Skip -> {
-                    LOG.info("Not updating local $role branch '$branch': ${action.reason}")
+                    LOG.info("Not updating local $label branch '$branch': ${action.reason}")
                     PrBranchSyncStepResult.Skipped(reason = action.reason, path = (status as? BranchSyncStatus.Behind)?.checkedOutAt)
                 }
                 is PrBranchSyncAction.MergeFastForwardInWorktree -> {
                     val result = runSafely(
-                        project = projectFor(project = project, prWorktreePath = snapshot.prWorktreePath, path = action.worktreePath),
+                        project = projectFor(project = project, prWorktreePath = workingDir, path = action.worktreePath),
                         workingDir = action.worktreePath,
                         command = GitCommand.MERGE,
-                        parameters = listOf("--ff-only", remoteRef)
+                        parameters = listOf("--ff-only", remoteRef),
+                        background = background
                     )
-                    finish(role = role, branch = branch, status = status, result = result, path = action.worktreePath)
+                    finish(label = label, branch = branch, status = status, result = result, path = action.worktreePath)
                 }
                 is PrBranchSyncAction.UpdateRef -> {
                     val result = runSafely(
                         project = project,
-                        workingDir = snapshot.prWorktreePath,
+                        workingDir = workingDir,
                         command = GitCommand.UPDATE_REF,
                         parameters = listOf(
                             "-m",
-                            "diffy: fast-forward $branch to ${snapshot.remoteName}/$branch",
+                            "diffy: fast-forward $branch to $remoteName/$branch",
                             "$HEADS_PREFIX$branch",
                             action.newRevision,
                             action.oldRevision
-                        )
+                        ),
+                        background = background
                     )
-                    finish(role = role, branch = branch, status = status, result = result, path = null)
+                    finish(label = label, branch = branch, status = status, result = result, path = null)
                 }
                 PrBranchSyncAction.CreateLocalBranch -> {
                     val result = runSafely(
                         project = project,
-                        workingDir = snapshot.prWorktreePath,
+                        workingDir = workingDir,
                         command = GitCommand.BRANCH,
-                        parameters = listOf("--track", branch, remoteRef)
+                        parameters = listOf("--track", branch, remoteRef),
+                        background = background
                     )
                     if (result != null && result.success) {
-                        LOG.info("Created local branch '$branch' from ${snapshot.remoteName}/$branch")
+                        LOG.info("Created local branch '$branch' from $remoteName/$branch")
                         PrBranchSyncStepResult.Updated(path = null)
                     } else {
                         failed(result = result)
@@ -317,28 +392,29 @@ class PrBranchSyncEngine(
                 PrBranchSyncAction.PullIntoPrWorktree -> {
                     val result = runSafely(
                         project = project,
-                        workingDir = snapshot.prWorktreePath,
+                        workingDir = workingDir,
                         command = GitCommand.PULL,
-                        parameters = listOf("--no-edit", snapshot.remoteName, branch),
-                        remoteUrl = remoteUrl
+                        parameters = listOf("--no-edit", remoteName, branch),
+                        remoteUrl = remoteUrl,
+                        background = background
                     )
-                    finish(role = role, branch = branch, status = status, result = result, path = snapshot.prWorktreePath)
+                    finish(label = label, branch = branch, status = status, result = result, path = workingDir)
                 }
             }
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            LOG.debug("Updating local $role branch '$branch' failed unexpectedly", exception)
+            LOG.debug("Updating local $label branch '$branch' failed unexpectedly", exception)
             PrBranchSyncStepResult.Failed(output = exception.message.orEmpty())
         }
     }
 
-    private fun finish(role: PrBranchRole, branch: String, status: BranchSyncStatus, result: GitCommandResult?, path: Path?): PrBranchSyncStepResult {
+    private fun finish(label: String, branch: String, status: BranchSyncStatus, result: GitCommandResult?, path: Path?): PrBranchSyncStepResult {
         if (result == null || !result.success) {
             return failed(result = result)
         }
         val commits = (status as? BranchSyncStatus.Behind)?.commitsBehind ?: 0
-        LOG.info("Fast-forwarded local branch '$branch' ($role) by $commits commit(s)")
+        LOG.info("Fast-forwarded local branch '$branch' ($label) by $commits commit(s)")
         return PrBranchSyncStepResult.Updated(path = path)
     }
 
@@ -356,9 +432,23 @@ class PrBranchSyncEngine(
         return openProjectLocator.findOpenProjectForPath(normalized)
     }
 
-    private fun runSafely(project: Project?, workingDir: Path, command: GitCommand, parameters: List<String>, remoteUrl: String? = null): GitCommandResult? {
+    private fun runSafely(
+        project: Project?,
+        workingDir: Path,
+        command: GitCommand,
+        parameters: List<String>,
+        remoteUrl: String? = null,
+        background: Boolean = false
+    ): GitCommandResult? {
         return try {
-            gitRunner.run(project = project, workingDir = workingDir, command = command, parameters = parameters, remoteUrl = remoteUrl)
+            gitRunner.run(
+                project = project,
+                workingDir = workingDir,
+                command = command,
+                parameters = parameters,
+                remoteUrl = remoteUrl,
+                background = background
+            )
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {

@@ -93,7 +93,7 @@ fun DiffySettingsScreen(viewModel: DiffySettingsViewModel, onOpenWatchedProjects
                 onOAuthCancel = viewModel::onOAuthLoginCancelClicked
             )
             WatchedProjectsSection(onOpenWatchedProjects = { onOpenWatchedProjects(hostComponent) })
-            PullRequestDiffsSection(viewModel = viewModel)
+            OtherSettingsSection(viewModel = viewModel, refreshKey = state.workingMethod)
             ResetSection(
                 isBusy = state.isBusy,
                 onReset = viewModel::onResetClicked
@@ -154,19 +154,33 @@ private fun WatchedProjectsSection(onOpenWatchedProjects: () -> Unit) {
 }
 
 @Composable
-private fun PullRequestDiffsSection(viewModel: DiffySettingsViewModel) {
-    var enabled by remember { mutableStateOf(viewModel.isEditableSourceSideEnabled()) }
-    GroupHeader(text = DiffyBundle.message("setup.section.pullRequestDiffs.title"))
+private fun OtherSettingsSection(viewModel: DiffySettingsViewModel, refreshKey: Any) {
+    var editableDiffsEnabled by remember { mutableStateOf(viewModel.isEditableDiffsEnabled()) }
+    // A reset turns the auto-update off, so the checkbox is read again whenever the sign-in method changes.
+    var autoUpdateMainBranchesEnabled by remember(refreshKey) { mutableStateOf(viewModel.isAutoUpdateMainBranchesEnabled()) }
+    GroupHeader(text = DiffyBundle.message("setup.section.otherSettings.title"))
     CheckboxRow(
-        text = DiffyBundle.message("settings.editableSourceSideInDiffs.label"),
-        checked = enabled,
+        text = DiffyBundle.message("setup.otherSettings.editableDiffs.label"),
+        checked = editableDiffsEnabled,
         onCheckedChange = { checked ->
-            enabled = checked
-            viewModel.onEditableSourceSideChanged(enabled = checked)
+            editableDiffsEnabled = checked
+            viewModel.onEditableDiffsChanged(enabled = checked)
         }
     )
     Text(
-        text = DiffyBundle.message("settings.editableSourceSideInDiffs.comment"),
+        text = DiffyBundle.message("setup.otherSettings.editableDiffs.comment"),
+        color = JewelTheme.globalColors.text.info
+    )
+    CheckboxRow(
+        text = DiffyBundle.message("setup.otherSettings.autoUpdateMainBranches.label"),
+        checked = autoUpdateMainBranchesEnabled,
+        onCheckedChange = { checked ->
+            autoUpdateMainBranchesEnabled = checked
+            viewModel.onAutoUpdateMainBranchesChanged(enabled = checked)
+        }
+    )
+    Text(
+        text = DiffyBundle.message("setup.otherSettings.autoUpdateMainBranches.comment"),
         color = JewelTheme.globalColors.text.info
     )
 }
@@ -229,6 +243,7 @@ private fun AuthenticationSection(state: SettingsUiState, onOAuthLogin: () -> Un
                 text = DiffyBundle.message("setup.authentication.oauth.button")
             )
         }
+        AuthenticationStatus(state = state)
     }
     if (state.isOAuthLoginInProgress) {
         OAuthLoginProgress(fallbackUrl = state.oauthBrowserFallbackUrl, onCancel = onOAuthCancel)
@@ -250,7 +265,6 @@ private fun AuthenticationSection(state: SettingsUiState, onOAuthLogin: () -> Un
             )
         }
     }
-    AuthenticationStatus(state = state)
 }
 
 /** The waiting line and Cancel link while an OAuth login runs, plus the browser-fallback URL and a Copy URL link. */

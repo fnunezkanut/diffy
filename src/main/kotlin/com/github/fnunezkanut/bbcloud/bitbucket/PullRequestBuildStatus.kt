@@ -23,12 +23,13 @@ data class PullRequestBuildStatus(
 data class BuildStatusPage(val statuses: List<PullRequestBuildStatus>, val nextUrl: String?)
 
 /**
- * Data shown on the Overview tab; a null field means the corresponding request failed.
+ * Data shown on the Overview tab; a null field means the corresponding request failed. [mergeChecks] reports its own
+ * failure as [MergeChecksResult.Unavailable]; null there means the checks are not loaded yet.
  */
 data class PullRequestOverview(
     val commitsBehind: ItemCount?,
     val builds: List<PullRequestBuildStatus>?,
-    val mergeChecks: List<PullRequestMergeCheck>? = null,
+    val mergeChecks: MergeChecksResult? = null,
     val tasks: List<PullRequestTask>? = null,
     val conversation: PullRequestConversation? = null,
     val activityFeed: PullRequestActivityFeed? = null

@@ -1,6 +1,13 @@
 package com.github.fnunezkanut.bbcloud.ui.main
 
+import com.github.fnunezkanut.bbcloud.bitbucket.CustomCheckPhase
+import com.github.fnunezkanut.bbcloud.bitbucket.GitMergeabilityReason
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckPullRequestState
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeCheckStatus
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksFailure
+import com.github.fnunezkanut.bbcloud.bitbucket.MergeChecksResult
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestDetails
+import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestMergeCheck
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestState
 import com.github.fnunezkanut.bbcloud.bitbucket.PullRequestSummary
 import io.kotest.assertions.assertSoftly
@@ -317,10 +324,511 @@ class PullRequestOverviewViewModelTest {
         }
     }
 
+    @Nested
+    inner class ChecksTests {
+        private val webUrl = "https://bitbucket.org/workspace/repository/pull-requests/273"
+
+        @Test
+        fun `showChecks - should order the rows Eligibility, Standard, Custom, Other`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val checks = listOf(
+                unrecognized(),
+                custom(name = "Scan"),
+                standard(kind = "resolved_tasks"),
+                permission(status = MergeCheckStatus.Failed, isBlocking = true)
+            )
+
+            // WHEN
+            viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.NotLoaded)
+
+            // THEN
+            viewModel.state.value.checks.rows.map { row -> row.group } shouldBe
+                listOf(CheckRowGroup.Eligibility, CheckRowGroup.Standard, CheckRowGroup.Custom, CheckRowGroup.Other)
+        }
+
+        @Test
+        fun `showChecks - should hide passing eligibility checks and count only required ones`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val checks = listOf(
+                permission(status = MergeCheckStatus.Passed, isBlocking = false),
+                PullRequestMergeCheck.StateCheck(
+                    state = MergeCheckPullRequestState.Open,
+                    status = MergeCheckStatus.Passed,
+                    isRequired = true,
+                    isBlocking = false
+                ),
+                git(reason = GitMergeabilityReason.Clean, status = MergeCheckStatus.Passed, isBlocking = false),
+                standard(kind = "minimum_approvals", status = MergeCheckStatus.Failed, isBlocking = true, requiredValue = 2, observedValue = 1)
+            )
+
+            // WHEN
+            viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.Loaded)
+
+            // THEN
+            assertSoftly(viewModel.state.value.checks) {
+                rows.size shouldBe 1
+                title shouldBe "<b>0 of 1</b> checks passed"
+                statusIcon shouldBe SectionStatusIcon.Error
+                rows.single().secondaryText shouldBe "1 / 2"
+            }
+        }
+
+        @Test
+        fun `showChecks - should show the empty message when only passing eligibility checks exist`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val checks = listOf(permission(status = MergeCheckStatus.Passed, isBlocking = false))
+
+            // WHEN
+            viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.NotLoaded)
+
+            // THEN
+            assertSoftly(viewModel.state.value.checks) {
+                message shouldBe "No merge checks configured"
+                rows shouldBe emptyList()
+            }
+        }
+
+        @Test
+        fun `showChecks - should mark an unenforced standard check as advisory and count zero of zero`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val checks = listOf(standard(kind = "resolved_tasks", status = MergeCheckStatus.Failed, isRequired = false))
+
+            // WHEN
+            viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.NotLoaded)
+
+            // THEN
+            assertSoftly(viewModel.state.value.checks) {
+                title shouldBe "<b>0 of 0</b> checks passed"
+                statusTooltip shouldBe "No check blocks merging"
+                rows.single().isAdvisory shouldBe true
+                rows.single().iconKind shouldBe CheckRowIcon.Warning
+                rows.single().tooltip shouldBe "Failed but not enforced"
+            }
+        }
+
+        @Test
+        fun `showChecks - should label a pending on-merge check as evaluated when merging with a neutral icon`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val checks = listOf(custom(name = "Release gate", phase = CustomCheckPhase.OnMerge, status = MergeCheckStatus.Pending, message = "ignored"))
+
+            // WHEN
+            viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.NotLoaded)
+
+            // THEN
+            assertSoftly(viewModel.state.value.checks.rows.single()) {
+                labelHtml shouldBe "Release gate"
+                secondaryText shouldBe "Evaluated when merging"
+                tooltip shouldBe "Evaluated when merging"
+                iconKind shouldBe CheckRowIcon.Neutral
+            }
+        }
+
+        @Test
+        fun `showChecks - should escape the message of a custom check`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val checks = listOf(custom(name = "Scan", status = MergeCheckStatus.Failed, message = "2 <high> findings"))
+
+            // WHEN
+            viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.NotLoaded)
+
+            // THEN
+            viewModel.state.value.checks.rows.single().secondaryText shouldBe "2 &lt;high&gt; findings"
+        }
+
+        @Test
+        fun `showChecks - should render the previous rows as stale when the read failed`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val previous = MergeChecksResult.Loaded(listOf(standard(kind = "resolved_tasks", status = MergeCheckStatus.Passed)))
+
+            // WHEN
+            viewModel.showChecks(
+                result = MergeChecksResult.Unavailable(MergeChecksFailure.RateLimited),
+                previous = previous,
+                gitStatus = GitRowStatus.NotLoaded
+            )
+
+            // THEN
+            assertSoftly(viewModel.state.value.checks) {
+                isStale shouldBe true
+                isRetryVisible shouldBe true
+                rows.size shouldBe 1
+                title shouldBe "<b>1 of 1</b> checks passed"
+                message shouldBe "Bitbucket is rate limiting merge check requests. Diffy will retry shortly."
+            }
+        }
+
+        @Test
+        fun `showChecks - should show a failure message and Retry without a previous result`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val messages = mapOf(
+                MergeChecksFailure.CustomChecksUnavailable to "Bitbucket could not evaluate the custom merge checks. A merge would fail too.",
+                MergeChecksFailure.RateLimited to "Bitbucket is rate limiting merge check requests. Diffy will retry shortly.",
+                MergeChecksFailure.Other to "Could not load merge checks"
+            )
+
+            // WHEN
+            val sections = messages.keys.associateWith { failure ->
+                viewModel.showChecks(result = MergeChecksResult.Unavailable(failure), previous = null, gitStatus = GitRowStatus.NotLoaded)
+                viewModel.state.value.checks
+            }
+
+            // THEN
+            assertSoftly {
+                messages.forEach { (failure, message) ->
+                    sections.getValue(failure).message shouldBe message
+                    sections.getValue(failure).isRetryVisible shouldBe true
+                    sections.getValue(failure).isStale shouldBe false
+                    sections.getValue(failure).rows shouldBe emptyList()
+                }
+            }
+        }
+
+        @Test
+        fun `showChecks - should not offer Retry after a successful read`() {
+            // GIVEN
+            val viewModel = createViewModel()
+
+            // WHEN
+            viewModel.showChecks(
+                result = MergeChecksResult.Loaded(listOf(standard(kind = "resolved_tasks"))),
+                previous = null,
+                gitStatus = GitRowStatus.NotLoaded
+            )
+
+            // THEN
+            assertSoftly(viewModel.state.value.checks) {
+                isRetryVisible shouldBe false
+                isStale shouldBe false
+            }
+        }
+
+        @Test
+        fun `showChecks - should show a muted checking row while the Git request is loading`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val checks = listOf(standard(kind = "resolved_tasks"))
+
+            // WHEN
+            viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.Loading)
+
+            // THEN
+            assertSoftly(viewModel.state.value.checks) {
+                gitStatus shouldBe GitRowStatus.Loading
+                rows.map { row -> row.labelHtml } shouldBe listOf("Checking for conflicts", "<b>All</b> tasks resolved")
+                rows.first().isMuted shouldBe true
+            }
+        }
+
+        @Test
+        fun `showChecks - should show a neutral muted row for a Git check Bitbucket could not evaluate`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val checks = listOf(git(reason = null, status = MergeCheckStatus.Unknown, isBlocking = false))
+
+            // WHEN
+            viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.Loaded)
+
+            // THEN
+            assertSoftly(viewModel.state.value.checks.rows.single()) {
+                labelHtml shouldBe "Could not check for conflicts"
+                iconKind shouldBe CheckRowIcon.Neutral
+                isMuted shouldBe true
+                isBlocking shouldBe false
+            }
+        }
+
+        @Test
+        fun `showChecks - should link failing checks to their page sections and queue rows to Bitbucket`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val scope = CoroutineScope(SupervisorJob())
+            viewModel.showReviewers(details = pullRequestDetails(description = null), coroutineScope = scope)
+            val checks = listOf(
+                standard(kind = "minimum_approvals", status = MergeCheckStatus.Failed),
+                standard(kind = "minimum_default_reviewer_approvals", status = MergeCheckStatus.Failed),
+                standard(kind = "resolved_tasks", status = MergeCheckStatus.Failed),
+                standard(kind = "no_failed_builds", status = MergeCheckStatus.Failed),
+                standard(kind = "minimum_successful_builds", status = MergeCheckStatus.Pending),
+                standard(kind = "no_in_progress_builds", status = MergeCheckStatus.Failed),
+                standard(kind = "no_changes_requested", status = MergeCheckStatus.Failed),
+                standard(kind = "resolved_tasks", status = MergeCheckStatus.Passed),
+                PullRequestMergeCheck.QueueCheck(
+                    isQueued = false,
+                    queueName = "q",
+                    queueState = "ACTIVE",
+                    status = MergeCheckStatus.Failed,
+                    isRequired = true,
+                    isBlocking = true
+                )
+            )
+
+            try {
+                // WHEN
+                viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.NotLoaded)
+
+                // THEN
+                val actions = viewModel.state.value.checks.rows.map { row -> row.actions }
+                actions shouldBe listOf(
+                    listOf(CheckRowAction.OpenInBitbucket(webUrl)),
+                    listOf(CheckRowAction.ScrollToSection(CheckSection.Reviewers)),
+                    listOf(CheckRowAction.ScrollToSection(CheckSection.Reviewers)),
+                    listOf(CheckRowAction.ScrollToSection(CheckSection.Tasks)),
+                    listOf(CheckRowAction.ScrollToSection(CheckSection.Builds)),
+                    listOf(CheckRowAction.ScrollToSection(CheckSection.Builds)),
+                    listOf(CheckRowAction.ScrollToSection(CheckSection.Builds)),
+                    emptyList(),
+                    emptyList()
+                )
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `showChecks - should offer the rebase only for conflicts with a local checkout`() {
+            // GIVEN
+            val withCheckout = createViewModel(isRebaseAvailable = { true })
+            val withoutCheckout = createViewModel(isRebaseAvailable = { false })
+            val scope = CoroutineScope(SupervisorJob())
+            val conflicts = MergeChecksResult.Loaded(listOf(git(reason = GitMergeabilityReason.Conflicts)))
+            val impossible = MergeChecksResult.Loaded(listOf(git(reason = GitMergeabilityReason.MergeImpossible)))
+            listOf(withCheckout, withoutCheckout).forEach { viewModel ->
+                viewModel.showReviewers(details = pullRequestDetails(description = null), coroutineScope = scope)
+            }
+
+            try {
+                // WHEN
+                withCheckout.showChecks(result = conflicts, previous = null, gitStatus = GitRowStatus.Loaded)
+                withoutCheckout.showChecks(result = conflicts, previous = null, gitStatus = GitRowStatus.Loaded)
+                val impossibleViewModel = createViewModel(isRebaseAvailable = { true })
+                impossibleViewModel.showReviewers(details = pullRequestDetails(description = null), coroutineScope = scope)
+                impossibleViewModel.showChecks(result = impossible, previous = null, gitStatus = GitRowStatus.Loaded)
+
+                // THEN
+                assertSoftly {
+                    withCheckout.state.value.checks.rows.single().actions shouldBe
+                        listOf(CheckRowAction.RebaseWithAi, CheckRowAction.OpenConflictsInBrowser(webUrl))
+                    withoutCheckout.state.value.checks.rows.single().actions shouldBe listOf(CheckRowAction.OpenConflictsInBrowser(webUrl))
+                    impossibleViewModel.state.value.checks.rows.single().actions shouldBe listOf(CheckRowAction.OpenConflictsInBrowser(webUrl))
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+
+        @Test
+        fun `showChecks - should render a queued pull request as queued in its queue and merge in progress`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            val checks = listOf(
+                PullRequestMergeCheck.StateCheck(
+                    state = MergeCheckPullRequestState.Open,
+                    status = MergeCheckStatus.Failed,
+                    isRequired = true,
+                    isBlocking = true
+                ),
+                PullRequestMergeCheck.QueueCheck(
+                    isQueued = true,
+                    queueName = "main queue",
+                    queueState = "ACTIVE",
+                    status = MergeCheckStatus.Passed,
+                    isRequired = true,
+                    isBlocking = false
+                )
+            )
+
+            // WHEN
+            viewModel.showChecks(result = MergeChecksResult.Loaded(checks), previous = null, gitStatus = GitRowStatus.NotLoaded)
+
+            // THEN
+            val rows = viewModel.state.value.checks.rows
+            assertSoftly {
+                rows.map { row -> row.labelHtml } shouldBe listOf("Merge in progress (queued)", "Queued in main queue")
+                rows.map { row -> row.iconKind } shouldBe listOf(CheckRowIcon.Blocking, CheckRowIcon.Passed)
+            }
+        }
+
+        @Test
+        fun `showChecks - should show the draining and suspended states of a merge queue in the row text`() {
+            // GIVEN
+            val viewModel = createViewModel()
+
+            fun queue(state: String): PullRequestMergeCheck.QueueCheck {
+                return PullRequestMergeCheck.QueueCheck(
+                    isQueued = false,
+                    queueName = "q",
+                    queueState = state,
+                    status = MergeCheckStatus.Failed,
+                    isRequired = true,
+                    isBlocking = true
+                )
+            }
+
+            // WHEN
+            viewModel.showChecks(
+                result = MergeChecksResult.Loaded(listOf(queue("DRAINING"), queue("SUSPENDED"), queue("ACTIVE"))),
+                previous = null,
+                gitStatus = GitRowStatus.NotLoaded
+            )
+
+            // THEN
+            viewModel.state.value.checks.rows.map { row -> row.labelHtml } shouldBe listOf(
+                "Merge queue is draining and not accepting pull requests",
+                "Merge queue is suspended",
+                "A merge queue is required"
+            )
+        }
+
+        @Test
+        fun `setNextChecksAttempt - should tell when Diffy retries a rate limited read and clear it after a success`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            viewModel.showChecks(
+                result = MergeChecksResult.Unavailable(MergeChecksFailure.RateLimited),
+                previous = null,
+                gitStatus = GitRowStatus.NotLoaded
+            )
+
+            // WHEN
+            viewModel.setNextChecksAttempt(30.seconds)
+
+            // THEN
+            viewModel.state.value.checks.retryTooltip shouldBe "Diffy tries again by itself in about 30 s"
+
+            // WHEN
+            viewModel.setNextChecksAttempt(null)
+
+            // THEN
+            viewModel.state.value.checks.retryTooltip.shouldBeNull()
+        }
+
+        @Test
+        fun `onCheckActionClicked - should start the rebase`() {
+            // GIVEN
+            var rebases = 0
+            val viewModel = createViewModel(onRebaseWithAi = { rebases++ })
+
+            // WHEN
+            viewModel.onCheckActionClicked(CheckRowAction.RebaseWithAi)
+
+            // THEN
+            rebases shouldBe 1
+        }
+
+        @Test
+        fun `onCheckActionClicked - should expand the section and request a scroll that is consumed once`() {
+            // GIVEN
+            val viewModel = createViewModel()
+            viewModel.onToggleReviewers()
+            viewModel.state.value.reviewers.isExpanded shouldBe false
+
+            // WHEN
+            viewModel.onCheckActionClicked(CheckRowAction.ScrollToSection(CheckSection.Reviewers))
+
+            // THEN
+            assertSoftly(viewModel.state.value) {
+                reviewers.isExpanded shouldBe true
+                scrollTarget shouldBe CheckSection.Reviewers
+            }
+
+            // WHEN
+            viewModel.onScrollTargetConsumed()
+
+            // THEN
+            viewModel.state.value.scrollTarget.shouldBeNull()
+        }
+
+        @Test
+        fun `onRetryChecks - should request a new read of the checks`() {
+            // GIVEN
+            var retries = 0
+            val viewModel = createViewModel(onRetryChecksRequested = { retries++ })
+
+            // WHEN
+            viewModel.onRetryChecks()
+
+            // THEN
+            retries shouldBe 1
+        }
+
+        private fun standard(
+            kind: String,
+            status: MergeCheckStatus = MergeCheckStatus.Passed,
+            isBlocking: Boolean = false,
+            isRequired: Boolean = true,
+            requiredValue: Int? = null,
+            observedValue: Int? = null
+        ): PullRequestMergeCheck.StandardCheck {
+            return PullRequestMergeCheck.StandardCheck(
+                kind = kind,
+                requiredValue = requiredValue,
+                observedValue = observedValue,
+                status = status,
+                isRequired = isRequired,
+                isBlocking = isBlocking
+            )
+        }
+
+        private fun custom(
+            name: String,
+            phase: CustomCheckPhase = CustomCheckPhase.PreMerge,
+            status: MergeCheckStatus = MergeCheckStatus.Passed,
+            message: String? = null
+        ): PullRequestMergeCheck.CustomCheck {
+            return PullRequestMergeCheck.CustomCheck(
+                phase = phase,
+                id = null,
+                name = name,
+                message = message,
+                status = status,
+                isRequired = true,
+                isBlocking = false
+            )
+        }
+
+        private fun unrecognized(): PullRequestMergeCheck.UnrecognizedCheck {
+            return PullRequestMergeCheck.UnrecognizedCheck(
+                type = "future_check",
+                status = MergeCheckStatus.Failed,
+                isRequired = true,
+                isBlocking = true
+            )
+        }
+
+        private fun permission(status: MergeCheckStatus, isBlocking: Boolean): PullRequestMergeCheck.PermissionCheck {
+            return PullRequestMergeCheck.PermissionCheck(status = status, isRequired = true, isBlocking = isBlocking)
+        }
+
+        private fun git(
+            reason: GitMergeabilityReason?,
+            status: MergeCheckStatus = MergeCheckStatus.Failed,
+            isBlocking: Boolean = true
+        ): PullRequestMergeCheck.GitCheck {
+            return PullRequestMergeCheck.GitCheck(
+                reason = reason,
+                conflictsUrl = null,
+                status = status,
+                isRequired = true,
+                isBlocking = isBlocking
+            )
+        }
+    }
+
     private fun createViewModel(
         workspace: String = "acme",
         isAirAvailable: () -> Boolean = { false },
         onExplainWithAi: (ExplainPullRequestRequest) -> Unit = {},
+        isRebaseAvailable: () -> Boolean = { false },
+        onRebaseWithAi: () -> Unit = {},
+        onRetryChecksRequested: () -> Unit = {},
         clock: () -> Instant = { Instant.parse("2026-11-10T10:00:00Z") }
     ): PullRequestOverviewViewModel {
         return PullRequestOverviewViewModel(
@@ -331,6 +839,9 @@ class PullRequestOverviewViewModelTest {
             openSearchPopup = {},
             isAirAvailable = isAirAvailable,
             onExplainWithAi = onExplainWithAi,
+            isRebaseAvailable = isRebaseAvailable,
+            onRebaseWithAi = onRebaseWithAi,
+            onRetryChecksRequested = onRetryChecksRequested,
             clock = clock
         )
     }

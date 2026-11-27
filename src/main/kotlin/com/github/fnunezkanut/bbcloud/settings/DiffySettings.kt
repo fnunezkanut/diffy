@@ -126,6 +126,14 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
         var editableSourceSideInDiffs by property(true)
 
         /**
+         * Default false: when true, the main branch of each watched project is fetched from Bitbucket every 5 minutes and
+         * the local main branch is fast-forwarded when that is safe. It is set back to false by a settings reset. The
+         * option name is part of the persisted XML; do not rename it without a migration. `BaseState` omits the default
+         * value, so existing installs need no migration.
+         */
+        var autoUpdateMainBranches by property(false)
+
+        /**
          * Default false: set to true once the plugin has turned on "Collapse unchanged fragments" for pull request
          * diffs, so a later choice of the user is not overwritten. The option name is part of the persisted XML; do not
          * rename it without a migration.
@@ -166,6 +174,13 @@ class DiffySettings : SimplePersistentStateComponent<DiffySettings.State>(State(
         get() = state.editableSourceSideInDiffs
         set(value) {
             state.editableSourceSideInDiffs = value
+        }
+
+    /** Whether the main branch of each watched project is kept up to date. See [State.autoUpdateMainBranches]. */
+    var autoUpdateMainBranches: Boolean
+        get() = state.autoUpdateMainBranches
+        set(value) {
+            state.autoUpdateMainBranches = value
         }
 
     /** Whether the Watched Projects table lists only watched projects. See [State.watchedProjectsShowOnlyWatched]. */
